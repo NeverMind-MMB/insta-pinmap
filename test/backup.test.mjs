@@ -44,3 +44,14 @@ test('Reminder only with pins and after 30 days or never', () => {
   assert.equal(needsBackupReminder('2026-09-10T00:00:00Z', 3, now), false);
   assert.equal(needsBackupReminder('2026-09-03T00:00:00Z', 3, now), true);
 });
+
+test('Hostile colour and javascript: link never reach the viewer markup', () => {
+  const bad = { version: 1, tags: [{ name: 'x', color: '"><img src=x onerror=alert(1)>' }],
+    pins: [{ id: 'p', lat: 1, lon: 2, title: 't', tags: ['x'], posts: [{ url: 'javascript:alert(1)' }] }] };
+  const h = buildBackupHtml(bad, { leafletJs: '', leafletCss: '', colorOf: () => bad.tags[0].color });
+  const rest = h.slice(h.indexOf('</script>') + 9);
+  const viewerData = rest.slice(rest.indexOf('var P='), rest.indexOf('var m=L.map'));
+  assert.doesNotMatch(viewerData.replace(/"u":\[[^\]]*\]/, ''), /onerror/);
+  assert.match(viewerData, /#8a8f98/);
+  assert.doesNotMatch(rest.replace(viewerData, ''), /onerror|javascript:/);
+});

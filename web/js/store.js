@@ -371,7 +371,7 @@ export function normalizeDb(raw) {
       source: p.source || p.quelle || 'manual',
       createdAt: p.createdAt || new Date().toISOString(),
       updatedAt: p.updatedAt || p.createdAt || new Date().toISOString(),
-      posts: (Array.isArray(p.posts) ? p.posts : []).filter((x) => x && typeof x === 'object' && x.url).map((x) => ({
+      posts: (Array.isArray(p.posts) ? p.posts : []).filter((x) => x && typeof x === 'object' && /^https?:[/][/]/i.test(String(x.url || ''))).map((x) => ({
         url: x.url,
         shortcode: x.shortcode || shortcode(x.url) || '',
         caption: String(x.caption || ''),
@@ -385,7 +385,7 @@ export function normalizeDb(raw) {
     .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
 
   db.tags = (Array.isArray(db.tags) ? db.tags : [])
-    .map((t) => (typeof t === 'string' ? { name: normTag(t), color: '' } : { name: normTag(t.name), color: t.color || '' }))
+    .map((t) => (typeof t === 'string' ? { name: normTag(t), color: '' } : { name: normTag(t.name), color: /^#[0-9a-f]{3,8}$/i.test(String(t.color)) ? String(t.color) : '' }))
     .filter((t) => t.name);
 
   return buildIndex(db);

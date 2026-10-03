@@ -20,11 +20,14 @@ export function jsonForScript(value) {
     .replace(/\u2029/g, '\\u2029');
 }
 
+/** Only plain hex colours get into markup. */
+const safeColor = (c) => (/^#[0-9a-f]{3,8}$/i.test(String(c)) ? String(c) : '#8a8f98');
+
 export function buildBackupHtml(db, { leafletJs, leafletCss, colorOf, now = new Date() }) {
   const pins = db.pins.map((p) => ({
     t: p.title, a: p.address, la: p.lat, lo: p.lon,
     s: p.status, n: p.note, g: p.tags || [],
-    f: colorOf(p),
+    f: safeColor(colorOf(p)),
     u: (p.posts || []).map((x) => x.url),
   }));
   // Leaflet's default images are not embedded — markers are drawn with CSS.
@@ -62,7 +65,7 @@ P.forEach(function(p){
   if(p.n)h+='<p>'+esc(p.n)+'</p>';
   h+='<p>'+(p.s==='visited'?'been there':'want to go')+'</p>';
   p.g.forEach(function(g){h+='<span class="g">'+esc(g)+'</span>'});
-  p.u.forEach(function(u){h+='<div><a href="'+esc(u)+'" target="_blank" rel="noopener">View post</a></div>'});
+  p.u.forEach(function(u){if(/^https?:[/][/]/i.test(u))h+='<div><a href="'+esc(u)+'" target="_blank" rel="noopener">View post</a></div>'});
   L.marker([p.la,p.lo],{icon:ic}).addTo(m).bindPopup(h);
 });
 if(b.length)m.fitBounds(b,{padding:[40,40],maxZoom:14});

@@ -101,3 +101,13 @@ test('removePost changes updatedAt and rebuilds postIndex', () => {
   clearTimeout(store._saveTimer);
   store._saveTimer = null;
 });
+
+test('normalizeDb drops hostile tag colours and non-http post links', () => {
+  const db = normalizeDb({
+    tags: [{ name: 'a', color: '"><img src=x onerror=alert(1)>' }, { name: 'b', color: '#b8543f' }],
+    pins: [pin('p', '2026-01-02T00:00:00.000Z', { posts: [{ url: 'javascript:alert(1)' }, { url: 'https://www.instagram.com/p/AAA111/' }] })],
+  });
+  assert.equal(db.tags.find((t) => t.name === 'a').color, '');
+  assert.equal(db.tags.find((t) => t.name === 'b').color, '#b8543f');
+  assert.deepEqual(db.pins[0].posts.map((x) => x.url), ['https://www.instagram.com/p/AAA111/']);
+});
