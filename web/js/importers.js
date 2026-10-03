@@ -9,6 +9,7 @@
  * lat/lon may be null; then they still have to be looked up.
  */
 
+import { readBackupText } from './backup.js';
 import { unzipSync, strFromU8 } from '../vendor/fflate.js';
 import { kml, gpx } from '../vendor/togeojson.js';
 
@@ -459,6 +460,10 @@ export async function readFile(file) {
   }
 
   const text = await file.text();
+
+  if (ext === 'html' || ext === 'htm') {
+    return { name, entries: [], backup: readBackupText(text) };
+  }
 
   if (ext === 'kml') return { name, entries: readKml(text) };
   if (ext === 'gpx') return { name, entries: readGpx(text) };

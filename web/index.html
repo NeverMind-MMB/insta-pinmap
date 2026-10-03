@@ -72,6 +72,11 @@
 </main>
 
 <!-- Input bar: always reachable, this is the main way into the app -->
+<div class="reminder" id="backup-reminder" role="status" hidden>
+  <span id="backup-reminder-text"></span>
+  <button type="button" class="btn btn--small btn--primary" id="backup-reminder-save">Save backup</button>
+  <button type="button" class="btn btn--small btn--quiet" id="backup-reminder-later">Later</button>
+</div>
 <form class="inputbar" id="input-form" autocomplete="off">
   <label class="visually-hidden" for="input-field">Instagram link or place</label>
   <input type="text" id="input-field" name="link"
@@ -243,7 +248,7 @@
         </p>
         <label class="field">
           <span class="field__label">Choose files</span>
-          <input type="file" id="settings-import-file" accept=".json,.geojson,.csv,.kml,.kmz,.gpx,.zip" multiple>
+          <input type="file" id="settings-import-file" accept=".json,.geojson,.csv,.kml,.kmz,.gpx,.zip,.html,.htm" multiple>
         </label>
         <label class="field">
           <span class="field__label">Or paste a link (Apple Guide / place link)</span>
@@ -258,16 +263,16 @@
       <fieldset class="fieldgroup">
         <legend>Backup</legend>
         <p class="field__help">
-          Your data is stored as <code>data/pins.json</code> next to the program.
-          A backup never hurts, though.
+          Your pins live on this phone. A backup is one HTML file: open it to see your map,
+          or load it here to get your pins back.
         </p>
+        <p class="field__help" id="settings-backup-age"></p>
         <div class="buttonrow">
-          <button type="button" class="btn" id="settings-export">Back up as JSON</button>
-          <button type="button" class="btn" id="settings-export-html">As a standalone HTML map</button>
+          <button type="button" class="btn" id="settings-export-html">Save backup</button>
         </div>
         <label class="field">
-          <span class="field__label">Restore a backup</span>
-          <input type="file" id="settings-restore" accept=".json">
+          <span class="field__label">Load backup</span>
+          <input type="file" id="settings-restore" accept=".html,.htm,.json">
         </label>
       </fieldset>
 
@@ -317,6 +322,22 @@
     <footer class="sheet__foot">
       <button type="submit" formnovalidate value="cancel" class="btn btn--quiet">Cancel</button>
       <button type="button" class="btn btn--primary" id="import-apply">Import selected</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Load backup -->
+<dialog class="sheet sheet--narrow" id="dlg-restore" aria-labelledby="dlg-restore-title">
+  <form method="dialog" class="sheet__form">
+    <header class="sheet__head">
+      <h2 id="dlg-restore-title">Load backup</h2>
+      <button type="submit" formnovalidate value="cancel" class="iconbtn" aria-label="Close">✕</button>
+    </header>
+    <div class="sheet__body"><p id="restore-text"></p></div>
+    <footer class="sheet__foot sheet__foot--stacked">
+      <button type="submit" formnovalidate value="merge" class="btn btn--primary">Add to my pins</button>
+      <button type="button" class="btn btn--danger" id="restore-replace">Replace everything</button>
+      <button type="submit" formnovalidate value="cancel" class="btn btn--quiet">Cancel</button>
     </footer>
   </form>
 </dialog>

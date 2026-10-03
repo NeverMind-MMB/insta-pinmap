@@ -594,86 +594,60 @@ function download(name, content, type) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export function exportJson() {
-  const date = new Date().toISOString().slice(0, 10);
-  download(`ortsammlung-${date}.json`, store.asJson(), 'application/json');
-  toast('Backup downloaded.', 'success');
-}
+import { buildBackupHtml, backupAgeText } from './backup.js';
 
-/**
- * A standalone HTML file with all pins baked in.
- * Opens with a double-click and shows the map, with no server and nothing else.
- * View only; editing still happens in the real app.
- */
-export async function exportHtml() {
-  toast('Building the standalone map …', 'info', 0);
+export async function exportBackup() {
+  toast('Building the backup …', 'info', 0);
   try {
     const [leafletJs, leafletCss] = await Promise.all([
       fetch('/vendor/leaflet/leaflet.js').then((r) => r.text()),
       fetch('/vendor/leaflet/leaflet.css').then((r) => r.text()),
     ]);
-
-    const pins = store.db.pins.map((p) => ({
-      t: p.title, a: p.address, la: p.lat, lo: p.lon,
-      s: p.status, n: p.note, g: p.tags || [],
-      f: store.pinColor(p),
-      u: (p.posts || []).map((x) => x.url),
-    }));
-
-    // Leaflet's default images are not available here, so use custom CSS pins.
-    const css = leafletCss.replace(/url\((["']?)images\/[^)]+\1\)/g, 'none');
-
-    // Embedding JSON in a <script> element is only safe if angle brackets
-    // are escaped: otherwise a title like "</script>" would end the element
-    // in the middle of the data and swallow half the map.
-    const jsonForScript = (value) =>
-      JSON.stringify(value)
-        .replace(/</g, '\\u003c')
-        .replace(/>/g, '\\u003e')
-        .replace(/&/g, '\\u0026')
-        .replace(/\u2028/g, '\\u2028')
-        .replace(/\u2029/g, '\\u2029');
-
-    const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ortsammlung — as of ${new Date().toLocaleDateString('de-DE')}</title>
-<style>${css}
-html,body{margin:0;height:100%;font:16px/1.5 system-ui,sans-serif;background:#16181c;color:#e9e6e1}
-#k{position:absolute;inset:0}
-.pinmark{width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.4)}
-.leaflet-popup-content{font:14px/1.45 system-ui,sans-serif}
-.leaflet-popup-content h3{margin:0 0 4px;font-size:15px}
-.leaflet-popup-content p{margin:0 0 4px;color:#555}
-.leaflet-popup-content .g{display:inline-block;font-size:11px;background:#eee;border-radius:99px;padding:1px 7px;margin:2px 3px 0 0}
-#i{position:absolute;z-index:600;left:10px;top:10px;background:rgba(22,24,28,.9);padding:8px 12px;border-radius:10px;font-size:13px}
-</style></head><body>
-<div id="k"></div><div id="i">${pins.length} places · as of ${new Date().toLocaleDateString('de-DE')} · view only</div>
-<script>${leafletJs}<\/script>
-<script>
-var P=${jsonForScript(pins)};
-var m=L.map('k').setView([51,10],5);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(m);
-var b=[];
-P.forEach(function(p){
-  b.push([p.la,p.lo]);
-  var ic=L.divIcon({className:'',html:'<div class="pinmark" style="background:'+p.f+'"></div>',iconSize:[24,24],iconAnchor:[12,24],popupAnchor:[0,-22]});
-  var h='<h3>'+esc(p.t)+'</h3>';
-  if(p.a)h+='<p>'+esc(p.a)+'</p>';
-  if(p.n)h+='<p>'+esc(p.n)+'</p>';
-  h+='<p>'+(p.s==='visited'?'been there':'want to go')+'</p>';
-  p.g.forEach(function(g){h+='<span class="g">'+esc(g)+'</span>'});
-  p.u.forEach(function(u){h+='<div><a href="'+esc(u)+'" target="_blank" rel="noopener">View post</a></div>'});
-  L.marker([p.la,p.lo],{icon:ic}).addTo(m).bindPopup(h);
-});
-if(b.length)m.fitBounds(b,{padding:[40,40],maxZoom:14});
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-<\/script></body></html>`;
-
+    const html = buildBackupHtml(store.db, { leafletJs, leafletCss, colorOf: (p) => store.pinColor(p) });
     const date = new Date().toISOString().slice(0, 10);
-    download(`ortskarte-${date}.html`, html, 'text/html');
-    toast('Standalone map downloaded. Open it with a double-click.', 'success', 5000);
+    download(`insta-pinmap-${date}.html`, html, 'text/html');
+    store.setSetting('lastBackupAt', new Date().toISOString());
+    toast('Backup saved. Keep the file somewhere safe (Files, iCloud Drive, Google Drive).', 'success', 6000);
   } catch (e) {
-    toast('Could not build the map: ' + e.message, 'error');
+    toast("Couldn't build the backup: " + e.message, 'error');
   }
+}
+
+/** Asks how to load a backup: merge (default) or replace everything (tap twice). */
+export function showRestore(backupDb, env) {
+  const dlg = $('dlg-restore');
+  const count = (backupDb.pins || []).length;
+  $('restore-text').textContent =
+    `This backup has ${count} ${count === 1 ? 'place' : 'places'}. You have ${store.db.pins.length} now.`;
+  const replaceBtn = $('restore-replace');
+  replaceBtn.textContent = 'Replace everything';
+  replaceBtn.dataset.confirm = '';
+  replaceBtn.onclick = () => {
+    if (replaceBtn.dataset.confirm === 'yes') { dlg.close('replace'); return; }
+    replaceBtn.dataset.confirm = 'yes';
+    replaceBtn.textContent = `Tap again: delete my ${store.db.pins.length} pins and load the backup`;
+  };
+  dlg.onclose = async () => {
+    dlg.onclose = null;
+    let message;
+    if (dlg.returnValue === 'merge') {
+      const r = store.mergeIn(backupDb);
+      message = `Added ${r.added}, updated ${r.updated}, skipped ${r.skipped}.`;
+    } else if (dlg.returnValue === 'replace') {
+      store.replaceAll(backupDb);
+      message = `Backup loaded: ${store.db.pins.length} places.`;
+    } else {
+      return;
+    }
+    const saved = await store.save();
+    env.redraw();
+    env.map?.fitTo(store.db.pins);
+    if (saved.ok) toast(message, 'success', 6000);
+  };
+  dlg.returnValue = '';
+  dlg.showModal();
+}
+
+export function backupAgeLabel() {
+  return `Last backup: ${backupAgeText(store.settings.lastBackupAt)}`;
 }

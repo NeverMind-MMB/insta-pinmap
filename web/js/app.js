@@ -8,9 +8,10 @@ import { startAdd, wireConfirm } from './addflow.js';
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
-  exportJson, exportHtml,
+  exportBackup, showRestore, backupAgeLabel,
 } from './ui.js';
 import { readFile, readLink } from './importers.js';
+import { readBackupText, needsBackupReminder } from './backup.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -85,12 +86,24 @@ async function start() {
     map.fitTo(store.db.pins);
   }
 
-  // 4) Service worker: makes the app installable and usable offline
+  // 4) Backup reminder
+  if (needsBackupReminder(store.settings.lastBackupAt, store.db.pins.length)) {
+    $('backup-reminder-text').textContent =
+      `${backupAgeLabel()}. Save one so your pins survive a lost phone.`;
+    $('backup-reminder').hidden = false;
+  }
+  $('backup-reminder-save').addEventListener('click', async () => {
+    await exportBackup();
+    $('backup-reminder').hidden = true;
+  });
+  $('backup-reminder-later').addEventListener('click', () => { $('backup-reminder').hidden = true; });
+
+  // 5) Service worker: makes the app installable and usable offline
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => { /* not a problem */ });
   }
 
-  // 5) Location for "Nearest first", only when sorting by it
+  // 6) Location for "Nearest first", only when sorting by it
   $('sort').addEventListener('change', () => {
     if ($('sort').value === 'nearest' && !filter.location && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -206,6 +219,7 @@ function wireSettings() {
     $('settings-radius-out').value = `${store.settings.radiusM} m`;
     $('settings-tiles').value = store.settings.tiles;
     $('settings-import-status').textContent = '';
+    $('settings-backup-age').textContent = backupAgeLabel();
     dlg.showModal();
   });
 
@@ -232,14 +246,7 @@ function wireSettings() {
     for (const f of files) {
       try {
         const { entries, backup, name } = await readFile(f);
-        if (backup) {
-          store.replaceAll(backup);
-          if (!(await store.save()).ok) return;
-          redraw();
-          toast(`Backup restored: ${store.db.pins.length} places.`, 'success');
-          dlg.close();
-          return;
-        }
+        if (backup) { dlg.close(); showRestore(backup, env); return; }
         all.push(...entries);
         names.push(name);
       } catch (err) {
@@ -273,24 +280,18 @@ function wireSettings() {
   });
 
   // --- Backup ---
-  $('settings-export').addEventListener('click', exportJson);
-  $('settings-export-html').addEventListener('click', exportHtml);
+  $('settings-export-html').addEventListener('click', exportBackup);
 
   $('settings-restore').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     e.target.value = '';
     if (!f) return;
     try {
-      const j = JSON.parse(await f.text());
-      if (!Array.isArray(j.pins)) throw new Error('This is not a backup of this app.');
-      store.replaceAll(j);
-      if (!(await store.save()).ok) return;
-      redraw();
-      map?.fitTo(store.db.pins);
-      toast(`Backup restored: ${store.db.pins.length} places.`, 'success');
+      const backup = readBackupText(await f.text());
       dlg.close();
+      showRestore(backup, env);
     } catch (err) {
-      toast('Could not read the backup: ' + err.message, 'error', 6000);
+      toast(err.message, 'error', 6000);
     }
   });
 

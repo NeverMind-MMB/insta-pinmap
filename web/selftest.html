@@ -76,6 +76,7 @@
 
 <script type="module">
 import { idbGet, idbSet } from './js/idb.js';
+import { buildBackupHtml, readBackupText } from './js/backup.js';
 import { shortcode, normalizeLink, distanceM, distanceText, findPost, buildIndex, nearbyPins } from './js/dedupe.js';
 import { placeCandidates, flagCountries, tagToWords, tagSuggestions, scoreMatches } from './js/extract.js';
 import { readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows, readKml, readGpx } from './js/importers.js';
@@ -132,6 +133,15 @@ const APPLE_UG = 'https://guides.apple.com/?ug=Cg1FcGljIEdhbWVyaW5nElcaM0hvbHpzY
 
 function logicChecks() {
   $('logic').innerHTML = '';
+
+  check('Backup file round trip', async () => {
+    const db = { version: 1, tags: [], deleted: [], pins: [{ id: 'p', lat: 1, lon: 2, title: '<\/script>x', posts: [] }] };
+    const leafletJs = await (await fetch('/vendor/leaflet/leaflet.js')).text();
+    const leafletCss = await (await fetch('/vendor/leaflet/leaflet.css')).text();
+    const html = buildBackupHtml(db, { leafletJs, leafletCss, colorOf: () => '#b8543f' });
+    if (JSON.stringify(readBackupText(html)) !== JSON.stringify(db)) throw new Error('Data changed');
+    return `${Math.round(html.length / 1024)} KB, data identical`;
+  });
 
   check('Normalize Instagram links', () => {
     const same = [
