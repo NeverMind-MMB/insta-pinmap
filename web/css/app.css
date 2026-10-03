@@ -524,7 +524,7 @@ input[type="file"] { border: 1px dashed var(--rand); padding: 12px; background: 
   transition: opacity .2s, transform .2s;
 }
 .toast.is-an { opacity: 1; transform: translate(-50%, 0); }
-.toast[data-art="fehler"] { background: var(--gefahr); color: #fff; }
+.toast[data-art="error"] { background: var(--gefahr); color: #fff; }
 
 /* ---------- Map pins ---------- */
 
