@@ -1,0 +1,39 @@
+{
+  "name": "Ortsammlung — places from Instagram",
+  "short_name": "Ortsammlung",
+  "description": "Personal world map for places from Instagram posts.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#16181c",
+  "theme_color": "#16181c",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["travel", "lifestyle", "utilities"],
+  "icons": [
+    { "src": "/icons/icon.svg",     "sizes": "any",     "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png",     "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png",     "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Add place",
+      "short_name": "Add",
+      "url": "/?fokus=eingabe",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

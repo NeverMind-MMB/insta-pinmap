@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "stand": 0,
+  "tags": [
+    { "name": "coffee", "color": "" },
+    { "name": "beach", "color": "" },
+    { "name": "mountains", "color": "" },
+    { "name": "lake", "color": "" },
+    { "name": "park", "color": "" },
+    { "name": "viewpoint", "color": "" },
+    { "name": "museum", "color": "" },
+    { "name": "portugal", "color": "" }
+  ],
+  "pins": [
+    {
+      "id": "p_demo0001",
+      "lat": 49.4521,
+      "lon": 11.0767,
+      "title": "Machhörndl Kaffee",
+      "address": "Obere Kanalstraße 11, 90429 Nürnberg",
+      "note": "Try the flat white. Busy on Sundays.",
+      "status": "visited",
+      "tags": ["coffee"],
+      "quelle": "instagram",
+      "createdAt": "2026-03-14T10:12:00.000Z",
+      "updatedAt": "2026-03-21T15:40:00.000Z",
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DEMO0001/",
+          "shortcode": "DEMO0001",
+          "caption": "Best coffee in town ☕ 📍 Machhörndl Kaffee, Nürnberg 🇩🇪 #coffee #nuernberg #speciality",
+          "username": "kaffeekind",
+          "thumb": "",
+          "addedAt": "2026-03-14T10:12:00.000Z"
+        }
+      ],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0002",
+      "lat": 37.0894,
+      "lon": -8.4118,
+      "title": "Praia da Marinha",
+      "address": "Lagoa, Algarve, Portugal",
+      "note": "Go at sunset, cliff path to Benagil.",
+      "status": "wishlist",
+      "tags": ["beach", "portugal"],
+      "quelle": "instagram",
+      "createdAt": "2026-04-02T18:05:00.000Z",
+      "updatedAt": "2026-04-02T18:05:00.000Z",
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DEMO0002/",
+          "shortcode": "DEMO0002",
+          "caption": "Sunset at Praia da Marinha 🇵🇹🌅\nOne of those evenings you never forget.\n#algarve #portugal #sunset",
+          "username": "reisefee",
+          "thumb": "",
+          "addedAt": "2026-04-02T18:05:00.000Z"
+        },
+        {
+          "url": "https://www.instagram.com/reel/DEMO0003/",
+          "shortcode": "DEMO0003",
+          "caption": "Praia da Marinha from above 🚁 #algarve #drone",
+          "username": "dronefritz",
+          "thumb": "",
+          "addedAt": "2026-04-09T07:30:00.000Z"
+        }
+      ],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0004",
+      "lat": 46.0207,
+      "lon": 7.7491,
+      "title": "Zermatt",
+      "address": "3920 Zermatt, Wallis, Schweiz",
+      "note": "",
+      "status": "visited",
+      "tags": ["mountains"],
+      "quelle": "instagram",
+      "createdAt": "2026-01-20T09:00:00.000Z",
+      "updatedAt": "2026-02-28T12:00:00.000Z",
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DEMO0004/",
+          "shortcode": "DEMO0004",
+          "caption": "Zermatt 🇨🇭❄️",
+          "username": "bergfex",
+          "thumb": "",
+          "addedAt": "2026-01-20T09:00:00.000Z"
+        }
+      ],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0005",
+      "lat": 47.5622,
+      "lon": 13.6493,
+      "title": "Hallstatt",
+      "address": "4830 Hallstatt, Oberösterreich",
+      "note": "Go early in the morning, before the buses arrive.",
+      "status": "wishlist",
+      "tags": ["lake", "viewpoint"],
+      "quelle": "instagram",
+      "createdAt": "2026-05-11T20:15:00.000Z",
+      "updatedAt": "2026-05-11T20:15:00.000Z",
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DEMO0005/",
+          "shortcode": "DEMO0005",
+          "caption": "Hallstatt in the fog 🌫️ 📍 Hallstatt, Österreich #hallstatt #austria",
+          "username": "nebelkind",
+          "thumb": "",
+          "addedAt": "2026-05-11T20:15:00.000Z"
+        }
+      ],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0006",
+      "lat": 48.1698,
+      "lon": 11.5405,
+      "title": "Olympiapark",
+      "address": "Toni-Merkens-Weg 4, 80809 München",
+      "note": "Olympiaberg at sunset.",
+      "status": "visited",
+      "tags": ["park", "viewpoint"],
+      "quelle": "manuell",
+      "createdAt": "2025-09-03T16:00:00.000Z",
+      "updatedAt": "2025-09-03T16:00:00.000Z",
+      "posts": [],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0007",
+      "lat": 38.7187,
+      "lon": -9.1327,
+      "title": "Miradouro da Senhora do Monte",
+      "address": "Largo Monte, 1170-253 Lissabon, Portugal",
+      "note": "",
+      "status": "wishlist",
+      "tags": ["viewpoint", "portugal"],
+      "quelle": "instagram",
+      "createdAt": "2026-04-02T18:20:00.000Z",
+      "updatedAt": "2026-04-02T18:20:00.000Z",
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DEMO0007/",
+          "shortcode": "DEMO0007",
+          "caption": "Lissabon from above 🇵🇹 📍 Miradouro da Senhora do Monte #lisboa #lisbon #miradouro",
+          "username": "reisefee",
+          "thumb": "",
+          "addedAt": "2026-04-02T18:20:00.000Z"
+        }
+      ],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0008",
+      "lat": 52.4733,
+      "lon": 13.4030,
+      "title": "Tempelhofer Feld",
+      "address": "Tempelhofer Damm, 12101 Berlin",
+      "note": "Imported from Google Takeout.",
+      "status": "visited",
+      "tags": ["park"],
+      "quelle": "import",
+      "createdAt": "2025-07-19T11:00:00.000Z",
+      "updatedAt": "2025-07-19T11:00:00.000Z",
+      "posts": [],
+      "getrenntVon": []
+    },
+    {
+      "id": "p_demo0009",
+      "lat": 48.8600,
+      "lon": 2.3266,
+      "title": "Musée d'Orsay",
+      "address": "Esplanade Valéry Giscard d'Estaing, 75007 Paris",
+      "note": "Open until 21:45 on Thursdays.",
+      "status": "wishlist",
+      "tags": ["museum"],
+      "quelle": "instagram",
+      "createdAt": "2026-06-07T13:45:00.000Z",
+      "updatedAt": "2026-06-07T13:45:00.000Z",
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DEMO0009/",
+          "shortcode": "DEMO0009",
+          "caption": "The clock in the Musée d'Orsay 🕰️ Paris, you are beautiful. #paris #museedorsay #art",
+          "username": "kunstkater",
+          "thumb": "",
+          "addedAt": "2026-06-07T13:45:00.000Z"
+        }
+      ],
+      "getrenntVon": []
+    }
+  ],
+  "postIndex": {},
+  "settings": {}
+}

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ortsammlung">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d4674c"/>
+      <stop offset="1" stop-color="#a8452f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#1b1d22"/>
+  <!-- Breitengrade als angedeuteter Globus -->
+  <g stroke="#3a3f47" stroke-width="9" fill="none" stroke-linecap="round">
+    <circle cx="256" cy="272" r="150"/>
+    <ellipse cx="256" cy="272" rx="150" ry="60"/>
+    <ellipse cx="256" cy="272" rx="62" ry="150"/>
+  </g>
+  <!-- Pin -->
+  <path d="M256 96c-53 0-96 43-96 96 0 66 96 176 96 176s96-110 96-176c0-53-43-96-96-96Z" fill="url(#g)"/>
+  <circle cx="256" cy="190" r="35" fill="#1b1d22"/>
+</svg>
