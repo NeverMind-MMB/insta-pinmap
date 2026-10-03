@@ -8,24 +8,24 @@
 
 import { store } from './store.js';
 
-export const KACHELN = {
+export const TILES = {
   osm: {
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    optionen: {
+    options: {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     },
   },
   'osm-de': {
     url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-    optionen: {
+    options: {
       maxZoom: 18,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     },
   },
   topo: {
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    optionen: {
+    options: {
       maxZoom: 17,
       subdomains: 'abc',
       attribution:
@@ -36,26 +36,26 @@ export const KACHELN = {
 };
 
 /** Drop-shaped pin in the color of the first tag. */
-export function pinIcon(farbe, mehrfach = false) {
+export function pinIcon(color, multiple = false) {
   return L.divIcon({
     className: '',
-    html: `<div class="pinmark${mehrfach ? ' pinmark--mehr' : ''}" style="background:${farbe}"></div>`,
+    html: `<div class="pinmark${multiple ? ' pinmark--mehr' : ''}" style="background:${color}"></div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 26],
     popupAnchor: [0, -24],
   });
 }
 
-export class Karte {
+export class MainMap {
   /**
    * @param {string} elementId
-   * @param {object} opts { beiKlickPin, beiKlickKarte }
+   * @param {object} opts { onPinClick, onMapClick }
    */
   constructor(elementId, opts = {}) {
     this.opts = opts;
-    this.marker = new Map(); // pinId -> L.Marker
+    this.markers = new Map(); // pinId -> L.Marker
 
-    const start = store.einstellungen.letzteAnsicht;
+    const start = store.settings.lastView;
     this.map = L.map(elementId, {
       zoomControl: true,
       attributionControl: true,
@@ -66,8 +66,8 @@ export class Karte {
       start ? start.zoom : 5
     );
 
-    this.kachelSchicht = null;
-    this.setzeKacheln(store.einstellungen.kacheln);
+    this.tileLayer = null;
+    this.setTiles(store.settings.tiles);
 
     this.cluster = L.markerClusterGroup({
       showCoverageOnHover: false,
@@ -81,40 +81,40 @@ export class Karte {
 
     this.map.on('moveend zoomend', () => {
       const c = this.map.getCenter();
-      store.setzeEinstellung('letzteAnsicht', {
+      store.setSetting('lastView', {
         lat: c.lat, lon: c.lng, zoom: this.map.getZoom(),
       });
     });
 
-    if (opts.beiKlickKarte) {
-      this.map.on('click', (e) => opts.beiKlickKarte(e.latlng.lat, e.latlng.lng));
+    if (opts.onMapClick) {
+      this.map.on('click', (e) => opts.onMapClick(e.latlng.lat, e.latlng.lng));
     }
   }
 
-  setzeKacheln(name) {
-    const wahl = KACHELN[name] || KACHELN.osm;
-    if (this.kachelSchicht) this.map.removeLayer(this.kachelSchicht);
-    this.kachelSchicht = L.tileLayer(wahl.url, wahl.optionen).addTo(this.map);
+  setTiles(name) {
+    const choice = TILES[name] || TILES.osm;
+    if (this.tileLayer) this.map.removeLayer(this.tileLayer);
+    this.tileLayer = L.tileLayer(choice.url, choice.options).addTo(this.map);
   }
 
   /** Redraws all pins. At this scale that is cheaper than bookkeeping. */
-  zeichne(pins) {
+  draw(pins) {
     this.cluster.clearLayers();
-    this.marker.clear();
+    this.markers.clear();
 
     for (const pin of pins) {
       const m = L.marker([pin.lat, pin.lon], {
-        icon: pinIcon(store.pinFarbe(pin), (pin.posts || []).length > 1),
+        icon: pinIcon(store.pinColor(pin), (pin.posts || []).length > 1),
         title: pin.title,
         alt: pin.title,
         keyboard: true,
         riseOnHover: true,
       });
-      m.on('click', () => this.opts.beiKlickPin?.(pin.id));
+      m.on('click', () => this.opts.onPinClick?.(pin.id));
       m.on('keypress', (e) => {
-        if (e.originalEvent?.key === 'Enter') this.opts.beiKlickPin?.(pin.id);
+        if (e.originalEvent?.key === 'Enter') this.opts.onPinClick?.(pin.id);
       });
-      this.marker.set(pin.id, m);
+      this.markers.set(pin.id, m);
       this.cluster.addLayer(m);
     }
   }
@@ -128,7 +128,7 @@ export class Karte {
    * off from zoom level 17 anyway (disableClusteringAtZoom), jumping to that
    * level is enough: the pin then stands on its own.
    */
-  zuPin(pinId, zoom = 17) {
+  goToPin(pinId, zoom = 17) {
     const pin = store.pin(pinId);
     if (!pin) return;
     this.map.setView(
@@ -138,17 +138,17 @@ export class Karte {
     );
   }
 
-  zu(lat, lon, zoom = 15) {
+  goTo(lat, lon, zoom = 15) {
     this.map.setView([lat, lon], zoom, { animate: true });
   }
 
-  passeAn(pins) {
+  fitTo(pins) {
     if (!pins.length) return;
     const b = L.latLngBounds(pins.map((p) => [p.lat, p.lon]));
     this.map.fitBounds(b.pad(0.15), { maxZoom: 15 });
   }
 
-  neuMessen() {
+  remeasure() {
     // After switching views, Leaflet does not know its size yet.
     setTimeout(() => this.map.invalidateSize(), 60);
   }
@@ -158,48 +158,48 @@ export class Karte {
  * Small preview map in the dialogs
  * ------------------------------------------------------------------ */
 
-export class Vorschaukarte {
+export class PreviewMap {
   constructor(elementId) {
     this.elementId = elementId;
     this.map = null;
-    this.gruppe = null;
+    this.group = null;
   }
 
-  _stelleSicher() {
+  _ensure() {
     if (this.map) return;
     const el = document.getElementById(this.elementId);
     if (!el) return;
-    const wahl = KACHELN[store.einstellungen.kacheln] || KACHELN.osm;
+    const choice = TILES[store.settings.tiles] || TILES.osm;
     this.map = L.map(el, {
       zoomControl: false, attributionControl: true,
       dragging: true, scrollWheelZoom: false, doubleClickZoom: false,
     }).setView([51, 10], 4);
-    L.tileLayer(wahl.url, wahl.optionen).addTo(this.map);
-    this.gruppe = L.layerGroup().addTo(this.map);
+    L.tileLayer(choice.url, choice.options).addTo(this.map);
+    this.group = L.layerGroup().addTo(this.map);
   }
 
-  /** @param {Array} punkte [{lat, lon, farbe, titel}] */
-  zeige(punkte, zoom = 16) {
-    this._stelleSicher();
+  /** @param {Array} points [{lat, lon, color, title}] */
+  show(points, zoom = 16) {
+    this._ensure();
     if (!this.map) return;
-    this.gruppe.clearLayers();
+    this.group.clearLayers();
 
-    for (const p of punkte) {
-      L.marker([p.lat, p.lon], { icon: pinIcon(p.farbe || '#b8543f'), title: p.titel || '' })
-        .addTo(this.gruppe);
+    for (const p of points) {
+      L.marker([p.lat, p.lon], { icon: pinIcon(p.color || '#b8543f'), title: p.title || '' })
+        .addTo(this.group);
     }
 
     setTimeout(() => {
       this.map.invalidateSize();
-      if (punkte.length === 1) {
-        this.map.setView([punkte[0].lat, punkte[0].lon], zoom);
-      } else if (punkte.length > 1) {
-        this.map.fitBounds(L.latLngBounds(punkte.map((p) => [p.lat, p.lon])).pad(0.4), { maxZoom: 17 });
+      if (points.length === 1) {
+        this.map.setView([points[0].lat, points[0].lon], zoom);
+      } else if (points.length > 1) {
+        this.map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.4), { maxZoom: 17 });
       }
     }, 60);
   }
 
-  aufraeumen() {
-    if (this.map) { this.map.remove(); this.map = null; this.gruppe = null; }
+  destroy() {
+    if (this.map) { this.map.remove(); this.map = null; this.group = null; }
   }
 }

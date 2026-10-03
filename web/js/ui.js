@@ -3,7 +3,7 @@
  */
 
 import { store, normTag } from './store.js';
-import { embedLink, entfernung, entfernungText, shortcode } from './dedupe.js';
+import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -13,16 +13,16 @@ const $ = (id) => document.getElementById(id);
 
 let toastTimer = null;
 
-export function toast(text, art = 'info', dauer = 3200) {
+export function toast(text, kind = 'info', durationMs = 3200) {
   const el = $('toast');
   el.textContent = text;
-  el.dataset.art = art;
+  el.dataset.art = kind;
   el.classList.add('is-an');
   clearTimeout(toastTimer);
-  if (dauer > 0) toastTimer = setTimeout(() => el.classList.remove('is-an'), dauer);
+  if (durationMs > 0) toastTimer = setTimeout(() => el.classList.remove('is-an'), durationMs);
 }
 
-export function toastWeg() {
+export function hideToast() {
   clearTimeout(toastTimer);
   $('toast').classList.remove('is-an');
 }
@@ -33,13 +33,13 @@ export function toastWeg() {
 
 export const filter = {
   tags: new Set(),
-  suche: '',
-  sortierung: 'neu',
-  standort: null,     // { lat, lon } if known
+  search: '',
+  sort: 'newest',
+  location: null,     // { lat, lon } if known
 };
 
-export function gefilterte() {
-  const q = filter.suche.trim().toLowerCase();
+export function filteredPins() {
+  const q = filter.search.trim().toLowerCase();
   let pins = store.db.pins;
 
   if (filter.tags.size) {
@@ -48,26 +48,26 @@ export function gefilterte() {
 
   if (q) {
     pins = pins.filter((p) => {
-      const heu = [
+      const haystack = [
         p.title, p.address, p.note,
         ...(p.tags || []),
         ...(p.posts || []).map((x) => `${x.caption} ${x.username}`),
       ].join(' ').toLowerCase();
-      return q.split(/\s+/).every((wort) => heu.includes(wort));
+      return q.split(/\s+/).every((word) => haystack.includes(word));
     });
   }
 
   const s = [...pins];
-  switch (filter.sortierung) {
-    case 'alt':   s.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')); break;
-    case 'titel': s.sort((a, b) => a.title.localeCompare(b.title, 'de')); break;
-    case 'nah':
-      if (filter.standort) {
-        const { lat, lon } = filter.standort;
-        s.sort((a, b) => entfernung(lat, lon, a.lat, a.lon) - entfernung(lat, lon, b.lat, b.lon));
+  switch (filter.sort) {
+    case 'oldest': s.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')); break;
+    case 'title':  s.sort((a, b) => a.title.localeCompare(b.title, 'de')); break;
+    case 'nearest':
+      if (filter.location) {
+        const { lat, lon } = filter.location;
+        s.sort((a, b) => distanceM(lat, lon, a.lat, a.lon) - distanceM(lat, lon, b.lat, b.lon));
       }
       break;
-    default:      s.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    default:       s.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }
   return s;
 }
@@ -76,26 +76,26 @@ export function gefilterte() {
  * Tag filter bar
  * ================================================================== */
 
-export function zeichneTagbar(beiAenderung) {
+export function drawTagBar(onChange) {
   const bar = $('tagbar');
-  const liste = $('tagbar-list');
-  const tags = store.alleTags();
+  const list = $('tagbar-list');
+  const tags = store.allTags();
 
   bar.hidden = tags.length === 0;
-  liste.innerHTML = '';
+  list.innerHTML = '';
 
   if (!tags.length) return;
 
   // "All" to reset
-  const alleLi = document.createElement('li');
-  const alleBtn = document.createElement('button');
-  alleBtn.type = 'button';
-  alleBtn.className = 'tagchip';
-  alleBtn.setAttribute('aria-pressed', String(filter.tags.size === 0));
-  alleBtn.innerHTML = `<span>All</span> <span class="tagchip__zahl">${store.db.pins.length}</span>`;
-  alleBtn.addEventListener('click', () => { filter.tags.clear(); beiAenderung(); });
-  alleLi.appendChild(alleBtn);
-  liste.appendChild(alleLi);
+  const allLi = document.createElement('li');
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.className = 'tagchip';
+  allBtn.setAttribute('aria-pressed', String(filter.tags.size === 0));
+  allBtn.innerHTML = `<span>All</span> <span class="tagchip__zahl">${store.db.pins.length}</span>`;
+  allBtn.addEventListener('click', () => { filter.tags.clear(); onChange(); });
+  allLi.appendChild(allBtn);
+  list.appendChild(allLi);
 
   for (const t of tags) {
     const li = document.createElement('li');
@@ -103,22 +103,22 @@ export function zeichneTagbar(beiAenderung) {
     btn.type = 'button';
     btn.className = 'tagchip';
     btn.setAttribute('aria-pressed', String(filter.tags.has(t.name)));
-    const punkt = document.createElement('span');
-    punkt.className = 'tagchip__punkt';
-    punkt.style.background = t.farbe;
+    const dot = document.createElement('span');
+    dot.className = 'tagchip__punkt';
+    dot.style.background = t.color;
     const name = document.createElement('span');
     name.textContent = t.name;
-    const zahl = document.createElement('span');
-    zahl.className = 'tagchip__zahl';
-    zahl.textContent = String(t.anzahl);
-    btn.append(punkt, name, zahl);
+    const count = document.createElement('span');
+    count.className = 'tagchip__zahl';
+    count.textContent = String(t.count);
+    btn.append(dot, name, count);
     btn.addEventListener('click', () => {
       if (filter.tags.has(t.name)) filter.tags.delete(t.name);
       else filter.tags.add(t.name);
-      beiAenderung();
+      onChange();
     });
     li.appendChild(btn);
-    liste.appendChild(li);
+    list.appendChild(li);
   }
 }
 
@@ -126,22 +126,22 @@ export function zeichneTagbar(beiAenderung) {
  * List view
  * ================================================================== */
 
-export function zeichneListe(pins, beiKlick) {
+export function drawList(pins, onClick) {
   const ol = $('liste');
-  const zaehler = $('liste-zaehler');
+  const counter = $('liste-zaehler');
   ol.innerHTML = '';
 
-  const gesamt = store.db.pins.length;
-  zaehler.textContent = gesamt === 0
+  const total = store.db.pins.length;
+  counter.textContent = total === 0
     ? ''
-    : pins.length === gesamt
-      ? `${gesamt} ${gesamt === 1 ? 'place' : 'places'}`
-      : `${pins.length} of ${gesamt} places`;
+    : pins.length === total
+      ? `${total} ${total === 1 ? 'place' : 'places'}`
+      : `${pins.length} of ${total} places`;
 
   if (!pins.length) {
     const li = document.createElement('li');
     li.className = 'liste__leer';
-    li.textContent = gesamt === 0
+    li.textContent = total === 0
       ? 'Nothing saved yet. Paste an Instagram link below.'
       : 'No place matches this filter.';
     ol.appendChild(li);
@@ -154,36 +154,36 @@ export function zeichneListe(pins, beiKlick) {
     btn.type = 'button';
     btn.className = 'eintrag';
 
-    const punkt = document.createElement('span');
-    punkt.className = 'eintrag__punkt';
-    punkt.style.background = store.pinFarbe(pin);
+    const dot = document.createElement('span');
+    dot.className = 'eintrag__punkt';
+    dot.style.background = store.pinColor(pin);
 
-    const titel = document.createElement('p');
-    titel.className = 'eintrag__titel';
-    titel.textContent = pin.title;
+    const title = document.createElement('p');
+    title.className = 'eintrag__titel';
+    title.textContent = pin.title;
 
     const meta = document.createElement('p');
     meta.className = 'eintrag__meta';
-    const anzahl = (pin.posts || []).length;
+    const count = (pin.posts || []).length;
     meta.textContent = [
       pin.address || `${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}`,
-      anzahl > 1 ? `${anzahl} posts` : null,
+      count > 1 ? `${count} posts` : null,
     ].filter(Boolean).join(' · ');
 
-    const rechts = document.createElement('span');
-    rechts.className = 'eintrag__rechts';
+    const right = document.createElement('span');
+    right.className = 'eintrag__rechts';
     const st = document.createElement('span');
     st.className = 'eintrag__status';
     st.dataset.status = pin.status;
     st.textContent = pin.status === 'visited' ? 'been there' : 'want to go';
-    rechts.appendChild(st);
-    if (filter.sortierung === 'nah' && filter.standort) {
+    right.appendChild(st);
+    if (filter.sort === 'nearest' && filter.location) {
       const d = document.createElement('span');
-      d.textContent = entfernungText(entfernung(filter.standort.lat, filter.standort.lon, pin.lat, pin.lon));
-      rechts.appendChild(d);
+      d.textContent = distanceText(distanceM(filter.location.lat, filter.location.lon, pin.lat, pin.lon));
+      right.appendChild(d);
     }
 
-    btn.append(punkt, titel, meta, rechts);
+    btn.append(dot, title, meta, right);
 
     if ((pin.tags || []).length) {
       const tagUl = document.createElement('ul');
@@ -197,7 +197,7 @@ export function zeichneListe(pins, beiKlick) {
       btn.appendChild(tagUl);
     }
 
-    btn.addEventListener('click', () => beiKlick(pin.id));
+    btn.addEventListener('click', () => onClick(pin.id));
     li.appendChild(btn);
     ol.appendChild(li);
   }
@@ -209,7 +209,7 @@ export function zeichneListe(pins, beiKlick) {
 
 let detailPinId = null;
 
-export function zeigeDetail(pinId, umgebung) {
+export function showDetail(pinId, env) {
   const pin = store.pin(pinId);
   if (!pin) return;
   detailPinId = pinId;
@@ -220,7 +220,7 @@ export function zeigeDetail(pinId, umgebung) {
   body.innerHTML = '';
 
   // --- Title ---
-  body.appendChild(feld('Title', () => {
+  body.appendChild(field('Title', () => {
     const i = document.createElement('input');
     i.type = 'text';
     i.id = 'detail-titel';
@@ -229,55 +229,55 @@ export function zeigeDetail(pinId, umgebung) {
   }));
 
   // --- Address and coordinates ---
-  const adr = document.createElement('div');
-  adr.className = 'feld';
+  const addr = document.createElement('div');
+  addr.className = 'feld';
   const a1 = document.createElement('p');
   a1.className = 'detail__adresse';
   a1.textContent = pin.address || '(no address stored)';
   const a2 = document.createElement('p');
   a2.className = 'detail__koord';
   a2.textContent = `${pin.lat.toFixed(5)}, ${pin.lon.toFixed(5)}`;
-  const reihe = document.createElement('div');
-  reihe.className = 'knopfreihe';
-  reihe.append(
-    linkKnopf('Open in OpenStreetMap', `https://www.openstreetmap.org/?mlat=${pin.lat}&mlon=${pin.lon}#map=17/${pin.lat}/${pin.lon}`),
-    linkKnopf('Directions (Google)', `https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lon}`),
+  const row = document.createElement('div');
+  row.className = 'knopfreihe';
+  row.append(
+    linkButton('Open in OpenStreetMap', `https://www.openstreetmap.org/?mlat=${pin.lat}&mlon=${pin.lon}#map=17/${pin.lat}/${pin.lon}`),
+    linkButton('Directions (Google)', `https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lon}`),
   );
-  adr.append(a1, a2, reihe);
-  body.appendChild(adr);
+  addr.append(a1, a2, row);
+  body.appendChild(addr);
 
   // --- Status ---
-  const stFeld = document.createElement('div');
-  stFeld.className = 'feld';
-  const stLab = document.createElement('span');
-  stLab.className = 'feld__label';
-  stLab.textContent = 'Status';
-  const stGrp = document.createElement('div');
-  stGrp.className = 'segmented segmented--voll';
-  stGrp.setAttribute('role', 'radiogroup');
-  stGrp.setAttribute('aria-label', 'Status');
-  for (const [wert, text] of [['wishlist', 'Want to go'], ['visited', 'Been there']]) {
+  const statusField = document.createElement('div');
+  statusField.className = 'feld';
+  const statusLabel = document.createElement('span');
+  statusLabel.className = 'feld__label';
+  statusLabel.textContent = 'Status';
+  const statusGroup = document.createElement('div');
+  statusGroup.className = 'segmented segmented--voll';
+  statusGroup.setAttribute('role', 'radiogroup');
+  statusGroup.setAttribute('aria-label', 'Status');
+  for (const [value, text] of [['wishlist', 'Want to go'], ['visited', 'Been there']]) {
     const b = document.createElement('button');
     b.type = 'button';
     b.setAttribute('role', 'radio');
-    b.className = 'segmented__btn' + (pin.status === wert ? ' is-active' : '');
-    b.setAttribute('aria-checked', String(pin.status === wert));
-    b.dataset.status = wert;
+    b.className = 'segmented__btn' + (pin.status === value ? ' is-active' : '');
+    b.setAttribute('aria-checked', String(pin.status === value));
+    b.dataset.status = value;
     b.textContent = text;
     b.addEventListener('click', () => {
-      for (const x of stGrp.children) {
-        const an = x === b;
-        x.classList.toggle('is-active', an);
-        x.setAttribute('aria-checked', String(an));
+      for (const x of statusGroup.children) {
+        const isActive = x === b;
+        x.classList.toggle('is-active', isActive);
+        x.setAttribute('aria-checked', String(isActive));
       }
     });
-    stGrp.appendChild(b);
+    statusGroup.appendChild(b);
   }
-  stFeld.append(stLab, stGrp);
-  body.appendChild(stFeld);
+  statusField.append(statusLabel, statusGroup);
+  body.appendChild(statusField);
 
   // --- Note ---
-  body.appendChild(feld('Note', () => {
+  body.appendChild(field('Note', () => {
     const t = document.createElement('textarea');
     t.id = 'detail-notiz';
     t.rows = 3;
@@ -286,21 +286,21 @@ export function zeigeDetail(pinId, umgebung) {
   }));
 
   // --- Tags ---
-  const tagFeld = document.createElement('div');
-  tagFeld.className = 'feld';
-  const tagLab = document.createElement('span');
-  tagLab.className = 'feld__label';
-  tagLab.textContent = 'Tags';
+  const tagField = document.createElement('div');
+  tagField.className = 'feld';
+  const tagLabel = document.createElement('span');
+  tagLabel.className = 'feld__label';
+  tagLabel.textContent = 'Tags';
   const tagUl = document.createElement('ul');
   tagUl.className = 'chips';
   let tags = [...(pin.tags || [])];
 
-  const zeichneChips = () => {
+  const drawChips = () => {
     tagUl.innerHTML = '';
     for (const t of tags) {
       const li = document.createElement('li');
       li.className = 'chip';
-      li.style.borderColor = store.tagFarbe(t);
+      li.style.borderColor = store.tagColor(t);
       const s = document.createElement('span');
       s.textContent = t;
       const x = document.createElement('button');
@@ -308,15 +308,15 @@ export function zeigeDetail(pinId, umgebung) {
       x.className = 'chip__x';
       x.setAttribute('aria-label', `Remove tag ${t}`);
       x.textContent = '×';
-      x.addEventListener('click', () => { tags = tags.filter((a) => a !== t); zeichneChips(); });
+      x.addEventListener('click', () => { tags = tags.filter((a) => a !== t); drawChips(); });
       li.append(s, x);
       tagUl.appendChild(li);
     }
   };
-  zeichneChips();
+  drawChips();
 
-  const tagEin = document.createElement('div');
-  tagEin.className = 'tageingabe';
+  const tagEntry = document.createElement('div');
+  tagEntry.className = 'tageingabe';
   const tagInput = document.createElement('input');
   tagInput.type = 'text';
   tagInput.placeholder = 'Add tag …';
@@ -329,15 +329,15 @@ export function zeigeDetail(pinId, umgebung) {
     const t = normTag(tagInput.value);
     if (t && !tags.includes(t)) tags.push(t);
     tagInput.value = '';
-    zeichneChips();
+    drawChips();
   };
   tagBtn.addEventListener('click', tagAdd);
   tagInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); tagAdd(); }
   });
-  tagEin.append(tagInput, tagBtn);
-  tagFeld.append(tagLab, tagUl, tagEin);
-  body.appendChild(tagFeld);
+  tagEntry.append(tagInput, tagBtn);
+  tagField.append(tagLabel, tagUl, tagEntry);
+  body.appendChild(tagField);
 
   // --- Posts ---
   if ((pin.posts || []).length) {
@@ -352,10 +352,10 @@ export function zeigeDetail(pinId, umgebung) {
       const li = document.createElement('li');
       li.className = 'detail__post';
 
-      const eb = embedLink(post.url);
-      if (eb) {
+      const embed = embedLink(post.url);
+      if (embed) {
         const f = document.createElement('iframe');
-        f.src = eb;
+        f.src = embed;
         f.loading = 'lazy';
         f.title = `Instagram post by ${post.username || 'unknown'}`;
         f.referrerPolicy = 'no-referrer';
@@ -375,9 +375,9 @@ export function zeigeDetail(pinId, umgebung) {
       del.className = 'btn btn--klein btn--gefahr';
       del.textContent = 'Remove post';
       del.addEventListener('click', () => {
-        store.postLoeschen(pin.id, post.url);
-        umgebung.neuZeichnen();
-        zeigeDetail(pin.id, umgebung);
+        store.removePost(pin.id, post.url);
+        env.redraw();
+        showDetail(pin.id, env);
       });
       foot.append(a, del);
       li.appendChild(foot);
@@ -388,25 +388,25 @@ export function zeigeDetail(pinId, umgebung) {
 
   // --- Footer buttons ---
   $('detail-speichern').onclick = () => {
-    const aktiv = stGrp.querySelector('[aria-checked="true"]');
-    store.pinAendern(pin.id, {
+    const active = statusGroup.querySelector('[aria-checked="true"]');
+    store.updatePin(pin.id, {
       title: $('detail-titel').value.trim() || pin.title,
       note: $('detail-notiz').value.trim(),
-      status: aktiv?.dataset.status || pin.status,
+      status: active?.dataset.status || pin.status,
       tags,
     });
     dlg.close();
-    umgebung.neuZeichnen();
-    toast('Saved.', 'gut');
+    env.redraw();
+    toast('Saved.', 'success');
   };
 
   $('detail-loeschen').onclick = () => {
     // No window.confirm: it blocks and looks bad on a phone.
     const btn = $('detail-loeschen');
     if (btn.dataset.sicher === 'ja') {
-      store.pinLoeschen(pin.id);
+      store.deletePin(pin.id);
       dlg.close();
-      umgebung.neuZeichnen();
+      env.redraw();
       toast(`"${pin.title}" deleted.`, 'info');
       return;
     }
@@ -421,17 +421,17 @@ export function zeigeDetail(pinId, umgebung) {
   dlg.showModal();
 }
 
-function feld(label, machElement) {
+function field(label, makeElement) {
   const wrap = document.createElement('label');
   wrap.className = 'feld';
   const s = document.createElement('span');
   s.className = 'feld__label';
   s.textContent = label;
-  wrap.append(s, machElement());
+  wrap.append(s, makeElement());
   return wrap;
 }
 
-function linkKnopf(text, href) {
+function linkButton(text, href) {
   const a = document.createElement('a');
   a.className = 'btn btn--klein';
   a.href = href;
@@ -445,19 +445,19 @@ function linkKnopf(text, href) {
  * Import dialog
  * ================================================================== */
 
-export function zeigeImport(eintraege, quellName, umgebung) {
+export function showImport(entries, sourceName, env) {
   const dlg = $('dlg-import');
-  const liste = $('import-liste');
-  $('dlg-import-titel').textContent = quellName ? `Import: ${quellName}` : 'Places found';
+  const list = $('import-liste');
+  $('dlg-import-titel').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
 
-  const mitKoord = eintraege.filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon));
-  const ohne = eintraege.length - mitKoord.length;
+  const withCoords = entries.filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon));
+  const withoutCoords = entries.length - withCoords.length;
   $('import-info').textContent =
-    `${eintraege.length} ${eintraege.length === 1 ? 'place' : 'places'} found` +
-    (ohne ? ` — ${ohne} of them have no coordinates; these will be looked up on import.` : '.');
+    `${entries.length} ${entries.length === 1 ? 'place' : 'places'} found` +
+    (withoutCoords ? ` — ${withoutCoords} of them have no coordinates; these will be looked up on import.` : '.');
 
-  liste.innerHTML = '';
-  eintraege.forEach((e, i) => {
+  list.innerHTML = '';
+  entries.forEach((e, i) => {
     const li = document.createElement('li');
     li.className = 'importzeile';
 
@@ -472,47 +472,47 @@ export function zeigeImport(eintraege, quellName, umgebung) {
     lab.htmlFor = cb.id;
     lab.textContent = e.name;
 
-    const adr = document.createElement('span');
-    adr.className = 'importzeile__adr';
-    adr.textContent = e.address ||
+    const addr = document.createElement('span');
+    addr.className = 'importzeile__adr';
+    addr.textContent = e.address ||
       (Number.isFinite(e.lat) ? `${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}` : '');
 
-    li.append(cb, lab, adr);
+    li.append(cb, lab, addr);
 
-    if (e.warnung) {
+    if (e.warning) {
       const w = document.createElement('span');
       w.className = 'importzeile__warn';
-      w.textContent = e.warnung;
+      w.textContent = e.warning;
       li.appendChild(w);
     }
-    liste.appendChild(li);
+    list.appendChild(li);
   });
 
-  const alle = (an) => {
-    for (const cb of liste.querySelectorAll('input[type=checkbox]')) cb.checked = an;
+  const setAllChecked = (checked) => {
+    for (const cb of list.querySelectorAll('input[type=checkbox]')) cb.checked = checked;
   };
-  $('import-alle').onclick = () => alle(true);
-  $('import-keine').onclick = () => alle(false);
+  $('import-alle').onclick = () => setAllChecked(true);
+  $('import-keine').onclick = () => setAllChecked(false);
 
   $('import-uebernehmen').onclick = async () => {
-    const gewaehlt = [...liste.querySelectorAll('input[type=checkbox]:checked')]
-      .map((cb) => eintraege[Number(cb.dataset.index)]);
+    const selected = [...list.querySelectorAll('input[type=checkbox]:checked')]
+      .map((cb) => entries[Number(cb.dataset.index)]);
     dlg.close();
-    await uebernehmeImport(gewaehlt, quellName, umgebung);
+    await applyImport(selected, sourceName, env);
   };
 
   dlg.showModal();
 }
 
-async function uebernehmeImport(eintraege, quellName, umgebung) {
-  let angelegt = 0;
-  let uebersprungen = 0;
-  const fehlgeschlagen = [];
-  const radius = store.einstellungen.radiusM;
+async function applyImport(entries, sourceName, env) {
+  let created = 0;
+  let skipped = 0;
+  const failed = [];
+  const radius = store.settings.radiusM;
 
-  for (let i = 0; i < eintraege.length; i++) {
-    const e = eintraege[i];
-    toast(`Importing ${i + 1} of ${eintraege.length} …`, 'info', 0);
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    toast(`Importing ${i + 1} of ${entries.length} …`, 'info', 0);
 
     let lat = e.lat;
     let lon = e.lon;
@@ -522,8 +522,8 @@ async function uebernehmeImport(eintraege, quellName, umgebung) {
       try {
         const j = await (await fetch(`/api/resolve?url=${encodeURIComponent(e.url)}`)).json();
         if (j.ok && j.url) {
-          const { googleKoordinaten } = await import('./importers.js');
-          const k = googleKoordinaten(j.url);
+          const { googleCoordinates } = await import('./importers.js');
+          const k = googleCoordinates(j.url);
           if (k) { lat = k.lat; lon = k.lon; }
         }
       } catch { /* next attempt: search by name */ }
@@ -540,49 +540,49 @@ async function uebernehmeImport(eintraege, quellName, umgebung) {
     }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      fehlgeschlagen.push(e.name);
+      failed.push(e.name);
       continue;
     }
 
     // Is there already something at this spot? During a batch import, don't ask;
     // silently skip very close duplicates instead.
-    const nah = store.db.pins.find(
-      (p) => entfernung(lat, lon, p.lat, p.lon) < Math.min(radius, 60)
+    const nearby = store.db.pins.find(
+      (p) => distanceM(lat, lon, p.lat, p.lon) < Math.min(radius, 60)
     );
-    if (nah) { uebersprungen++; continue; }
+    if (nearby) { skipped++; continue; }
 
     const tags = [];
-    if (e.tagVorschlag) { const t = normTag(e.tagVorschlag); if (t) tags.push(t); }
+    if (e.tagSuggestion) { const t = normTag(e.tagSuggestion); if (t) tags.push(t); }
 
-    store.neuerPin({
+    store.addPin({
       lat, lon,
       title: e.name,
       address: e.address || '',
       note: e.note || '',
       tags,
-      quelle: e.quelle || 'import',
+      source: e.source || 'import',
     });
-    angelegt++;
+    created++;
   }
 
-  await store.sichern();
-  umgebung.neuZeichnen();
-  toastWeg();
+  await store.save();
+  env.redraw();
+  hideToast();
 
-  const teile = [`${angelegt} ${angelegt === 1 ? 'place' : 'places'} imported`];
-  if (uebersprungen) teile.push(`${uebersprungen} skipped as duplicates`);
-  if (fehlgeschlagen.length) teile.push(`${fehlgeschlagen.length} left without coordinates`);
-  toast(teile.join(', ') + '.', fehlgeschlagen.length ? 'fehler' : 'gut', 6000);
+  const parts = [`${created} ${created === 1 ? 'place' : 'places'} imported`];
+  if (skipped) parts.push(`${skipped} skipped as duplicates`);
+  if (failed.length) parts.push(`${failed.length} left without coordinates`);
+  toast(parts.join(', ') + '.', failed.length ? 'error' : 'success', 6000);
 
-  if (angelegt) umgebung.karte?.passeAn(store.db.pins);
+  if (created) env.map?.fitTo(store.db.pins);
 }
 
 /* ================================================================== *
  * Backup
  * ================================================================== */
 
-function ladeHerunter(name, inhalt, typ) {
-  const blob = new Blob([inhalt], { type: typ });
+function download(name, content, type) {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -593,10 +593,10 @@ function ladeHerunter(name, inhalt, typ) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export function exportiereJSON() {
-  const datum = new Date().toISOString().slice(0, 10);
-  ladeHerunter(`ortsammlung-${datum}.json`, store.alsJSON(), 'application/json');
-  toast('Backup downloaded.', 'gut');
+export function exportJson() {
+  const date = new Date().toISOString().slice(0, 10);
+  download(`ortsammlung-${date}.json`, store.asJson(), 'application/json');
+  toast('Backup downloaded.', 'success');
 }
 
 /**
@@ -604,7 +604,7 @@ export function exportiereJSON() {
  * Opens with a double-click and shows the map, with no server and nothing else.
  * View only; editing still happens in the real app.
  */
-export async function exportiereHTML() {
+export async function exportHtml() {
   toast('Building the standalone map …', 'info', 0);
   try {
     const [leafletJs, leafletCss] = await Promise.all([
@@ -615,7 +615,7 @@ export async function exportiereHTML() {
     const pins = store.db.pins.map((p) => ({
       t: p.title, a: p.address, la: p.lat, lo: p.lon,
       s: p.status, n: p.note, g: p.tags || [],
-      f: store.pinFarbe(p),
+      f: store.pinColor(p),
       u: (p.posts || []).map((x) => x.url),
     }));
 
@@ -625,8 +625,8 @@ export async function exportiereHTML() {
     // Embedding JSON in a <script> element is only safe if angle brackets
     // are escaped: otherwise a title like "</script>" would end the element
     // in the middle of the data and swallow half the map.
-    const jsonFuerScript = (wert) =>
-      JSON.stringify(wert)
+    const jsonForScript = (value) =>
+      JSON.stringify(value)
         .replace(/</g, '\\u003c')
         .replace(/>/g, '\\u003e')
         .replace(/&/g, '\\u0026')
@@ -650,7 +650,7 @@ html,body{margin:0;height:100%;font:16px/1.5 system-ui,sans-serif;background:#16
 <div id="k"></div><div id="i">${pins.length} places · as of ${new Date().toLocaleDateString('de-DE')} · view only</div>
 <script>${leafletJs}<\/script>
 <script>
-var P=${jsonFuerScript(pins)};
+var P=${jsonForScript(pins)};
 var m=L.map('k').setView([51,10],5);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(m);
 var b=[];
@@ -669,10 +669,10 @@ if(b.length)m.fitBounds(b,{padding:[40,40],maxZoom:14});
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 <\/script></body></html>`;
 
-    const datum = new Date().toISOString().slice(0, 10);
-    ladeHerunter(`ortskarte-${datum}.html`, html, 'text/html');
-    toast('Standalone map downloaded. Open it with a double-click.', 'gut', 5000);
+    const date = new Date().toISOString().slice(0, 10);
+    download(`ortskarte-${date}.html`, html, 'text/html');
+    toast('Standalone map downloaded. Open it with a double-click.', 'success', 5000);
   } catch (e) {
-    toast('Could not build the map: ' + e.message, 'fehler');
+    toast('Could not build the map: ' + e.message, 'error');
   }
 }

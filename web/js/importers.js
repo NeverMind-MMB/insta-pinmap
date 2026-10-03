@@ -5,7 +5,7 @@
  * resolving short links and searching by name when coordinates are missing.
  *
  * Every function returns entries of the form:
- *   { name, address, lat, lon, url, quelle, note, warnung }
+ *   { name, address, lat, lon, url, source, note, warning }
  * lat/lon may be null; then they still have to be looked up.
  */
 
@@ -24,7 +24,7 @@ import { kml, gpx } from '../vendor/togeojson.js';
  *   Further f2 entries without f3/f4 are internal references and are skipped.
  * ================================================================== */
 
-function b64urlZuBytes(s) {
+function base64UrlToBytes(s) {
   let t = String(s).replace(/-/g, '+').replace(/_/g, '/');
   t = t.replace(/\s/g, '');
   while (t.length % 4) t += '=';
@@ -35,51 +35,51 @@ function b64urlZuBytes(s) {
 }
 
 /** Minimal protobuf reader: returns a list of fields. */
-function pbFelder(bytes) {
+function protobufFields(bytes) {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const felder = [];
+  const fields = [];
   let i = 0;
 
   function varint() {
-    let ergebnis = 0n;
-    let schub = 0n;
+    let result = 0n;
+    let shift = 0n;
     for (let n = 0; n < 10; n++) {
       if (i >= bytes.length) throw new Error('truncated');
       const b = bytes[i++];
-      ergebnis |= BigInt(b & 0x7f) << schub;
-      if (!(b & 0x80)) return ergebnis;
-      schub += 7n;
+      result |= BigInt(b & 0x7f) << shift;
+      if (!(b & 0x80)) return result;
+      shift += 7n;
     }
     throw new Error('varint too long');
   }
 
   while (i < bytes.length) {
     const key = Number(varint());
-    const nummer = key >> 3;
-    const typ = key & 7;
-    if (typ === 0) {
-      felder.push({ nummer, typ, wert: varint() });
-    } else if (typ === 1) {
+    const number = key >> 3;
+    const type = key & 7;
+    if (type === 0) {
+      fields.push({ number, type, value: varint() });
+    } else if (type === 1) {
       if (i + 8 > bytes.length) break;
-      felder.push({ nummer, typ, wert: dv.getFloat64(i, true) });
+      fields.push({ number, type, value: dv.getFloat64(i, true) });
       i += 8;
-    } else if (typ === 2) {
+    } else if (type === 2) {
       const len = Number(varint());
       if (i + len > bytes.length) break;
-      felder.push({ nummer, typ, wert: bytes.subarray(i, i + len) });
+      fields.push({ number, type, value: bytes.subarray(i, i + len) });
       i += len;
-    } else if (typ === 5) {
+    } else if (type === 5) {
       if (i + 4 > bytes.length) break;
-      felder.push({ nummer, typ, wert: dv.getFloat32(i, true) });
+      fields.push({ number, type, value: dv.getFloat32(i, true) });
       i += 4;
     } else {
       break; // groups do not occur here
     }
   }
-  return felder;
+  return fields;
 }
 
-function pbText(bytes) {
+function protobufText(bytes) {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
@@ -95,43 +95,43 @@ function appleName(s) {
 
 /**
  * Reads an Apple Guides link.
- * @returns {{titel: string, eintraege: Array}}
+ * @returns {{title: string, entries: Array}}
  */
-export function leseAppleGuide(urlOderUg) {
-  let ug = urlOderUg;
+export function readAppleGuide(urlOrUg) {
+  let ug = urlOrUg;
   try {
-    const u = new URL(urlOderUg);
+    const u = new URL(urlOrUg);
     ug = u.searchParams.get('ug') || u.searchParams.get('g') || '';
   } catch {
     /* then it is probably the bare parameter already */
   }
   if (!ug) throw new Error('No ug parameter found in the link.');
 
-  const felder = pbFelder(b64urlZuBytes(ug));
-  let titel = '';
-  const eintraege = [];
+  const fields = protobufFields(base64UrlToBytes(ug));
+  let title = '';
+  const entries = [];
 
-  for (const f of felder) {
-    if (f.nummer === 1 && f.typ === 2 && !titel) {
-      titel = pbText(f.wert) || '';
+  for (const f of fields) {
+    if (f.number === 1 && f.type === 2 && !title) {
+      title = protobufText(f.value) || '';
       continue;
     }
-    if (f.nummer !== 2 || f.typ !== 2) continue;
+    if (f.number !== 2 || f.type !== 2) continue;
 
-    const sub = pbFelder(f.wert);
-    let adresse = '';
+    const sub = protobufFields(f.value);
+    let address = '';
     let name = '';
     let lat = null;
     let lon = null;
 
     for (const s of sub) {
-      if (s.nummer === 3 && s.typ === 2) adresse = pbText(s.wert) || adresse;
-      else if (s.nummer === 5 && s.typ === 2) name = pbText(s.wert) || name;
-      else if (s.nummer === 4 && s.typ === 2) {
-        for (const c of pbFelder(s.wert)) {
-          if (c.typ !== 1) continue;
-          if (c.nummer === 1) lat = c.wert;
-          else if (c.nummer === 2) lon = c.wert;
+      if (s.number === 3 && s.type === 2) address = protobufText(s.value) || address;
+      else if (s.number === 5 && s.type === 2) name = protobufText(s.value) || name;
+      else if (s.number === 4 && s.type === 2) {
+        for (const c of protobufFields(s.value)) {
+          if (c.type !== 1) continue;
+          if (c.number === 1) lat = c.value;
+          else if (c.number === 2) lon = c.value;
         }
       }
     }
@@ -139,25 +139,25 @@ export function leseAppleGuide(urlOderUg) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;   // reference entry
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
 
-    eintraege.push({
-      name: appleName(name) || adresse.split(',')[0] || 'Untitled',
-      address: adresse,
+    entries.push({
+      name: appleName(name) || address.split(',')[0] || 'Untitled',
+      address,
       lat, lon,
       url: '',
-      quelle: 'apple-guide',
+      source: 'apple-guide',
       note: '',
-      warnung: '',
+      warning: '',
     });
   }
 
-  return { titel: appleName(titel), eintraege };
+  return { title: appleName(title), entries };
 }
 
 /* ================================================================== *
  * Single Apple place links
  * ================================================================== */
 
-export function leseAppleOrt(link) {
+export function readApplePlace(link) {
   let u;
   try {
     u = new URL(link);
@@ -170,9 +170,9 @@ export function leseAppleOrt(link) {
   let lat = null;
   let lon = null;
 
-  const paar = q.get('coordinate') || q.get('ll') || q.get('sll') || q.get('daddr');
-  if (paar) {
-    const m = paar.match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
+  const pair = q.get('coordinate') || q.get('ll') || q.get('sll') || q.get('daddr');
+  if (pair) {
+    const m = pair.match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
     if (m) {
       lat = parseFloat(m[1]);
       lon = parseFloat(m[2]);
@@ -188,9 +188,9 @@ export function leseAppleOrt(link) {
     lat: Number.isFinite(lat) ? lat : null,
     lon: Number.isFinite(lon) ? lon : null,
     url: link,
-    quelle: 'apple-ort',
+    source: 'apple-ort',
     note: '',
-    warnung: Number.isFinite(lat) ? '' : 'No coordinates in the link; it has to be looked up.',
+    warning: Number.isFinite(lat) ? '' : 'No coordinates in the link; it has to be looked up.',
   };
 }
 
@@ -203,22 +203,22 @@ export function leseAppleOrt(link) {
  * The pattern !3d<lat>!4d<lon> is the place itself; @lat,lng is only the
  * map center at the time of sharing and therefore less precise. So !3d!4d first.
  */
-export function googleKoordinaten(link) {
+export function googleCoordinates(link) {
   const s = String(link || '');
-  const genau = s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
-  if (genau) return { lat: parseFloat(genau[1]), lon: parseFloat(genau[2]), genau: true };
+  const precise = s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (precise) return { lat: parseFloat(precise[1]), lon: parseFloat(precise[2]), precise: true };
 
   try {
     const u = new URL(s);
     const query = u.searchParams.get('query') || u.searchParams.get('q') || u.searchParams.get('center');
     if (query) {
       const m = query.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
-      if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), genau: true };
+      if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), precise: true };
     }
   } catch { /* continue */ }
 
-  const mitte = s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),/);
-  if (mitte) return { lat: parseFloat(mitte[1]), lon: parseFloat(mitte[2]), genau: false };
+  const center = s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),/);
+  if (center) return { lat: parseFloat(center[1]), lon: parseFloat(center[2]), precise: false };
 
   return null;
 }
@@ -233,7 +233,7 @@ export function googleName(link) {
   }
 }
 
-export function istGoogleKurzlink(link) {
+export function isGoogleShortLink(link) {
   return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\//i.test(String(link || ''));
 }
 
@@ -241,10 +241,10 @@ export function istGoogleKurzlink(link) {
  * Google Takeout: "Saved Places" as GeoJSON
  * ================================================================== */
 
-export function leseTakeoutGeoJSON(text) {
+export function readTakeoutGeoJSON(text) {
   const j = typeof text === 'string' ? JSON.parse(text) : text;
   const feats = j?.features || [];
-  const raus = [];
+  const result = [];
 
   for (const f of feats) {
     const p = f.properties || {};
@@ -263,7 +263,7 @@ export function leseTakeoutGeoJSON(text) {
     if (!Number.isFinite(lon) && geo.Longitude != null) lon = parseFloat(geo.Longitude);
 
     // 0,0 is the usual placeholder for "unknown" in Takeout exports.
-    const brauchbar =
+    const usable =
       Number.isFinite(lat) && Number.isFinite(lon) &&
       Math.abs(lat) <= 90 && Math.abs(lon) <= 180 &&
       !(Math.abs(lat) < 1e-7 && Math.abs(lon) < 1e-7);
@@ -272,20 +272,20 @@ export function leseTakeoutGeoJSON(text) {
     const address = p.Location?.Address || '';
     const url = p['Google Maps URL'] || p.url || '';
 
-    if (!name && !brauchbar) continue;
+    if (!name && !usable) continue;
 
-    raus.push({
+    result.push({
       name: name || address.split(',')[0] || 'Untitled',
       address,
-      lat: brauchbar ? lat : null,
-      lon: brauchbar ? lon : null,
+      lat: usable ? lat : null,
+      lon: usable ? lon : null,
       url,
-      quelle: 'google-takeout',
+      source: 'google-takeout',
       note: p.Comment || '',
-      warnung: brauchbar ? '' : 'No usable coordinates in the file.',
+      warning: usable ? '' : 'No usable coordinates in the file.',
     });
   }
-  return raus;
+  return result;
 }
 
 /* ================================================================== *
@@ -293,10 +293,10 @@ export function leseTakeoutGeoJSON(text) {
  * ================================================================== */
 
 /** CSV per RFC 4180: quotes, doubled quotes, line breaks inside a field. */
-export function csvZeilen(text) {
-  const zeilen = [];
-  let feld = '';
-  let zeile = [];
+export function csvRows(text) {
+  const rows = [];
+  let field = '';
+  let row = [];
   let inQuote = false;
   const s = String(text).replace(/^﻿/, '');
 
@@ -304,87 +304,87 @@ export function csvZeilen(text) {
     const c = s[i];
     if (inQuote) {
       if (c === '"') {
-        if (s[i + 1] === '"') { feld += '"'; i++; }
+        if (s[i + 1] === '"') { field += '"'; i++; }
         else inQuote = false;
-      } else feld += c;
+      } else field += c;
       continue;
     }
     if (c === '"') { inQuote = true; continue; }
-    if (c === ',') { zeile.push(feld); feld = ''; continue; }
+    if (c === ',') { row.push(field); field = ''; continue; }
     if (c === '\r') continue;
-    if (c === '\n') { zeile.push(feld); zeilen.push(zeile); zeile = []; feld = ''; continue; }
-    feld += c;
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue; }
+    field += c;
   }
-  if (feld !== '' || zeile.length) { zeile.push(feld); zeilen.push(zeile); }
-  return zeilen.filter((z) => z.some((x) => String(x).trim() !== ''));
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((z) => z.some((x) => String(x).trim() !== ''));
 }
 
-export function leseGoogleCSV(text, listenName = '') {
-  const zeilen = csvZeilen(text);
-  if (!zeilen.length) return [];
+export function readGoogleCsv(text, listName = '') {
+  const rows = csvRows(text);
+  if (!rows.length) return [];
 
-  const kopf = zeilen[0].map((h) => h.trim().toLowerCase());
-  const hatKopf = kopf.some((h) => ['title', 'name', 'url', 'note', 'comment', 'titel'].includes(h));
-  const spalte = (namen) => {
-    for (const n of namen) {
-      const i = kopf.indexOf(n);
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  const hasHeader = header.some((h) => ['title', 'name', 'url', 'note', 'comment', 'titel'].includes(h));
+  const column = (names) => {
+    for (const n of names) {
+      const i = header.indexOf(n);
       if (i !== -1) return i;
     }
     return -1;
   };
-  const iTitel = hatKopf ? spalte(['title', 'titel', 'name']) : 0;
-  const iNotiz = hatKopf ? spalte(['note', 'comment', 'notiz', 'kommentar']) : 1;
-  const iUrl = hatKopf ? spalte(['url', 'link']) : 2;
+  const iTitle = hasHeader ? column(['title', 'titel', 'name']) : 0;
+  const iNote = hasHeader ? column(['note', 'comment', 'notiz', 'kommentar']) : 1;
+  const iUrl = hasHeader ? column(['url', 'link']) : 2;
 
-  const spaltenZahl = kopf.length;
+  const columnCount = header.length;
 
-  const raus = [];
-  for (const z of zeilen.slice(hatKopf ? 1 : 0)) {
-    const name = (iTitel >= 0 ? z[iTitel] : '') || '';
-    const note = (iNotiz >= 0 ? z[iNotiz] : '') || '';
+  const result = [];
+  for (const z of rows.slice(hasHeader ? 1 : 0)) {
+    const name = (iTitle >= 0 ? z[iTitle] : '') || '';
+    const note = (iNote >= 0 ? z[iNote] : '') || '';
 
     // Google Maps URLs contain commas (@45.4,9.2,17z). If they are not quoted
     // in the file, the link falls apart into several columns. If the last
     // header column is the URL, join everything from there back together;
     // otherwise exactly the coordinates get lost.
     let url = (iUrl >= 0 ? z[iUrl] : '') || '';
-    if (iUrl >= 0 && iUrl === spaltenZahl - 1 && z.length > spaltenZahl) {
+    if (iUrl >= 0 && iUrl === columnCount - 1 && z.length > columnCount) {
       url = z.slice(iUrl).join(',');
     }
 
     if (!name && !url) continue;
 
-    const koord = url ? googleKoordinaten(url) : null;
-    let warnung = '';
-    if (!koord) {
-      warnung = istGoogleKurzlink(url)
+    const coords = url ? googleCoordinates(url) : null;
+    let warning = '';
+    if (!coords) {
+      warning = isGoogleShortLink(url)
         ? 'Short link; it will be resolved on import.'
         : 'No coordinates in the link; it will be searched by name.';
-    } else if (!koord.genau) {
-      warnung = 'Coordinate comes from the map center and may be slightly off.';
+    } else if (!coords.precise) {
+      warning = 'Coordinate comes from the map center and may be slightly off.';
     }
 
-    raus.push({
+    result.push({
       name: name || googleName(url) || 'Untitled',
       address: '',
-      lat: koord?.lat ?? null,
-      lon: koord?.lon ?? null,
+      lat: coords?.lat ?? null,
+      lon: coords?.lon ?? null,
       url,
-      quelle: 'google-csv',
+      source: 'google-csv',
       note,
-      tagVorschlag: listenName ? listenName.toLowerCase().replace(/\.csv$/, '') : '',
-      warnung,
+      tagSuggestion: listName ? listName.toLowerCase().replace(/\.csv$/, '') : '',
+      warning,
     });
   }
-  return raus;
+  return result;
 }
 
 /* ================================================================== *
  * GeoJSON, KML, KMZ, GPX
  * ================================================================== */
 
-function ausGeoJSON(j, quelle) {
-  const raus = [];
+function fromGeoJSON(j, source) {
+  const result = [];
   const feats = j?.type === 'FeatureCollection' ? j.features || [] : j?.type === 'Feature' ? [j] : [];
 
   for (const f of feats) {
@@ -409,18 +409,18 @@ function ausGeoJSON(j, quelle) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
 
-    raus.push({
+    result.push({
       name: p.name || p.Name || p.title || p.Title || 'Untitled',
       address: p.address || p.Address || p.vicinity || '',
       lat, lon,
       url: p.url || p.link || '',
-      quelle,
+      source,
       note: (p.description || p.Description || p.desc || '')
         .replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 500),
-      warnung: '',
+      warning: '',
     });
   }
-  return raus;
+  return result;
 }
 
 function xmlDoc(text) {
@@ -429,42 +429,42 @@ function xmlDoc(text) {
   return doc;
 }
 
-export function leseKML(text) {
-  return ausGeoJSON(kml(xmlDoc(text)), 'kml');
+export function readKml(text) {
+  return fromGeoJSON(kml(xmlDoc(text)), 'kml');
 }
 
-export function leseGPX(text) {
-  return ausGeoJSON(gpx(xmlDoc(text)), 'gpx');
+export function readGpx(text) {
+  return fromGeoJSON(gpx(xmlDoc(text)), 'gpx');
 }
 
-export function leseKMZ(bytes) {
-  const dateien = unzipSync(new Uint8Array(bytes));
+export function readKmz(bytes) {
+  const files = unzipSync(new Uint8Array(bytes));
   const name =
-    Object.keys(dateien).find((n) => /^doc\.kml$/i.test(n)) ||
-    Object.keys(dateien).find((n) => /\.kml$/i.test(n));
+    Object.keys(files).find((n) => /^doc\.kml$/i.test(n)) ||
+    Object.keys(files).find((n) => /\.kml$/i.test(n));
   if (!name) throw new Error('The KMZ file contains no KML file.');
-  return leseKML(strFromU8(dateien[name]));
+  return readKml(strFromU8(files[name]));
 }
 
 /* ================================================================== *
  * Read a file, detect the format automatically
  * ================================================================== */
 
-export async function leseDatei(file) {
+export async function readFile(file) {
   const name = file.name || '';
-  const endung = (name.split('.').pop() || '').toLowerCase();
+  const ext = (name.split('.').pop() || '').toLowerCase();
 
-  if (endung === 'kmz' || endung === 'zip') {
-    return { name, eintraege: leseKMZ(await file.arrayBuffer()) };
+  if (ext === 'kmz' || ext === 'zip') {
+    return { name, entries: readKmz(await file.arrayBuffer()) };
   }
 
   const text = await file.text();
 
-  if (endung === 'kml') return { name, eintraege: leseKML(text) };
-  if (endung === 'gpx') return { name, eintraege: leseGPX(text) };
-  if (endung === 'csv' || endung === 'tsv') return { name, eintraege: leseGoogleCSV(text, name) };
+  if (ext === 'kml') return { name, entries: readKml(text) };
+  if (ext === 'gpx') return { name, entries: readGpx(text) };
+  if (ext === 'csv' || ext === 'tsv') return { name, entries: readGoogleCsv(text, name) };
 
-  if (endung === 'json' || endung === 'geojson' || !endung) {
+  if (ext === 'json' || ext === 'geojson' || !ext) {
     let j;
     try {
       j = JSON.parse(text);
@@ -472,47 +472,47 @@ export async function leseDatei(file) {
       throw new Error('The file is not readable JSON.');
     }
     // Our own backup
-    if (Array.isArray(j?.pins)) return { name, sicherung: j, eintraege: [] };
+    if (Array.isArray(j?.pins)) return { name, backup: j, entries: [] };
     // Takeout is recognized by its typical properties
-    const erstes = j?.features?.[0]?.properties || {};
-    if ('Google Maps URL' in erstes || 'Location' in erstes) {
-      return { name, eintraege: leseTakeoutGeoJSON(j) };
+    const first = j?.features?.[0]?.properties || {};
+    if ('Google Maps URL' in first || 'Location' in first) {
+      return { name, entries: readTakeoutGeoJSON(j) };
     }
-    return { name, eintraege: ausGeoJSON(j, 'geojson') };
+    return { name, entries: fromGeoJSON(j, 'geojson') };
   }
 
   // Guess if necessary
   if (/^\s*</.test(text)) {
-    return { name, eintraege: /<gpx/i.test(text) ? leseGPX(text) : leseKML(text) };
+    return { name, entries: /<gpx/i.test(text) ? readGpx(text) : readKml(text) };
   }
-  throw new Error(`I can't do anything with the extension ".${endung}".`);
+  throw new Error(`I can't do anything with the extension ".${ext}".`);
 }
 
 /** Text from the link field in the settings. */
-export function leseLink(link) {
+export function readLink(link) {
   const s = String(link || '').trim();
   if (/guides\.apple\.com/i.test(s) || /[?&]ug=/.test(s)) {
-    const { titel, eintraege } = leseAppleGuide(s);
-    return { name: titel || 'Apple Guide', eintraege };
+    const { title, entries } = readAppleGuide(s);
+    return { name: title || 'Apple Guide', entries };
   }
-  const apple = leseAppleOrt(s);
-  if (apple) return { name: apple.name, eintraege: [apple] };
+  const apple = readApplePlace(s);
+  if (apple) return { name: apple.name, entries: [apple] };
 
-  if (/google\.[a-z.]+\/maps|maps\.google\./i.test(s) || istGoogleKurzlink(s)) {
-    const k = googleKoordinaten(s);
+  if (/google\.[a-z.]+\/maps|maps\.google\./i.test(s) || isGoogleShortLink(s)) {
+    const k = googleCoordinates(s);
     return {
       name: googleName(s) || 'Google place',
-      eintraege: [{
+      entries: [{
         name: googleName(s) || 'Google place',
         address: '',
         lat: k?.lat ?? null,
         lon: k?.lon ?? null,
         url: s,
-        quelle: 'google-link',
+        source: 'google-link',
         note: '',
-        warnung: k
-          ? (k.genau ? '' : 'Coordinate comes from the map center.')
-          : (istGoogleKurzlink(s) ? 'Short link; it will be resolved on import.' : 'No coordinates in the link.'),
+        warning: k
+          ? (k.precise ? '' : 'Coordinate comes from the map center.')
+          : (isGoogleShortLink(s) ? 'Short link; it will be resolved on import.' : 'No coordinates in the link.'),
       }],
     };
   }

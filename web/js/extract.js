@@ -11,7 +11,7 @@
  * ------------------------------------------------------------------ */
 
 /** Hashtags that are never a place. */
-export const HASHTAG_STOPP = new Set([
+export const HASHTAG_STOPLIST = new Set([
   // Reach
   'reels', 'reel', 'reelsinstagram', 'explore', 'explorepage', 'fyp', 'foryou', 'foryoupage',
   'viral', 'trending', 'instagood', 'instadaily', 'instagram', 'igers', 'photooftheday',
@@ -41,7 +41,7 @@ export const HASHTAG_STOPP = new Set([
 ]);
 
 /** Words that are worthless as a place name on their own. */
-const WORT_STOPP = new Set([
+const WORD_STOPLIST = new Set([
   // Articles, pronouns, filler words
   'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einen', 'einem', 'einer',
   'und', 'oder', 'aber', 'auch', 'noch', 'schon', 'sehr', 'mehr', 'hier', 'dort',
@@ -80,7 +80,7 @@ const WORT_STOPP = new Set([
 ]);
 
 /** Is this a word at all, or just a separator? */
-function istWort(s) {
+function isWord(s) {
   return /[\p{L}\p{N}]/u.test(s);
 }
 
@@ -94,13 +94,13 @@ function istWort(s) {
  * "Sunset an der Praia da Marinha" turns into the nonsense "Sunset an der Praia".
  * The marker rule further down handles that role.
  */
-const VERBINDER =
+const CONNECTORS =
   'von|vom|van|der|den|des|dem|zur|zum|' +
   'da|de|del|della|di|do|dos|das|du|la|le|les|el|los|las|' +
   'of|the|op|ter|sur|sous|aux|al|ibn|bin';
 
 /** Instagram accounts that are never a place. */
-const HANDLE_STOPP = new Set(['instagram', 'reels', 'explore', 'shop', 'creators']);
+const HANDLE_STOPLIST = new Set(['instagram', 'reels', 'explore', 'shop', 'creators']);
 
 /* ------------------------------------------------------------------ *
  * Flag emoji → country code
@@ -111,7 +111,7 @@ const HANDLE_STOPP = new Set(['instagram', 'reels', 'explore', 'shop', 'creators
  * The code is not used as a candidate of its own but as a filter for all
  * the others; that is exactly what decides Paris/France versus Paris/Texas.
  */
-export function flaggenLaender(text) {
+export function flagCountries(text) {
   const out = [];
   const s = String(text || '');
   for (let i = 0; i < s.length - 1; ) {
@@ -136,15 +136,15 @@ export function flaggenLaender(text) {
  * ------------------------------------------------------------------ */
 
 /** Removes emoji and symbol clutter, keeps letters. */
-function ohneEmoji(s) {
+function withoutEmoji(s) {
   return String(s || '')
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
 
-function saeubern(s) {
-  return ohneEmoji(s)
+function cleanUp(s) {
+  return withoutEmoji(s)
     .replace(/^[\s\-–—•·:,.!?"'`«»„“”()[\]{}]+/, '')
     .replace(/[\s\-–—•·:,.!?"'`«»„“”()[\]{}]+$/, '')
     .replace(/\s{2,}/g, ' ')
@@ -152,7 +152,7 @@ function saeubern(s) {
 }
 
 /** Split CamelCase and snake_case into words: NuernbergFood → "Nuernberg Food". */
-export function tagInWorte(tag) {
+export function tagToWords(tag) {
   let s = String(tag || '').replace(/^#/, '');
   s = s.replace(/[_.]+/g, ' ');
   // Split before an uppercase letter that follows a lowercase letter/digit
@@ -166,26 +166,26 @@ export function tagInWorte(tag) {
  * A name may neither end with a connector ("Rio de") nor start with an
  * article ("der Praia da Marinha").
  */
-function trimmVerbinder(s) {
-  const verb = new Set(VERBINDER.split('|'));
-  const artikel = new Set(['der', 'die', 'das', 'dem', 'den', 'the']);
-  const worte = String(s).split(/\s+/).filter(Boolean);
-  while (worte.length > 1 && verb.has(worte[worte.length - 1].toLowerCase())) worte.pop();
-  while (worte.length > 1 && artikel.has(worte[0].toLowerCase())) worte.shift();
-  return worte.join(' ');
+function trimConnectors(s) {
+  const connectorSet = new Set(CONNECTORS.split('|'));
+  const articles = new Set(['der', 'die', 'das', 'dem', 'den', 'the']);
+  const words = String(s).split(/\s+/).filter(Boolean);
+  while (words.length > 1 && connectorSet.has(words[words.length - 1].toLowerCase())) words.pop();
+  while (words.length > 1 && articles.has(words[0].toLowerCase())) words.shift();
+  return words.join(' ');
 }
 
-function gueltigerName(s) {
-  const t = trimmVerbinder(saeubern(s));
+function isValidName(s) {
+  const t = trimConnectors(cleanUp(s));
   if (t.length < 3 || t.length > 80) return false;
   if (!/[a-zA-ZäöüÄÖÜß]/.test(t)) return false;
 
   // Only rate real words. Otherwise a separator rescues the match:
   // "Werbung | Anzeige" passed the check because the | is in no stop list
   // and the every() condition therefore failed.
-  const worte = t.toLowerCase().split(/[\s,]+/).filter(istWort);
-  if (!worte.length) return false;
-  if (worte.every((w) => WORT_STOPP.has(w))) return false;
+  const words = t.toLowerCase().split(/[\s,]+/).filter(isWord);
+  if (!words.length) return false;
+  if (words.every((w) => WORD_STOPLIST.has(w))) return false;
   return true;
 }
 
@@ -194,23 +194,23 @@ function gueltigerName(s) {
  * ------------------------------------------------------------------ */
 
 /** Explicit place markers. Highest likelihood of a match. */
-const MARKER = [
+const MARKERS = [
   // 📍 place   /   📌 place   /   🗺 place
-  { re: /[\u{1F4CD}\u{1F4CC}\u{1F5FA}\u{1F3E0}]\s*([^\n#@]{3,80})/gu, punkte: 100 },
+  { re: /[\u{1F4CD}\u{1F4CC}\u{1F5FA}\u{1F3E0}]\s*([^\n#@]{3,80})/gu, points: 100 },
   // "Location: X" / "Ort: X" / "Adresse: X" / "Wo: X"
-  { re: /\b(?:location|ort|adresse|address|standort|wo|where|spot|place)\s*[:\-–]\s*([^\n#@]{3,80})/gi, punkte: 95 },
+  { re: /\b(?:location|ort|adresse|address|standort|wo|where|spot|place)\s*[:\-–]\s*([^\n#@]{3,80})/gi, points: 95 },
   // "@ place" with a space: Instagram's old way of writing a location
-  { re: /(?:^|\s)@\s+([A-ZÄÖÜ][^\n#@]{2,60})/gm, punkte: 85 },
+  { re: /(?:^|\s)@\s+([A-ZÄÖÜ][^\n#@]{2,60})/gm, points: 85 },
   // "im/in/an/bei/at Xyz", only if followed by a capitalized word.
   // The article may come along ("an der Praia …") and is cut off afterwards.
   {
     re: new RegExp(
       `\\b(?:in|im|an|am|auf|bei|beim|vor|nahe|neben|near|at|from|aus|to|nach)\\s+` +
       `((?:der |die |das |dem |den |the )?` +
-      `(?:[A-ZÄÖÜ][\\wäöüß'’-]*)(?:[ -](?:[A-ZÄÖÜ][\\wäöüß'’-]*|${VERBINDER})){0,4})`,
+      `(?:[A-ZÄÖÜ][\\wäöüß'’-]*)(?:[ -](?:[A-ZÄÖÜ][\\wäöüß'’-]*|${CONNECTORS})){0,4})`,
       'g'
     ),
-    punkte: 70,
+    points: 70,
   },
 ];
 
@@ -219,35 +219,35 @@ const MARKER = [
  * @param {object} [extra]   { username, location } if available
  * @returns {{candidates: Array, countries: string[], hashtags: string[]}}
  */
-export function ortsKandidaten(caption, extra = {}) {
+export function placeCandidates(caption, extra = {}) {
   const text = String(caption || '');
-  const countries = flaggenLaender(text);
-  const treffer = new Map(); // lowercased -> {text, punkte, quelle}
+  const countries = flagCountries(text);
+  const matches = new Map(); // lowercased -> {text, points, source}
 
-  const add = (roh, punkte, quelle) => {
-    const t = trimmVerbinder(saeubern(roh));
-    if (!gueltigerName(t)) return;
+  const add = (raw, points, source) => {
+    const t = trimConnectors(cleanUp(raw));
+    if (!isValidName(t)) return;
     const key = t.toLowerCase();
-    const alt = treffer.get(key);
-    if (!alt || alt.punkte < punkte) treffer.set(key, { text: t, punkte, quelle });
-    else if (alt.quelle !== quelle) alt.punkte += 6; // confirmed from two directions
+    const existing = matches.get(key);
+    if (!existing || existing.points < points) matches.set(key, { text: t, points, source });
+    else if (existing.source !== source) existing.points += 6; // confirmed from two directions
   };
 
   // 0) A location name supplied by Instagram beats everything else.
   if (extra.location) add(extra.location, 130, 'instagram');
 
   // 1) Explicit markers
-  for (const { re, punkte } of MARKER) {
+  for (const { re, points } of MARKERS) {
     re.lastIndex = 0;
     let m;
     while ((m = re.exec(text)) !== null) {
       // Cut at separators: "📍 Nürnberg | Werbung" -> "Nürnberg".
       // And at the end of a sentence, otherwise "Ort: Elbphilharmonie Hamburg.
       // Konzert war Wahnsinn" becomes a single, useless search term.
-      const roh = m[1]
+      const raw = m[1]
         .split(/[.!?]\s+|\s+[–—-]\s+|\s*[|•·]\s*|\s{2,}|,\s*(?=[a-z])/)[0]
         .replace(/[.!?]+$/, '');
-      add(roh, punkte, 'marker');
+      add(raw, points, 'marker');
       if (m.index === re.lastIndex) re.lastIndex++;
     }
   }
@@ -255,22 +255,22 @@ export function ortsKandidaten(caption, extra = {}) {
   // 2) @ mentions: on Instagram, shops' accounts are often named like the shop
   const handles = [...text.matchAll(/(?:^|[^\w@])@([A-Za-z0-9._]{3,30})\b/g)].map((m) => m[1]);
   for (const h of handles) {
-    if (HANDLE_STOPP.has(h.toLowerCase())) continue;
+    if (HANDLE_STOPLIST.has(h.toLowerCase())) continue;
     if (extra.username && h.toLowerCase() === String(extra.username).toLowerCase()) continue;
-    const worte = tagInWorte(h);
-    add(worte, 55, 'handle');
+    const words = tagToWords(h);
+    add(words, 55, 'handle');
   }
 
   // 3) Hashtags
   const hashtags = [...text.matchAll(/#([\p{L}\p{N}_]{2,50})/gu)].map((m) => m[1]);
   for (const tag of hashtags) {
-    const klein = tag.toLowerCase();
-    if (HASHTAG_STOPP.has(klein)) continue;
+    const lower = tag.toLowerCase();
+    if (HASHTAG_STOPLIST.has(lower)) continue;
     if (/^\d+$/.test(tag)) continue;
-    const worte = tagInWorte(tag);
+    const words = tagToWords(tag);
     // A single word starting with an uppercase letter is often a place name
-    const punkte = worte.includes(' ') ? 45 : 50;
-    add(worte, punkte, 'hashtag');
+    const points = words.includes(' ') ? 45 : 50;
+    add(words, points, 'hashtag');
   }
 
   // 4) The remaining sentence.
@@ -281,7 +281,7 @@ export function ortsKandidaten(caption, extra = {}) {
   // finds such names. If, after removing emoji, hashtags, mentions and URLs,
   // something short remains that looks like a name, it is very likely
   // exactly the place we are looking for.
-  const rest = ohneEmoji(
+  const rest = withoutEmoji(
     text
       .replace(/https?:\/\/\S+/g, ' ')
       .replace(/#[\p{L}\p{N}_]+/gu, ' ')
@@ -294,28 +294,28 @@ export function ortsKandidaten(caption, extra = {}) {
     .trim();
 
   if (rest && rest.length <= 70 && !/[!?;:]|\.\s/.test(rest)) {
-    const worte = rest.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
-    const grossAnteil = worte.filter((w) => /^[A-ZÄÖÜ]/.test(w)).length / worte.length;
+    const words = rest.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+    const capitalShare = words.filter((w) => /^[A-ZÄÖÜ]/.test(w)).length / words.length;
     // At most five words, mostly capitalized, and a capitalized start:
     // "Zermatt", "Praia da Marinha", "Cinque Terre, Italien" pass,
     // "Nur ein Selfie, nichts weiter" does not.
-    if (worte.length <= 5 && grossAnteil >= 0.5 && /^[A-ZÄÖÜ]/.test(rest)) {
-      add(rest, 80, 'restsatz');
+    if (words.length <= 5 && capitalShare >= 0.5 && /^[A-ZÄÖÜ]/.test(rest)) {
+      add(rest, 80, 'remainder');
     }
   }
 
   // 5) Capitalized word sequences in running text (proper names)
-  const ohne = ohneEmoji(text.replace(/#[\p{L}\p{N}_]+/gu, ' ').replace(/@[A-Za-z0-9._]+/g, ' '));
-  const eigennameRe = new RegExp(
+  const stripped = withoutEmoji(text.replace(/#[\p{L}\p{N}_]+/gu, ' ').replace(/@[A-Za-z0-9._]+/g, ' '));
+  const properNameRe = new RegExp(
     `(?:^|[.!?:;,]\\s+|\\s)` +
-    `((?:[A-ZÄÖÜ][\\wäöüß'’-]{1,})(?:[ -](?:[A-ZÄÖÜ][\\wäöüß'’-]{1,}|${VERBINDER})){1,4})`,
+    `((?:[A-ZÄÖÜ][\\wäöüß'’-]{1,})(?:[ -](?:[A-ZÄÖÜ][\\wäöüß'’-]{1,}|${CONNECTORS})){1,4})`,
     'g'
   );
-  for (const zeile of ohne.split('\n')) {
-    const re = new RegExp(eigennameRe.source, 'g');
+  for (const line of stripped.split('\n')) {
+    const re = new RegExp(properNameRe.source, 'g');
     let m;
-    while ((m = re.exec(zeile)) !== null) {
-      add(m[1], 30, 'eigenname');
+    while ((m = re.exec(line)) !== null) {
+      add(m[1], 30, 'properName');
       if (m.index === re.lastIndex) re.lastIndex++;
     }
 
@@ -323,16 +323,16 @@ export function ortsKandidaten(caption, extra = {}) {
     // capitalized, so this is thin evidence, hence few points. But it is
     // enough that "Neuschwanstein" in the middle of a sentence is not
     // lost entirely.
-    const einzel = /(?:^|[.!?:;,]\s+|\s)([A-ZÄÖÜ][\p{L}äöüß'’-]{3,})(?=$|[\s.!?:;,])/gu;
+    const single = /(?:^|[.!?:;,]\s+|\s)([A-ZÄÖÜ][\p{L}äöüß'’-]{3,})(?=$|[\s.!?:;,])/gu;
     let e;
-    while ((e = einzel.exec(zeile)) !== null) {
-      add(e[1], 22, 'einzelwort');
-      if (e.index === einzel.lastIndex) einzel.lastIndex++;
+    while ((e = single.exec(line)) !== null) {
+      add(e[1], 22, 'singleWord');
+      if (e.index === single.lastIndex) single.lastIndex++;
     }
   }
 
-  const candidates = [...treffer.values()]
-    .sort((a, b) => b.punkte - a.punkte || a.text.length - b.text.length)
+  const candidates = [...matches.values()]
+    .sort((a, b) => b.points - a.points || a.text.length - b.text.length)
     .slice(0, 8);
 
   return { candidates, countries, hashtags };
@@ -347,8 +347,8 @@ export function ortsKandidaten(caption, extra = {}) {
  * Used to prefill the search field when the automatic extraction finds
  * nothing: a starting point to trim down is better than an empty field.
  */
-export function sauberterText(caption) {
-  return ohneEmoji(
+export function cleanedText(caption) {
+  return withoutEmoji(
     String(caption || '')
       .replace(/https?:\/\/\S+/g, ' ')
       .replace(/#[\p{L}\p{N}_]+/gu, ' ')
@@ -361,19 +361,19 @@ export function sauberterText(caption) {
 }
 
 /** The post's hashtags, filtered and normalized, as tag suggestions. */
-export function tagVorschlaege(caption, zusatzStopp = []) {
-  const stopp = new Set([...HASHTAG_STOPP, ...zusatzStopp.map((s) => String(s).toLowerCase())]);
-  const raus = [];
-  const gesehen = new Set();
+export function tagSuggestions(caption, extraStops = []) {
+  const stops = new Set([...HASHTAG_STOPLIST, ...extraStops.map((s) => String(s).toLowerCase())]);
+  const result = [];
+  const seen = new Set();
   for (const m of String(caption || '').matchAll(/#([\p{L}\p{N}_]{2,40})/gu)) {
     const tag = m[1];
-    const klein = tag.toLowerCase();
-    if (stopp.has(klein) || gesehen.has(klein) || /^\d+$/.test(tag)) continue;
-    gesehen.add(klein);
-    raus.push(klein);
-    if (raus.length >= 12) break;
+    const lower = tag.toLowerCase();
+    if (stops.has(lower) || seen.has(lower) || /^\d+$/.test(tag)) continue;
+    seen.add(lower);
+    result.push(lower);
+    if (result.length >= 12) break;
   }
-  return raus;
+  return result;
 }
 
 /* ------------------------------------------------------------------ *
@@ -381,12 +381,12 @@ export function tagVorschlaege(caption, zusatzStopp = []) {
  * ------------------------------------------------------------------ */
 
 /** Specific places are more likely meant than whole cities or countries. */
-const ART_PUNKTE = {
+const CATEGORY_POINTS = {
   amenity: 30, shop: 30, tourism: 28, leisure: 26, historic: 24, craft: 22,
   building: 12, natural: 14, waterway: 10,
   highway: 4, place: 8, boundary: -8, administrative: -8,
 };
-const KIND_PUNKTE = {
+const KIND_POINTS = {
   cafe: 6, restaurant: 6, bar: 6, pub: 6, bakery: 5, hotel: 5, museum: 5,
   attraction: 5, viewpoint: 5, park: 4, beach: 4, peak: 3,
   city: 2, town: 1, village: 0, suburb: -2, neighbourhood: -3,
@@ -395,23 +395,23 @@ const KIND_PUNKTE = {
 
 /**
  * Rates geocoder matches for a candidate.
- * @param {Array} treffer  normalized matches from the server
- * @param {object} ctx     { kandidatPunkte, countries }
+ * @param {Array} matches  normalized matches from the server
+ * @param {object} ctx     { candidatePoints, countries }
  */
-export function bewerteTreffer(treffer, ctx = {}) {
-  const { kandidatPunkte = 50, countries = [] } = ctx;
-  return treffer
+export function scoreMatches(matches, ctx = {}) {
+  const { candidatePoints = 50, countries = [] } = ctx;
+  return matches
     .map((t) => {
-      let p = kandidatPunkte;
-      p += ART_PUNKTE[t.category] ?? 0;
-      p += KIND_PUNKTE[t.kind] ?? 0;
+      let p = candidatePoints;
+      p += CATEGORY_POINTS[t.category] ?? 0;
+      p += KIND_POINTS[t.kind] ?? 0;
       if (typeof t.importance === 'number') p += t.importance * 20;
       if (countries.length) {
         // A flag in the post is a strong signal
         p += countries.includes(t.countryCode) ? 35 : -25;
       }
       if (!t.address) p -= 5;
-      return { ...t, punkte: Math.round(p) };
+      return { ...t, points: Math.round(p) };
     })
-    .sort((a, b) => b.punkte - a.punkte);
+    .sort((a, b) => b.points - a.points);
 }

@@ -75,55 +75,55 @@
 </main>
 
 <script type="module">
-import { shortcode, normalisiereLink, entfernung, entfernungText, findePost, baueIndex, nahePins } from './js/dedupe.js';
-import { ortsKandidaten, flaggenLaender, tagInWorte, tagVorschlaege, bewerteTreffer } from './js/extract.js';
-import { leseAppleGuide, leseAppleOrt, googleKoordinaten, leseTakeoutGeoJSON, leseGoogleCSV, csvZeilen, leseKML, leseGPX } from './js/importers.js';
+import { shortcode, normalizeLink, distanceM, distanceText, findPost, buildIndex, nearbyPins } from './js/dedupe.js';
+import { placeCandidates, flagCountries, tagToWords, tagSuggestions, scoreMatches } from './js/extract.js';
+import { readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows, readKml, readGpx } from './js/importers.js';
 
 const $ = (id) => document.getElementById(id);
-let zaehler = { ok: 0, fehl: 0, warn: 0 };
+let counts = { ok: 0, fehl: 0, warn: 0 };
 
-function eintrag(ziel, name) {
+function addRow(target, name) {
   const li = document.createElement('li');
   li.innerHTML = '<span class="zeichen">…</span><span class="name"></span><span class="dauer"></span><span class="details"></span>';
   li.querySelector('.name').textContent = name;
-  $(ziel).appendChild(li);
+  $(target).appendChild(li);
   return li;
 }
 
-function ergebnis(li, art, text, ms) {
-  li.className = art;
-  li.querySelector('.zeichen').textContent = art === 'ok' ? '✓' : art === 'warn' ? '!' : '✕';
+function setResult(li, kind, text, ms) {
+  li.className = kind;
+  li.querySelector('.zeichen').textContent = kind === 'ok' ? '✓' : kind === 'warn' ? '!' : '✕';
   li.querySelector('.details').textContent = text || '';
   if (ms != null) li.querySelector('.dauer').textContent = `${Math.round(ms)} ms`;
-  zaehler[art === 'ok' ? 'ok' : art === 'warn' ? 'warn' : 'fehl']++;
-  bilanz();
+  counts[kind === 'ok' ? 'ok' : kind === 'warn' ? 'warn' : 'fehl']++;
+  updateSummary();
 }
 
-function bilanz() {
+function updateSummary() {
   $('bilanz').textContent =
-    `${zaehler.ok} passed · ${zaehler.warn} with limitations · ${zaehler.fehl} failed`;
+    `${counts.ok} passed · ${counts.warn} with limitations · ${counts.fehl} failed`;
 }
 
 /* ---------- small test helpers ---------- */
 
-function pruefe(name, fn) {
-  const li = eintrag('logik', name);
+function check(name, fn) {
+  const li = addRow('logik', name);
   const t0 = performance.now();
   try {
     const info = fn();
-    ergebnis(li, 'ok', info || '', performance.now() - t0);
+    setResult(li, 'ok', info || '', performance.now() - t0);
   } catch (e) {
-    ergebnis(li, 'fehl', e.message, performance.now() - t0);
+    setResult(li, 'fehl', e.message, performance.now() - t0);
   }
 }
 
-function gleich(a, b, was = '') {
+function equal(a, b, was = '') {
   if (JSON.stringify(a) !== JSON.stringify(b)) {
     throw new Error(`${was} expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
   }
 }
-function wahr(b, was) { if (!b) throw new Error(was || 'Condition not met'); }
-function nah(a, b, tol, was = '') {
+function ok(b, was) { if (!b) throw new Error(was || 'Condition not met'); }
+function near(a, b, tol, was = '') {
   if (!(Math.abs(a - b) <= tol)) throw new Error(`${was} ${a} differs from ${b} by more than ${tol}`);
 }
 
@@ -131,11 +131,11 @@ function nah(a, b, tol, was = '') {
 
 const APPLE_UG = 'https://guides.apple.com/?ug=Cg1FcGljIEdhbWVyaW5nElcaM0hvbHpzY2h1aGVyc3RyYcOfZSAzNiwgOTA0MzkgTsO8cm5iZXJnLCBEZXV0c2NobGFuZCISCak0vB8SuUhAEcvv2d9%2BGSZAKgxIaXZlIEdhbWluZz8SDQiuTRDUhIiNx%2FL9oDgSURo1R3Jvw59lbmhhaW5lciBTdHJhw59lIDE4OCwgMDExMjkgRHJlc2RlbiwgRGV1dHNjaGxhbmQiEgna1vjlEYxJQBErmInXrHArQCoENDA0PxJrGjxPbHltcGlhcGFyaywgVG9uaS1NZXJrZW5zLVdlZyA0LCA4MDgwOSBNw7xuY2hlbiwgRGV1dHNjaGxhbmQiEgmZbbTiuhVIQBHGXDAhvhQnQCoXUmVkIEJ1bGwgR2FtaW5nIEdhcmRlbj8SDgiuTRDq57OmgKKGic8BEg4Irk0Qxeiv6pCt5ZyIARINCK5NEMrCuI7%2Bh6LKORINCK5NEI%2BtreyGx%2Fe1TxINCK5NEIrU7sq7pqLZMBIOCK5NEML2otPY%2BsCgzgE%3D';
 
-function logikTests() {
+function logicTests() {
   $('logik').innerHTML = '';
 
-  pruefe('Normalize Instagram links', () => {
-    const gleiche = [
+  check('Normalize Instagram links', () => {
+    const same = [
       'https://www.instagram.com/p/C8xYz_1AbCd/',
       'https://instagram.com/p/C8xYz_1AbCd',
       'https://www.instagram.com/reel/C8xYz_1AbCd/?igsh=MXY123&utm_source=ig_web',
@@ -143,79 +143,79 @@ function logikTests() {
       'https://www.instagram.com/machhoerndl/p/C8xYz_1AbCd/',
       'instagram.com/tv/C8xYz_1AbCd/',
     ];
-    for (const l of gleiche) gleich(shortcode(l), 'C8xYz_1AbCd', l);
-    gleich(normalisiereLink(gleiche[2]), 'https://www.instagram.com/p/C8xYz_1AbCd/');
-    gleich(shortcode('https://example.com/p/abc'), null, 'foreign URL');
-    return `${gleiche.length} spellings reduced to one form`;
+    for (const l of same) equal(shortcode(l), 'C8xYz_1AbCd', l);
+    equal(normalizeLink(same[2]), 'https://www.instagram.com/p/C8xYz_1AbCd/');
+    equal(shortcode('https://example.com/p/abc'), null, 'foreign URL');
+    return `${same.length} spellings reduced to one form`;
   });
 
-  pruefe('Distance (haversine)', () => {
+  check('Distance (haversine)', () => {
     // Brandenburg Gate -> Berlin TV Tower, about 2,2 km
-    nah(entfernung(52.5163, 13.3777, 52.5208, 13.4094), 2200, 120, 'Berlin');
+    near(distanceM(52.5163, 13.3777, 52.5208, 13.4094), 2200, 120, 'Berlin');
     // Nürnberg -> München, about 151 km
-    nah(entfernung(49.4539, 11.0775, 48.1372, 11.5755) / 1000, 151, 4, 'Nbg-M');
-    nah(entfernung(0, 0, 0, 0), 0, 0.001, 'same point');
-    gleich(entfernungText(87), '87 m');
-    gleich(entfernungText(1234), '1,2 km');
+    near(distanceM(49.4539, 11.0775, 48.1372, 11.5755) / 1000, 151, 4, 'Nbg-M');
+    near(distanceM(0, 0, 0, 0), 0, 0.001, 'same point');
+    equal(distanceText(87), '87 m');
+    equal(distanceText(1234), '1,2 km');
     return 'Berlin 2,2 km · Nürnberg→München 151 km';
   });
 
-  pruefe('Detect duplicate posts', () => {
-    const db = baueIndex({ pins: [{
+  check('Detect duplicate posts', () => {
+    const db = buildIndex({ pins: [{
       id: 'p1', lat: 49.45, lon: 11.07, title: 'Test', tags: [],
       posts: [{ url: 'https://www.instagram.com/p/AAA111/' }],
     }], postIndex: {} });
-    wahr(findePost(db, 'https://www.instagram.com/reel/AAA111/?igsh=xyz'), 'Reel form not recognized');
-    gleich(findePost(db, 'https://www.instagram.com/p/BBB222/'), null, 'other post');
-    gleich(db.postIndex.AAA111, 'p1', 'Index');
+    ok(findPost(db, 'https://www.instagram.com/reel/AAA111/?igsh=xyz'), 'Reel form not recognized');
+    equal(findPost(db, 'https://www.instagram.com/p/BBB222/'), null, 'other post');
+    equal(db.postIndex.AAA111, 'p1', 'Index');
     return 'Index and full scan agree';
   });
 
-  pruefe('Find nearby pins', () => {
+  check('Find nearby pins', () => {
     const db = { pins: [
       { id: 'a', lat: 49.4500, lon: 11.0700, title: 'A' },
       { id: 'b', lat: 49.4502, lon: 11.0700, title: 'B' },   // ~22 m
       { id: 'c', lat: 49.5000, lon: 11.0700, title: 'C' },   // ~5,5 km
     ] };
-    gleich(nahePins(db, 49.45, 11.07, 150).map((x) => x.pin.id), ['a', 'b']);
-    gleich(nahePins(db, 49.45, 11.07, 150, 'a').map((x) => x.pin.id), ['b'], 'with exclusion');
-    gleich(nahePins(db, 49.45, 11.07, 10).map((x) => x.pin.id), ['a']);
+    equal(nearbyPins(db, 49.45, 11.07, 150).map((x) => x.pin.id), ['a', 'b']);
+    equal(nearbyPins(db, 49.45, 11.07, 150, 'a').map((x) => x.pin.id), ['b'], 'with exclusion');
+    equal(nearbyPins(db, 49.45, 11.07, 10).map((x) => x.pin.id), ['a']);
     return 'Threshold works in both directions';
   });
 
-  pruefe('Evaluate flag emoji', () => {
-    gleich(flaggenLaender('Traum 🇫🇷'), ['FR']);
-    gleich(flaggenLaender('🇩🇪 und 🇮🇹'), ['DE', 'IT']);
-    gleich(flaggenLaender('ohne'), []);
+  check('Evaluate flag emoji', () => {
+    equal(flagCountries('Traum 🇫🇷'), ['FR']);
+    equal(flagCountries('🇩🇪 und 🇮🇹'), ['DE', 'IT']);
+    equal(flagCountries('ohne'), []);
     return 'FR, DE+IT, none';
   });
 
-  pruefe('Split hashtags into words', () => {
-    gleich(tagInWorte('#NuernbergFood'), 'Nuernberg Food');
-    gleich(tagInWorte('cafe_hamburg'), 'cafe hamburg');
-    gleich(tagInWorte('#OSMKarte'), 'OSM Karte');
+  check('Split hashtags into words', () => {
+    equal(tagToWords('#NuernbergFood'), 'Nuernberg Food');
+    equal(tagToWords('cafe_hamburg'), 'cafe hamburg');
+    equal(tagToWords('#OSMKarte'), 'OSM Karte');
     return 'CamelCase and underscores';
   });
 
-  pruefe('Place candidates: explicit marker', () => {
-    const { candidates } = ortsKandidaten('Bester Kaffee ☕ 📍 Machhörndl Kaffee, Nürnberg #coffee #foodie');
-    wahr(candidates.length > 0, 'nothing found');
-    wahr(/Machhörndl/i.test(candidates[0].text), `top result was: ${candidates[0].text}`);
+  check('Place candidates: explicit marker', () => {
+    const { candidates } = placeCandidates('Bester Kaffee ☕ 📍 Machhörndl Kaffee, Nürnberg #coffee #foodie');
+    ok(candidates.length > 0, 'nothing found');
+    ok(/Machhörndl/i.test(candidates[0].text), `top result was: ${candidates[0].text}`);
     return `Best: "${candidates[0].text}"`;
   });
 
-  pruefe('Place candidates: hashtags only', () => {
-    const { candidates } = ortsKandidaten('So schön hier! #Lissabon #reels #travel #foodporn #love');
-    const texte = candidates.map((c) => c.text.toLowerCase());
-    wahr(texte.some((t) => t.includes('lissabon')), `found: ${texte.join(' | ')}`);
-    wahr(!texte.some((t) => ['reels', 'travel', 'love', 'foodporn'].includes(t)), 'generic tag slipped through');
+  check('Place candidates: hashtags only', () => {
+    const { candidates } = placeCandidates('So schön hier! #Lissabon #reels #travel #foodporn #love');
+    const texts = candidates.map((c) => c.text.toLowerCase());
+    ok(texts.some((t) => t.includes('lissabon')), `found: ${texts.join(' | ')}`);
+    ok(!texts.some((t) => ['reels', 'travel', 'love', 'foodporn'].includes(t)), 'generic tag slipped through');
     return 'Lissabon recognized, generic tags filtered';
   });
 
-  pruefe('Place candidates: only place name and emoji', () => {
+  check('Place candidates: only place name and emoji', () => {
     // The most common case of all, and for a long time completely missed,
     // because the word-sequence rule needed at least two words.
-    const faelle = [
+    const cases = [
       ['Zermatt 🇨🇭❄️', 'Zermatt'],
       ['Hallstatt ⛰️✨', 'Hallstatt'],
       ['Lissabon ❤️🇵🇹', 'Lissabon'],
@@ -224,26 +224,26 @@ function logikTests() {
       ['Praia da Marinha 🇵🇹🌅', 'Praia da Marinha'],
       ['Machhörndl Kaffee ☕️😌', 'Machhörndl Kaffee'],
     ];
-    for (const [text, erwartet] of faelle) {
-      const oben = ortsKandidaten(text).candidates.slice(0, 3).map((c) => c.text.toLowerCase());
-      wahr(oben.includes(erwartet.toLowerCase()),
-        `"${text}" gave ${oben.length ? oben.join(' | ') : 'nothing'} instead of "${erwartet}"`);
+    for (const [text, expected] of cases) {
+      const top = placeCandidates(text).candidates.slice(0, 3).map((c) => c.text.toLowerCase());
+      ok(top.includes(expected.toLowerCase()),
+        `"${text}" gave ${top.length ? top.join(' | ') : 'nothing'} instead of "${expected}"`);
     }
-    return `${faelle.length} single-word and short captions recognized`;
+    return `${cases.length} single-word and short captions recognized`;
   });
 
-  pruefe('Place candidates: cities that look like everyday words', () => {
+  check('Place candidates: cities that look like everyday words', () => {
     // Essen and Bergen are real cities and must not fall victim to the
     // stop list.
-    for (const [text, erwartet] of [['Essen 🇩🇪', 'Essen'], ['Bergen 🇳🇴🏔', 'Bergen']]) {
-      const oben = ortsKandidaten(text).candidates.map((c) => c.text.toLowerCase());
-      wahr(oben.includes(erwartet.toLowerCase()), `"${text}" gave ${oben.join(' | ') || 'nothing'}`);
+    for (const [text, expected] of [['Essen 🇩🇪', 'Essen'], ['Bergen 🇳🇴🏔', 'Bergen']]) {
+      const top = placeCandidates(text).candidates.map((c) => c.text.toLowerCase());
+      ok(top.includes(expected.toLowerCase()), `"${text}" gave ${top.join(' | ') || 'nothing'}`);
     }
     return 'Essen and Bergen are kept';
   });
 
-  pruefe('Place candidates: no place at all', () => {
-    const leer = [
+  check('Place candidates: no place at all', () => {
+    const empty = [
       'Guten Morgen ihr Lieben ❤️ #love #instagood #reels',
       'Nur ein Selfie, nichts weiter #ootd #mood',
       'Werbung | Anzeige',
@@ -251,170 +251,170 @@ function logikTests() {
       '❤️❤️❤️',
       '#reels #fyp #viral',
     ];
-    for (const text of leer) {
-      const { candidates } = ortsKandidaten(text);
-      wahr(candidates.length === 0,
+    for (const text of empty) {
+      const { candidates } = placeCandidates(text);
+      ok(candidates.length === 0,
         `"${text}" should have found nothing, found: ${candidates.map((c) => c.text).join(', ')}`);
     }
-    return `${leer.length} captions without a place correctly left empty`;
+    return `${empty.length} captions without a place correctly left empty`;
   });
 
-  pruefe('Place candidates: English with flag', () => {
-    const r = ortsKandidaten('Sunset at Praia da Marinha 🇵🇹 #algarve #portugal #travel');
-    gleich(r.countries, ['PT']);
-    wahr(r.candidates.some((c) => /marinha/i.test(c.text)), `found: ${r.candidates.map((c) => c.text).join(', ')}`);
+  check('Place candidates: English with flag', () => {
+    const r = placeCandidates('Sunset at Praia da Marinha 🇵🇹 #algarve #portugal #travel');
+    equal(r.countries, ['PT']);
+    ok(r.candidates.some((c) => /marinha/i.test(c.text)), `found: ${r.candidates.map((c) => c.text).join(', ')}`);
     return 'Country PT, place Praia da Marinha';
   });
 
-  pruefe('Flag resolves ambiguity', () => {
-    const treffer = [
+  check('Flag resolves ambiguity', () => {
+    const matches = [
       { name: 'Paris', address: 'Texas, USA', countryCode: 'US', category: 'place', kind: 'city', importance: 0.5, lat: 33.6, lon: -95.5 },
       { name: 'Paris', address: 'Île-de-France, FR', countryCode: 'FR', category: 'place', kind: 'city', importance: 0.9, lat: 48.8, lon: 2.3 },
     ];
-    const ohne = bewerteTreffer(treffer, { countries: [] });
-    const mit = bewerteTreffer(treffer, { countries: ['US'] });
-    gleich(mit[0].countryCode, 'US', 'with US flag');
-    gleich(bewerteTreffer(treffer, { countries: ['FR'] })[0].countryCode, 'FR', 'with FR flag');
-    return `without flag ${ohne[0].address} first, with 🇺🇸 Texas first`;
+    const withoutFlag = scoreMatches(matches, { countries: [] });
+    const withFlag = scoreMatches(matches, { countries: ['US'] });
+    equal(withFlag[0].countryCode, 'US', 'with US flag');
+    equal(scoreMatches(matches, { countries: ['FR'] })[0].countryCode, 'FR', 'with FR flag');
+    return `without flag ${withoutFlag[0].address} first, with 🇺🇸 Texas first`;
   });
 
-  pruefe('Specific place beats whole country', () => {
-    const t = bewerteTreffer([
+  check('Specific place beats whole country', () => {
+    const t = scoreMatches([
       { name: 'Italien', address: '', countryCode: 'IT', category: 'place', kind: 'country', importance: 0.95, lat: 42, lon: 12 },
       { name: 'Bar Luce', address: 'Mailand', countryCode: 'IT', category: 'amenity', kind: 'bar', importance: 0.3, lat: 45.4, lon: 9.2 },
     ], {});
-    gleich(t[0].name, 'Bar Luce');
+    equal(t[0].name, 'Bar Luce');
     return 'Bar before country';
   });
 
-  pruefe('Filter tag suggestions', () => {
-    const t = tagVorschlaege('Lecker! #Ramen #tokyo #food #reels #foodporn #shibuya');
-    wahr(t.includes('ramen') && t.includes('tokyo') && t.includes('shibuya'), `got: ${t}`);
-    wahr(!t.includes('food') && !t.includes('reels'), 'generic tag slipped through');
+  check('Filter tag suggestions', () => {
+    const t = tagSuggestions('Lecker! #Ramen #tokyo #food #reels #foodporn #shibuya');
+    ok(t.includes('ramen') && t.includes('tokyo') && t.includes('shibuya'), `got: ${t}`);
+    ok(!t.includes('food') && !t.includes('reels'), 'generic tag slipped through');
     return `remaining: ${t.join(', ')}`;
   });
 
-  pruefe('Parse Apple Guide (your example link)', () => {
-    const { titel, eintraege } = leseAppleGuide(APPLE_UG);
-    gleich(titel, 'Epic Gamering');
-    gleich(eintraege.length, 3, 'number of places');
-    gleich(eintraege.map((e) => e.name), ['Hive Gaming', '404', 'Red Bull Gaming Garden']);
-    nah(eintraege[0].lat, 49.445866, 1e-5, 'Nürnberg latitude');
-    nah(eintraege[0].lon, 11.049796, 1e-5, 'Nürnberg longitude');
-    nah(eintraege[1].lat, 51.094296, 1e-5, 'Dresden');
-    nah(eintraege[2].lat, 48.169766, 1e-5, 'München');
-    wahr(/Holzschuherstraße 36/.test(eintraege[0].address), 'address');
+  check('Parse Apple Guide (your example link)', () => {
+    const { title, entries } = readAppleGuide(APPLE_UG);
+    equal(title, 'Epic Gamering');
+    equal(entries.length, 3, 'number of places');
+    equal(entries.map((e) => e.name), ['Hive Gaming', '404', 'Red Bull Gaming Garden']);
+    near(entries[0].lat, 49.445866, 1e-5, 'Nürnberg latitude');
+    near(entries[0].lon, 11.049796, 1e-5, 'Nürnberg longitude');
+    near(entries[1].lat, 51.094296, 1e-5, 'Dresden');
+    near(entries[2].lat, 48.169766, 1e-5, 'München');
+    ok(/Holzschuherstraße 36/.test(entries[0].address), 'address');
     return '3 places with name, address and coordinates';
   });
 
-  pruefe('Apple place links', () => {
-    const a = leseAppleOrt('https://maps.apple.com/place?coordinate=40.779092,-73.962932&name=Met');
-    nah(a.lat, 40.779092, 1e-6); nah(a.lon, -73.962932, 1e-6); gleich(a.name, 'Met');
-    const b = leseAppleOrt('https://maps.apple.com/?ll=48.8584,2.2945&q=Eiffelturm');
-    nah(b.lat, 48.8584, 1e-6); gleich(b.name, 'Eiffelturm');
-    gleich(leseAppleOrt('https://example.com/x'), null, 'foreign URL');
+  check('Apple place links', () => {
+    const a = readApplePlace('https://maps.apple.com/place?coordinate=40.779092,-73.962932&name=Met');
+    near(a.lat, 40.779092, 1e-6); near(a.lon, -73.962932, 1e-6); equal(a.name, 'Met');
+    const b = readApplePlace('https://maps.apple.com/?ll=48.8584,2.2945&q=Eiffelturm');
+    near(b.lat, 48.8584, 1e-6); equal(b.name, 'Eiffelturm');
+    equal(readApplePlace('https://example.com/x'), null, 'foreign URL');
     return 'coordinate= and ll= read';
   });
 
-  pruefe('Google Maps coordinates', () => {
-    const genau = googleKoordinaten('https://www.google.com/maps/place/X/@49.1,11.1,17z/data=!4m6!3m5!1s0x0!8m2!3d49.4539!4d11.0775');
-    nah(genau.lat, 49.4539, 1e-6, 'from !3d');
-    wahr(genau.genau, 'should have counted as precise');
-    const mitte = googleKoordinaten('https://www.google.com/maps/place/Y/@52.52,13.405,15z');
-    nah(mitte.lat, 52.52, 1e-6, 'from @');
-    wahr(!mitte.genau, 'should have counted as imprecise');
-    gleich(googleKoordinaten('https://maps.app.goo.gl/abc123'), null, 'short link');
+  check('Google Maps coordinates', () => {
+    const precise = googleCoordinates('https://www.google.com/maps/place/X/@49.1,11.1,17z/data=!4m6!3m5!1s0x0!8m2!3d49.4539!4d11.0775');
+    near(precise.lat, 49.4539, 1e-6, 'from !3d');
+    ok(precise.precise, 'should have counted as precise');
+    const center = googleCoordinates('https://www.google.com/maps/place/Y/@52.52,13.405,15z');
+    near(center.lat, 52.52, 1e-6, 'from @');
+    ok(!center.precise, 'should have counted as imprecise');
+    equal(googleCoordinates('https://maps.app.goo.gl/abc123'), null, 'short link');
     return '!3d!4d preferred, @ as fallback';
   });
 
-  pruefe('Parse CSV', () => {
-    const z = csvZeilen('Title,Note,URL\n"Café, klein","Sagt ""hallo""",https://x.y\nZwei,,https://a.b\n');
-    gleich(z.length, 3);
-    gleich(z[1][0], 'Café, klein', 'comma in field');
-    gleich(z[1][1], 'Sagt "hallo"', 'doubled quotes');
+  check('Parse CSV', () => {
+    const z = csvRows('Title,Note,URL\n"Café, klein","Sagt ""hallo""",https://x.y\nZwei,,https://a.b\n');
+    equal(z.length, 3);
+    equal(z[1][0], 'Café, klein', 'comma in field');
+    equal(z[1][1], 'Sagt "hallo"', 'doubled quotes');
     return 'RFC 4180 cases';
   });
 
-  pruefe('Google list CSV', () => {
-    const e = leseGoogleCSV(
+  check('Google list CSV', () => {
+    const e = readGoogleCsv(
       'Title,Note,URL\n' +
       'Bar Luce,schön,https://www.google.com/maps/place/Bar+Luce/@45.4,9.2,17z/data=!3d45.4719!4d9.1721\n' +
       'Irgendwo,,https://maps.app.goo.gl/xyz\n', 'Mailand.csv');
-    gleich(e.length, 2);
-    nah(e[0].lat, 45.4719, 1e-6);
-    gleich(e[0].tagVorschlag, 'mailand', 'list name as tag');
-    gleich(e[1].lat, null, 'short link has no coordinate yet');
-    wahr(/short link/i.test(e[1].warnung), 'warning missing');
+    equal(e.length, 2);
+    near(e[0].lat, 45.4719, 1e-6);
+    equal(e[0].tagSuggestion, 'mailand', 'list name as tag');
+    equal(e[1].lat, null, 'short link has no coordinate yet');
+    ok(/short link/i.test(e[1].warning), 'warning missing');
     return '1 with coordinate, 1 to resolve';
   });
 
-  pruefe('Google Takeout GeoJSON', () => {
-    const e = leseTakeoutGeoJSON({ type: 'FeatureCollection', features: [
+  check('Google Takeout GeoJSON', () => {
+    const e = readTakeoutGeoJSON({ type: 'FeatureCollection', features: [
       { type: 'Feature', geometry: { type: 'Point', coordinates: [-118.2474, 34.0527] },
         properties: { Title: 'Echo Park', 'Google Maps URL': 'http://maps.google.com/?cid=1',
           Location: { Address: 'Los Angeles', 'Geo Coordinates': { Latitude: '34.0527', Longitude: '-118.2474' } } } },
       { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: { Title: 'Kaputt' } },
     ] });
-    gleich(e.length, 2);
-    nah(e[0].lat, 34.0527, 1e-4);
-    gleich(e[1].lat, null, '0/0 must count as unusable');
+    equal(e.length, 2);
+    near(e[0].lat, 34.0527, 1e-4);
+    equal(e[1].lat, null, '0/0 must count as unusable');
     return 'Coordinates read, 0/0 discarded';
   });
 
-  pruefe('Read KML', () => {
-    const e = leseKML(`<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+  check('Read KML', () => {
+    const e = readKml(`<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
       <Placemark><name>Testort</name><description>Notiz</description>
       <Point><coordinates>11.0775,49.4539,0</coordinates></Point></Placemark></Document></kml>`);
-    gleich(e.length, 1);
-    gleich(e[0].name, 'Testort');
-    nah(e[0].lat, 49.4539, 1e-6);
+    equal(e.length, 1);
+    equal(e[0].name, 'Testort');
+    near(e[0].lat, 49.4539, 1e-6);
     return '1 Placemark';
   });
 
-  pruefe('Read GPX', () => {
-    const e = leseGPX(`<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  check('Read GPX', () => {
+    const e = readGpx(`<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
       <wpt lat="47.4212" lon="10.9852"><name>Zugspitze</name></wpt></gpx>`);
-    gleich(e.length, 1);
-    nah(e[0].lat, 47.4212, 1e-6);
+    equal(e.length, 1);
+    near(e[0].lat, 47.4212, 1e-6);
     return 'Waypoint read';
   });
 }
 
 /* =================== Connections =================== */
 
-async function netzTest(name, fn, { pflicht = true } = {}) {
-  const li = eintrag('netz', name);
+async function networkTest(name, fn, { required = true } = {}) {
+  const li = addRow('netz', name);
   const t0 = performance.now();
   try {
     const info = await fn();
-    ergebnis(li, 'ok', info || '', performance.now() - t0);
+    setResult(li, 'ok', info || '', performance.now() - t0);
   } catch (e) {
-    ergebnis(li, pflicht ? 'fehl' : 'warn', e.message, performance.now() - t0);
+    setResult(li, required ? 'fehl' : 'warn', e.message, performance.now() - t0);
   }
 }
 
-async function netzTests() {
+async function networkTests() {
   $('netz').innerHTML = '';
 
-  await netzTest('Mini server reachable', async () => {
+  await networkTest('Mini server reachable', async () => {
     const j = await (await fetch('/api/health')).json();
     if (!j.ok) throw new Error('Response without ok');
     return `${j.app} ${j.version} on Node ${j.node}${j.mock ? ' — MOCK MODE' : ''}`;
   });
 
-  await netzTest('Read and write data', async () => {
-    const vorher = await (await fetch('/api/pins')).json();
-    if (!vorher.ok) throw new Error(vorher.message || 'Reading failed');
+  await networkTest('Read and write data', async () => {
+    const before = await (await fetch('/api/pins')).json();
+    if (!before.ok) throw new Error(before.message || 'Reading failed');
     const r = await fetch('/api/pins', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(vorher.db),
+      body: JSON.stringify(before.db),
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.message || 'Writing failed');
     return `${j.count} pins read and written back unchanged`;
   });
 
-  await netzTest('Place search', async () => {
+  await networkTest('Place search', async () => {
     const j = await (await fetch('/api/geocode?q=' + encodeURIComponent('Brandenburger Tor Berlin') + '&limit=3')).json();
     if (!j.results?.length) throw new Error('No match — are Photon and Nominatim both silent?');
     const t = j.results[0];
@@ -422,21 +422,21 @@ async function netzTests() {
     return `${j.provider}: "${t.name}" at ${t.lat.toFixed(4)}/${t.lon.toFixed(4)}`;
   });
 
-  await netzTest('Reverse search (coordinate → address)', async () => {
+  await networkTest('Reverse search (coordinate → address)', async () => {
     const j = await (await fetch('/api/reverse?lat=49.4539&lon=11.0775')).json();
     if (!j.ok) throw new Error(j.message || 'no response');
     return j.result.address?.slice(0, 90) || j.result.name;
-  }, { pflicht: false });
+  }, { required: false });
 
-  await netzTest('Map tiles', () => new Promise((gut, schlecht) => {
+  await networkTest('Map tiles', () => new Promise((resolve, reject) => {
     const img = new Image();
-    const zeit = setTimeout(() => schlecht(new Error('Timeout after 10 s')), 10000);
-    img.onload = () => { clearTimeout(zeit); gut(`${img.naturalWidth}×${img.naturalHeight} pixels loaded`); };
-    img.onerror = () => { clearTimeout(zeit); schlecht(new Error('Tile could not be loaded')); };
+    const timer = setTimeout(() => reject(new Error('Timeout after 10 s')), 10000);
+    img.onload = () => { clearTimeout(timer); resolve(`${img.naturalWidth}×${img.naturalHeight} pixels loaded`); };
+    img.onerror = () => { clearTimeout(timer); reject(new Error('Tile could not be loaded')); };
     img.src = `https://tile.openstreetmap.org/10/548/357.png?t=${Date.now()}`;
   }));
 
-  await netzTest('Instagram fetch', async () => {
+  await networkTest('Instagram fetch', async () => {
     const testLink = new URLSearchParams(location.search).get('ig');
     if (!testLink) {
       throw new Error(
@@ -447,125 +447,125 @@ async function netzTests() {
     }
     const j = await (await fetch('/api/ig?url=' + encodeURIComponent(testLink))).json();
     if (!j.ok) throw new Error(`${j.reason}: ${j.message}`);
-    const teile = [`Strategy "${j.strategy}"`];
-    if (j.username) teile.push(`@${j.username}`);
-    if (j.caption) teile.push(`Text ${j.caption.length} characters: "${j.caption.slice(0, 60)}…"`);
-    if (j.thumb) teile.push('thumbnail present');
-    return teile.join(' · ');
-  }, { pflicht: false });
+    const parts = [`Strategy "${j.strategy}"`];
+    if (j.username) parts.push(`@${j.username}`);
+    if (j.caption) parts.push(`Text ${j.caption.length} characters: "${j.caption.slice(0, 60)}…"`);
+    if (j.thumb) parts.push('thumbnail present');
+    return parts.join(' · ');
+  }, { required: false });
 
-  await netzTest('Resolve short links', async () => {
+  await networkTest('Resolve short links', async () => {
     const j = await (await fetch('/api/resolve?url=' + encodeURIComponent('https://maps.app.goo.gl/'))).json();
     if (!j.ok && !/resolv|redirect|404|not/i.test(j.message || '')) throw new Error(j.message);
     return 'API responds (please check real short links in everyday use)';
-  }, { pflicht: false });
+  }, { required: false });
 
-  await netzTest('Page height layout', async () => {
+  await networkTest('Page height layout', async () => {
     // This test exists because of a real bug: the tag bar is hidden as long
     // as there are no tags, which shifted the row placement in the grid.
     // The map was 0 pixels high and the input bar took up the whole height.
     // With data nothing was visible; with an empty collection the app was unusable.
-    const rahmen = document.createElement('iframe');
-    rahmen.style.cssText = 'position:fixed;left:-9999px;top:0;width:375px;height:700px;border:0';
-    document.body.appendChild(rahmen);
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:375px;height:700px;border:0';
+    document.body.appendChild(frame);
     try {
-      await new Promise((gut, schlecht) => {
-        rahmen.onload = gut;
-        rahmen.onerror = () => schlecht(new Error('Start page could not be loaded'));
-        rahmen.src = '/';
+      await new Promise((resolve, reject) => {
+        frame.onload = resolve;
+        frame.onerror = () => reject(new Error('Start page could not be loaded'));
+        frame.src = '/';
       });
       await new Promise((r) => setTimeout(r, 1400));
-      const d = rahmen.contentDocument;
+      const d = frame.contentDocument;
       const h = (s) => Math.round(d.querySelector(s)?.getBoundingClientRect().height || 0);
-      const karte = h('#karte');
-      const eingabe = h('.eingabe');
-      const gesamt = rahmen.clientHeight;
-      if (karte < gesamt * 0.4) {
+      const mapHeight = h('#karte');
+      const inputBar = h('.eingabe');
+      const total = frame.clientHeight;
+      if (mapHeight < total * 0.4) {
         throw new Error(
-          `At 375×${gesamt} the map is only ${karte} px high (input bar ${eingabe} px). ` +
+          `At 375×${total} the map is only ${mapHeight} px high (input bar ${inputBar} px). ` +
           'Expected at least 40 % of the height.'
         );
       }
-      if (eingabe > 120) throw new Error(`Input bar is ${eingabe} px high, expected about 68 px`);
-      const ueberstand = d.documentElement.scrollWidth - d.documentElement.clientWidth;
-      if (ueberstand > 2) throw new Error(`${ueberstand} px horizontal overflow`);
-      return `375×${gesamt}: map ${karte} px, input ${eingabe} px, no overflow`;
+      if (inputBar > 120) throw new Error(`Input bar is ${inputBar} px high, expected about 68 px`);
+      const overflow = d.documentElement.scrollWidth - d.documentElement.clientWidth;
+      if (overflow > 2) throw new Error(`${overflow} px horizontal overflow`);
+      return `375×${total}: map ${mapHeight} px, input ${inputBar} px, no overflow`;
     } finally {
-      rahmen.remove();
+      frame.remove();
     }
   });
 
-  await netzTest('Dialogs can always be closed', async () => {
+  await networkTest('Dialogs can always be closed', async () => {
     // This test also comes from a real bug: the close buttons are submit
     // buttons in a method="dialog" form. If the form contains a required
     // field, form validation blocks closing, precisely when the field is
     // empty, i.e. in the "no place found" case. That turned the dialog
     // into a trap.
-    const rahmen = document.createElement('iframe');
-    rahmen.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;height:700px;border:0';
-    document.body.appendChild(rahmen);
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;height:700px;border:0';
+    document.body.appendChild(frame);
     try {
-      await new Promise((gut, schlecht) => {
-        rahmen.onload = gut;
-        rahmen.onerror = () => schlecht(new Error('Start page could not be loaded'));
-        rahmen.src = '/';
+      await new Promise((resolve, reject) => {
+        frame.onload = resolve;
+        frame.onerror = () => reject(new Error('Start page could not be loaded'));
+        frame.src = '/';
       });
       await new Promise((r) => setTimeout(r, 900));
-      const d = rahmen.contentDocument;
+      const d = frame.contentDocument;
 
-      const klagen = [];
-      let geprueft = 0;
+      const complaints = [];
+      let checked = 0;
       for (const dlg of d.querySelectorAll('dialog')) {
         const form = dlg.querySelector('form[method="dialog"]');
         if (!form) continue;
-        geprueft++;
-        const pflicht = [...form.querySelectorAll('[required]')];
-        for (const knopf of form.querySelectorAll('button[type="submit"]')) {
-          if (!knopf.hasAttribute('formnovalidate') && pflicht.length) {
-            klagen.push(`${dlg.id}: "${knopf.textContent.trim() || knopf.ariaLabel}" without formnovalidate, ` +
-              `blocked by ${pflicht.map((f) => f.id).join(', ')}`);
+        checked++;
+        const required = [...form.querySelectorAll('[required]')];
+        for (const button of form.querySelectorAll('button[type="submit"]')) {
+          if (!button.hasAttribute('formnovalidate') && required.length) {
+            complaints.push(`${dlg.id}: "${button.textContent.trim() || button.ariaLabel}" without formnovalidate, ` +
+              `blocked by ${required.map((f) => f.id).join(', ')}`);
           }
         }
       }
-      if (klagen.length) throw new Error(klagen.join(' · '));
-      return `${geprueft} dialogs checked, all close buttons are exempt from form validation`;
+      if (complaints.length) throw new Error(complaints.join(' · '));
+      return `${checked} dialogs checked, all close buttons are exempt from form validation`;
     } finally {
-      rahmen.remove();
+      frame.remove();
     }
   });
 
-  await netzTest('Installable as an app', async () => {
-    const gruende = [];
-    if (!('serviceWorker' in navigator)) gruende.push('Browser does not support service workers');
+  await networkTest('Installable as an app', async () => {
+    const reasons = [];
+    if (!('serviceWorker' in navigator)) reasons.push('Browser does not support service workers');
     else {
       const reg = await navigator.serviceWorker.getRegistration('/');
-      if (!reg) gruende.push('Service worker not registered yet — open the start page once');
+      if (!reg) reasons.push('Service worker not registered yet — open the start page once');
     }
-    if (!window.isSecureContext) gruende.push('Not a secure origin — please open via 127.0.0.1 instead of the network address');
+    if (!window.isSecureContext) reasons.push('Not a secure origin — please open via 127.0.0.1 instead of the network address');
     const m = await fetch('/manifest.webmanifest');
-    if (!m.ok) gruende.push('manifest.webmanifest missing');
-    if (gruende.length) throw new Error(gruende.join('; '));
+    if (!m.ok) reasons.push('manifest.webmanifest missing');
+    if (reasons.length) throw new Error(reasons.join('; '));
     return 'Secure origin, manifest and service worker present — the Chrome menu should show "Install app"';
-  }, { pflicht: false });
+  }, { required: false });
 }
 
 /* =================== Control =================== */
 
-async function lauf(logik, netz) {
-  zaehler = { ok: 0, fehl: 0, warn: 0 };
+async function run(logic, network) {
+  counts = { ok: 0, fehl: 0, warn: 0 };
   for (const b of document.querySelectorAll('button')) b.disabled = true;
   $('bilanz').textContent = 'Running …';
-  if (logik) logikTests(); else $('logik').innerHTML = '<li class="warn"><span class="zeichen">–</span><span class="name">Skipped</span></li>';
-  if (netz) await netzTests(); else $('netz').innerHTML = '<li class="warn"><span class="zeichen">–</span><span class="name">Skipped</span></li>';
-  bilanz();
+  if (logic) logicTests(); else $('logik').innerHTML = '<li class="warn"><span class="zeichen">–</span><span class="name">Skipped</span></li>';
+  if (network) await networkTests(); else $('netz').innerHTML = '<li class="warn"><span class="zeichen">–</span><span class="name">Skipped</span></li>';
+  updateSummary();
   for (const b of document.querySelectorAll('button')) b.disabled = false;
 }
 
-$('alles').addEventListener('click', () => lauf(true, true));
-$('nur-logik').addEventListener('click', () => lauf(true, false));
-$('nur-netz').addEventListener('click', () => lauf(false, true));
+$('alles').addEventListener('click', () => run(true, true));
+$('nur-logik').addEventListener('click', () => run(true, false));
+$('nur-netz').addEventListener('click', () => run(false, true));
 
-lauf(true, true);
+run(true, true);
 </script>
 </body>
 </html>
