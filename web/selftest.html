@@ -7,67 +7,67 @@
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <style>
   :root { color-scheme: light dark;
-    --grund:#f7f5f2; --flaeche:#fff; --rand:#ddd6cc; --text:#23201c; --leise:#6d665c;
-    --gut:#2f7d5d; --schlecht:#a3352b; --warn:#a3762b; }
+    --bg:#f7f5f2; --surface:#fff; --border:#ddd6cc; --text:#23201c; --muted:#6d665c;
+    --good:#2f7d5d; --bad:#a3352b; --warn:#a3762b; }
   @media (prefers-color-scheme: dark) { :root {
-    --grund:#16181c; --flaeche:#212429; --rand:#3a3f47; --text:#e9e6e1; --leise:#9aa0a8;
-    --gut:#5cc296; --schlecht:#e2685c; --warn:#d4a44a; } }
+    --bg:#16181c; --surface:#212429; --border:#3a3f47; --text:#e9e6e1; --muted:#9aa0a8;
+    --good:#5cc296; --bad:#e2685c; --warn:#d4a44a; } }
   * { box-sizing: border-box; }
   body { margin:0; padding:24px 16px 64px; font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-         background:var(--grund); color:var(--text); }
+         background:var(--bg); color:var(--text); }
   main { max-width: 820px; margin: 0 auto; }
   h1 { font-size:1.35rem; margin:0 0 4px; }
-  .unter { color:var(--leise); margin:0 0 24px; font-size:.9375rem; }
-  h2 { font-size:1rem; margin:28px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rand); }
-  .knopfreihe { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
-  button { min-height:44px; padding:0 18px; border:1px solid var(--rand); border-radius:9px;
-           background:var(--flaeche); color:var(--text); font:inherit; font-weight:550; cursor:pointer; }
-  button.haupt { background:#b8543f; border-color:#b8543f; color:#fff; }
+  .subtitle { color:var(--muted); margin:0 0 24px; font-size:.9375rem; }
+  h2 { font-size:1rem; margin:28px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .buttonrow { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  button { min-height:44px; padding:0 18px; border:1px solid var(--border); border-radius:9px;
+           background:var(--surface); color:var(--text); font:inherit; font-weight:550; cursor:pointer; }
+  button.primary { background:#b8543f; border-color:#b8543f; color:#fff; }
   button:disabled { opacity:.5; cursor:default; }
   ul { list-style:none; margin:0; padding:0; }
   li { display:grid; grid-template-columns:auto 1fr auto; gap:2px 12px; align-items:start;
-       padding:10px 12px; border:1px solid var(--rand); border-radius:9px; margin-bottom:6px;
-       background:var(--flaeche); }
-  .zeichen { font-size:1.05rem; line-height:1.4; width:1.4em; text-align:center; }
-  .ok .zeichen { color:var(--gut); }
-  .fehl .zeichen { color:var(--schlecht); }
-  .warn .zeichen { color:var(--warn); }
+       padding:10px 12px; border:1px solid var(--border); border-radius:9px; margin-bottom:6px;
+       background:var(--surface); }
+  .mark { font-size:1.05rem; line-height:1.4; width:1.4em; text-align:center; }
+  .ok .mark { color:var(--good); }
+  .fail .mark { color:var(--bad); }
+  .warn .mark { color:var(--warn); }
   .name { font-size:.9375rem; font-weight:550; }
-  .details { grid-column:2; font-size:.8125rem; color:var(--leise); white-space:pre-wrap;
+  .details { grid-column:2; font-size:.8125rem; color:var(--muted); white-space:pre-wrap;
              overflow-wrap:anywhere; margin-top:2px; }
-  .dauer { font-size:.75rem; color:var(--leise); font-variant-numeric:tabular-nums; }
-  .bilanz { padding:14px 16px; border-radius:11px; background:var(--flaeche);
-            border:1px solid var(--rand); margin:20px 0; font-weight:550; }
-  .hinweis { font-size:.875rem; color:var(--leise); background:var(--flaeche);
-             border:1px solid var(--rand); border-left:3px solid var(--warn);
+  .duration { font-size:.75rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .summary { padding:14px 16px; border-radius:11px; background:var(--surface);
+            border:1px solid var(--border); margin:20px 0; font-weight:550; }
+  .notice { font-size:.875rem; color:var(--muted); background:var(--surface);
+             border:1px solid var(--border); border-left:3px solid var(--warn);
              padding:12px 14px; border-radius:9px; margin:12px 0; }
   a { color:#b8543f; }
-  code { background:var(--flaeche); border:1px solid var(--rand); padding:1px 5px; border-radius:4px; font-size:.875em; }
+  code { background:var(--surface); border:1px solid var(--border); padding:1px 5px; border-radius:4px; font-size:.875em; }
 </style>
 </head>
 <body>
 <main>
 
 <h1>Self-test</h1>
-<p class="unter">
+<p class="subtitle">
   Checks one by one what the app computes internally and what must be reachable from outside.
   <a href="/">Back to the map</a>
 </p>
 
-<div class="knopfreihe">
-  <button type="button" id="alles" class="haupt">Check everything</button>
-  <button type="button" id="nur-logik">Logic only</button>
-  <button type="button" id="nur-netz">Connections only</button>
+<div class="buttonrow">
+  <button type="button" id="run-all" class="primary">Check everything</button>
+  <button type="button" id="run-logic">Logic only</button>
+  <button type="button" id="run-network">Connections only</button>
 </div>
 
-<div class="bilanz" id="bilanz">Nothing checked yet.</div>
+<div class="summary" id="summary">Nothing checked yet.</div>
 
 <h2>Logic — runs without internet</h2>
-<ul id="logik"></ul>
+<ul id="logic"></ul>
 
 <h2>Connections — need a network</h2>
-<ul id="netz"></ul>
-<div class="hinweis">
+<ul id="network"></ul>
+<div class="notice">
   If the Instagram fetch fails, the app is still fully usable:
   you then enter the place and tags yourself and see the post in the embedded frame.
 </div>
@@ -80,11 +80,11 @@ import { placeCandidates, flagCountries, tagToWords, tagSuggestions, scoreMatche
 import { readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows, readKml, readGpx } from './js/importers.js';
 
 const $ = (id) => document.getElementById(id);
-let counts = { ok: 0, fehl: 0, warn: 0 };
+let counts = { ok: 0, fail: 0, warn: 0 };
 
 function addRow(target, name) {
   const li = document.createElement('li');
-  li.innerHTML = '<span class="zeichen">…</span><span class="name"></span><span class="dauer"></span><span class="details"></span>';
+  li.innerHTML = '<span class="mark">…</span><span class="name"></span><span class="duration"></span><span class="details"></span>';
   li.querySelector('.name').textContent = name;
   $(target).appendChild(li);
   return li;
@@ -92,28 +92,28 @@ function addRow(target, name) {
 
 function setResult(li, kind, text, ms) {
   li.className = kind;
-  li.querySelector('.zeichen').textContent = kind === 'ok' ? '✓' : kind === 'warn' ? '!' : '✕';
+  li.querySelector('.mark').textContent = kind === 'ok' ? '✓' : kind === 'warn' ? '!' : '✕';
   li.querySelector('.details').textContent = text || '';
-  if (ms != null) li.querySelector('.dauer').textContent = `${Math.round(ms)} ms`;
-  counts[kind === 'ok' ? 'ok' : kind === 'warn' ? 'warn' : 'fehl']++;
-  updateSummary();
+  if (ms != null) li.querySelector('.duration').textContent = `${Math.round(ms)} ms`;
+  counts[kind === 'ok' ? 'ok' : kind === 'warn' ? 'warn' : 'fail']++;
+  showSummary();
 }
 
-function updateSummary() {
-  $('bilanz').textContent =
-    `${counts.ok} passed · ${counts.warn} with limitations · ${counts.fehl} failed`;
+function showSummary() {
+  $('summary').textContent =
+    `${counts.ok} passed · ${counts.warn} with limitations · ${counts.fail} failed`;
 }
 
 /* ---------- small test helpers ---------- */
 
 function check(name, fn) {
-  const li = addRow('logik', name);
+  const li = addRow('logic', name);
   const t0 = performance.now();
   try {
     const info = fn();
     setResult(li, 'ok', info || '', performance.now() - t0);
   } catch (e) {
-    setResult(li, 'fehl', e.message, performance.now() - t0);
+    setResult(li, 'fail', e.message, performance.now() - t0);
   }
 }
 
@@ -131,8 +131,8 @@ function near(a, b, tol, was = '') {
 
 const APPLE_UG = 'https://guides.apple.com/?ug=Cg1FcGljIEdhbWVyaW5nElcaM0hvbHpzY2h1aGVyc3RyYcOfZSAzNiwgOTA0MzkgTsO8cm5iZXJnLCBEZXV0c2NobGFuZCISCak0vB8SuUhAEcvv2d9%2BGSZAKgxIaXZlIEdhbWluZz8SDQiuTRDUhIiNx%2FL9oDgSURo1R3Jvw59lbmhhaW5lciBTdHJhw59lIDE4OCwgMDExMjkgRHJlc2RlbiwgRGV1dHNjaGxhbmQiEgna1vjlEYxJQBErmInXrHArQCoENDA0PxJrGjxPbHltcGlhcGFyaywgVG9uaS1NZXJrZW5zLVdlZyA0LCA4MDgwOSBNw7xuY2hlbiwgRGV1dHNjaGxhbmQiEgmZbbTiuhVIQBHGXDAhvhQnQCoXUmVkIEJ1bGwgR2FtaW5nIEdhcmRlbj8SDgiuTRDq57OmgKKGic8BEg4Irk0Qxeiv6pCt5ZyIARINCK5NEMrCuI7%2Bh6LKORINCK5NEI%2BtreyGx%2Fe1TxINCK5NEIrU7sq7pqLZMBIOCK5NEML2otPY%2BsCgzgE%3D';
 
-function logicTests() {
-  $('logik').innerHTML = '';
+function logicChecks() {
+  $('logic').innerHTML = '';
 
   check('Normalize Instagram links', () => {
     const same = [
@@ -382,27 +382,27 @@ function logicTests() {
 
 /* =================== Connections =================== */
 
-async function networkTest(name, fn, { required = true } = {}) {
-  const li = addRow('netz', name);
+async function networkCheck(name, fn, { required = true } = {}) {
+  const li = addRow('network', name);
   const t0 = performance.now();
   try {
     const info = await fn();
     setResult(li, 'ok', info || '', performance.now() - t0);
   } catch (e) {
-    setResult(li, required ? 'fehl' : 'warn', e.message, performance.now() - t0);
+    setResult(li, required ? 'fail' : 'warn', e.message, performance.now() - t0);
   }
 }
 
-async function networkTests() {
-  $('netz').innerHTML = '';
+async function networkChecks() {
+  $('network').innerHTML = '';
 
-  await networkTest('Mini server reachable', async () => {
+  await networkCheck('Mini server reachable', async () => {
     const j = await (await fetch('/api/health')).json();
     if (!j.ok) throw new Error('Response without ok');
     return `${j.app} ${j.version} on Node ${j.node}${j.mock ? ' — MOCK MODE' : ''}`;
   });
 
-  await networkTest('Read and write data', async () => {
+  await networkCheck('Read and write data', async () => {
     const before = await (await fetch('/api/pins')).json();
     if (!before.ok) throw new Error(before.message || 'Reading failed');
     const r = await fetch('/api/pins', {
@@ -414,7 +414,7 @@ async function networkTests() {
     return `${j.count} pins read and written back unchanged`;
   });
 
-  await networkTest('Place search', async () => {
+  await networkCheck('Place search', async () => {
     const j = await (await fetch('/api/geocode?q=' + encodeURIComponent('Brandenburger Tor Berlin') + '&limit=3')).json();
     if (!j.results?.length) throw new Error('No match — are Photon and Nominatim both silent?');
     const t = j.results[0];
@@ -422,13 +422,13 @@ async function networkTests() {
     return `${j.provider}: "${t.name}" at ${t.lat.toFixed(4)}/${t.lon.toFixed(4)}`;
   });
 
-  await networkTest('Reverse search (coordinate → address)', async () => {
+  await networkCheck('Reverse search (coordinate → address)', async () => {
     const j = await (await fetch('/api/reverse?lat=49.4539&lon=11.0775')).json();
     if (!j.ok) throw new Error(j.message || 'no response');
     return j.result.address?.slice(0, 90) || j.result.name;
   }, { required: false });
 
-  await networkTest('Map tiles', () => new Promise((resolve, reject) => {
+  await networkCheck('Map tiles', () => new Promise((resolve, reject) => {
     const img = new Image();
     const timer = setTimeout(() => reject(new Error('Timeout after 10 s')), 10000);
     img.onload = () => { clearTimeout(timer); resolve(`${img.naturalWidth}×${img.naturalHeight} pixels loaded`); };
@@ -436,7 +436,7 @@ async function networkTests() {
     img.src = `https://tile.openstreetmap.org/10/548/357.png?t=${Date.now()}`;
   }));
 
-  await networkTest('Instagram fetch', async () => {
+  await networkCheck('Instagram fetch', async () => {
     const testLink = new URLSearchParams(location.search).get('ig');
     if (!testLink) {
       throw new Error(
@@ -454,13 +454,13 @@ async function networkTests() {
     return parts.join(' · ');
   }, { required: false });
 
-  await networkTest('Resolve short links', async () => {
+  await networkCheck('Resolve short links', async () => {
     const j = await (await fetch('/api/resolve?url=' + encodeURIComponent('https://maps.app.goo.gl/'))).json();
     if (!j.ok && !/resolv|redirect|404|not/i.test(j.message || '')) throw new Error(j.message);
     return 'API responds (please check real short links in everyday use)';
   }, { required: false });
 
-  await networkTest('Page height layout', async () => {
+  await networkCheck('Page height layout', async () => {
     // This test exists because of a real bug: the tag bar is hidden as long
     // as there are no tags, which shifted the row placement in the grid.
     // The map was 0 pixels high and the input bar took up the whole height.
@@ -477,8 +477,8 @@ async function networkTests() {
       await new Promise((r) => setTimeout(r, 1400));
       const d = frame.contentDocument;
       const h = (s) => Math.round(d.querySelector(s)?.getBoundingClientRect().height || 0);
-      const mapHeight = h('#karte');
-      const inputBar = h('.eingabe');
+      const mapHeight = h('#map');
+      const inputBar = h('.inputbar');
       const total = frame.clientHeight;
       if (mapHeight < total * 0.4) {
         throw new Error(
@@ -495,7 +495,7 @@ async function networkTests() {
     }
   });
 
-  await networkTest('Dialogs can always be closed', async () => {
+  await networkCheck('Dialogs can always be closed', async () => {
     // This test also comes from a real bug: the close buttons are submit
     // buttons in a method="dialog" form. If the form contains a required
     // field, form validation blocks closing, precisely when the field is
@@ -534,7 +534,7 @@ async function networkTests() {
     }
   });
 
-  await networkTest('Installable as an app', async () => {
+  await networkCheck('Installable as an app', async () => {
     const reasons = [];
     if (!('serviceWorker' in navigator)) reasons.push('Browser does not support service workers');
     else {
@@ -552,18 +552,18 @@ async function networkTests() {
 /* =================== Control =================== */
 
 async function run(logic, network) {
-  counts = { ok: 0, fehl: 0, warn: 0 };
+  counts = { ok: 0, fail: 0, warn: 0 };
   for (const b of document.querySelectorAll('button')) b.disabled = true;
-  $('bilanz').textContent = 'Running …';
-  if (logic) logicTests(); else $('logik').innerHTML = '<li class="warn"><span class="zeichen">–</span><span class="name">Skipped</span></li>';
-  if (network) await networkTests(); else $('netz').innerHTML = '<li class="warn"><span class="zeichen">–</span><span class="name">Skipped</span></li>';
-  updateSummary();
+  $('summary').textContent = 'Running …';
+  if (logic) logicChecks(); else $('logic').innerHTML = '<li class="warn"><span class="mark">–</span><span class="name">Skipped</span></li>';
+  if (network) await networkChecks(); else $('network').innerHTML = '<li class="warn"><span class="mark">–</span><span class="name">Skipped</span></li>';
+  showSummary();
   for (const b of document.querySelectorAll('button')) b.disabled = false;
 }
 
-$('alles').addEventListener('click', () => run(true, true));
-$('nur-logik').addEventListener('click', () => run(true, false));
-$('nur-netz').addEventListener('click', () => run(false, true));
+$('run-all').addEventListener('click', () => run(true, true));
+$('run-logic').addEventListener('click', () => run(true, false));
+$('run-network').addEventListener('click', () => run(false, true));
 
 run(true, true);
 </script>

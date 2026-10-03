@@ -16,15 +16,15 @@ let toastTimer = null;
 export function toast(text, kind = 'info', durationMs = 3200) {
   const el = $('toast');
   el.textContent = text;
-  el.dataset.art = kind;
-  el.classList.add('is-an');
+  el.dataset.kind = kind;
+  el.classList.add('is-on');
   clearTimeout(toastTimer);
-  if (durationMs > 0) toastTimer = setTimeout(() => el.classList.remove('is-an'), durationMs);
+  if (durationMs > 0) toastTimer = setTimeout(() => el.classList.remove('is-on'), durationMs);
 }
 
 export function hideToast() {
   clearTimeout(toastTimer);
-  $('toast').classList.remove('is-an');
+  $('toast').classList.remove('is-on');
 }
 
 /* ================================================================== *
@@ -92,7 +92,7 @@ export function drawTagBar(onChange) {
   allBtn.type = 'button';
   allBtn.className = 'tagchip';
   allBtn.setAttribute('aria-pressed', String(filter.tags.size === 0));
-  allBtn.innerHTML = `<span>All</span> <span class="tagchip__zahl">${store.db.pins.length}</span>`;
+  allBtn.innerHTML = `<span>All</span> <span class="tagchip__count">${store.db.pins.length}</span>`;
   allBtn.addEventListener('click', () => { filter.tags.clear(); onChange(); });
   allLi.appendChild(allBtn);
   list.appendChild(allLi);
@@ -104,12 +104,12 @@ export function drawTagBar(onChange) {
     btn.className = 'tagchip';
     btn.setAttribute('aria-pressed', String(filter.tags.has(t.name)));
     const dot = document.createElement('span');
-    dot.className = 'tagchip__punkt';
+    dot.className = 'tagchip__dot';
     dot.style.background = t.color;
     const name = document.createElement('span');
     name.textContent = t.name;
     const count = document.createElement('span');
-    count.className = 'tagchip__zahl';
+    count.className = 'tagchip__count';
     count.textContent = String(t.count);
     btn.append(dot, name, count);
     btn.addEventListener('click', () => {
@@ -127,8 +127,8 @@ export function drawTagBar(onChange) {
  * ================================================================== */
 
 export function drawList(pins, onClick) {
-  const ol = $('liste');
-  const counter = $('liste-zaehler');
+  const ol = $('list');
+  const counter = $('list-count');
   ol.innerHTML = '';
 
   const total = store.db.pins.length;
@@ -140,7 +140,7 @@ export function drawList(pins, onClick) {
 
   if (!pins.length) {
     const li = document.createElement('li');
-    li.className = 'liste__leer';
+    li.className = 'list__empty';
     li.textContent = total === 0
       ? 'Nothing saved yet. Paste an Instagram link below.'
       : 'No place matches this filter.';
@@ -152,18 +152,18 @@ export function drawList(pins, onClick) {
     const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'eintrag';
+    btn.className = 'entry';
 
     const dot = document.createElement('span');
-    dot.className = 'eintrag__punkt';
+    dot.className = 'entry__dot';
     dot.style.background = store.pinColor(pin);
 
     const title = document.createElement('p');
-    title.className = 'eintrag__titel';
+    title.className = 'entry__title';
     title.textContent = pin.title;
 
     const meta = document.createElement('p');
-    meta.className = 'eintrag__meta';
+    meta.className = 'entry__meta';
     const count = (pin.posts || []).length;
     meta.textContent = [
       pin.address || `${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}`,
@@ -171,9 +171,9 @@ export function drawList(pins, onClick) {
     ].filter(Boolean).join(' · ');
 
     const right = document.createElement('span');
-    right.className = 'eintrag__rechts';
+    right.className = 'entry__right';
     const st = document.createElement('span');
-    st.className = 'eintrag__status';
+    st.className = 'entry__status';
     st.dataset.status = pin.status;
     st.textContent = pin.status === 'visited' ? 'been there' : 'want to go';
     right.appendChild(st);
@@ -187,10 +187,10 @@ export function drawList(pins, onClick) {
 
     if ((pin.tags || []).length) {
       const tagUl = document.createElement('ul');
-      tagUl.className = 'eintrag__tags';
+      tagUl.className = 'entry__tags';
       for (const t of pin.tags) {
         const tli = document.createElement('li');
-        tli.className = 'eintrag__tag';
+        tli.className = 'entry__tag';
         tli.textContent = t;
         tagUl.appendChild(tli);
       }
@@ -216,29 +216,29 @@ export function showDetail(pinId, env) {
 
   const dlg = $('dlg-detail');
   const body = $('detail-body');
-  $('dlg-detail-titel').textContent = pin.title;
+  $('dlg-detail-title').textContent = pin.title;
   body.innerHTML = '';
 
   // --- Title ---
   body.appendChild(field('Title', () => {
     const i = document.createElement('input');
     i.type = 'text';
-    i.id = 'detail-titel';
+    i.id = 'detail-title';
     i.value = pin.title;
     return i;
   }));
 
   // --- Address and coordinates ---
   const addr = document.createElement('div');
-  addr.className = 'feld';
+  addr.className = 'field';
   const a1 = document.createElement('p');
-  a1.className = 'detail__adresse';
+  a1.className = 'detail__address';
   a1.textContent = pin.address || '(no address stored)';
   const a2 = document.createElement('p');
-  a2.className = 'detail__koord';
+  a2.className = 'detail__coords';
   a2.textContent = `${pin.lat.toFixed(5)}, ${pin.lon.toFixed(5)}`;
   const row = document.createElement('div');
-  row.className = 'knopfreihe';
+  row.className = 'buttonrow';
   row.append(
     linkButton('Open in OpenStreetMap', `https://www.openstreetmap.org/?mlat=${pin.lat}&mlon=${pin.lon}#map=17/${pin.lat}/${pin.lon}`),
     linkButton('Directions (Google)', `https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lon}`),
@@ -248,12 +248,12 @@ export function showDetail(pinId, env) {
 
   // --- Status ---
   const statusField = document.createElement('div');
-  statusField.className = 'feld';
+  statusField.className = 'field';
   const statusLabel = document.createElement('span');
-  statusLabel.className = 'feld__label';
+  statusLabel.className = 'field__label';
   statusLabel.textContent = 'Status';
   const statusGroup = document.createElement('div');
-  statusGroup.className = 'segmented segmented--voll';
+  statusGroup.className = 'segmented segmented--full';
   statusGroup.setAttribute('role', 'radiogroup');
   statusGroup.setAttribute('aria-label', 'Status');
   for (const [value, text] of [['wishlist', 'Want to go'], ['visited', 'Been there']]) {
@@ -279,7 +279,7 @@ export function showDetail(pinId, env) {
   // --- Note ---
   body.appendChild(field('Note', () => {
     const t = document.createElement('textarea');
-    t.id = 'detail-notiz';
+    t.id = 'detail-note';
     t.rows = 3;
     t.value = pin.note || '';
     return t;
@@ -287,9 +287,9 @@ export function showDetail(pinId, env) {
 
   // --- Tags ---
   const tagField = document.createElement('div');
-  tagField.className = 'feld';
+  tagField.className = 'field';
   const tagLabel = document.createElement('span');
-  tagLabel.className = 'feld__label';
+  tagLabel.className = 'field__label';
   tagLabel.textContent = 'Tags';
   const tagUl = document.createElement('ul');
   tagUl.className = 'chips';
@@ -316,14 +316,14 @@ export function showDetail(pinId, env) {
   drawChips();
 
   const tagEntry = document.createElement('div');
-  tagEntry.className = 'tageingabe';
+  tagEntry.className = 'taginput';
   const tagInput = document.createElement('input');
   tagInput.type = 'text';
   tagInput.placeholder = 'Add tag …';
-  tagInput.setAttribute('list', 'tag-vorschlagsliste');
+  tagInput.setAttribute('list', 'tag-datalist');
   const tagBtn = document.createElement('button');
   tagBtn.type = 'button';
-  tagBtn.className = 'btn btn--klein';
+  tagBtn.className = 'btn btn--small';
   tagBtn.textContent = '+';
   const tagAdd = () => {
     const t = normTag(tagInput.value);
@@ -342,7 +342,7 @@ export function showDetail(pinId, env) {
   // --- Posts ---
   if ((pin.posts || []).length) {
     const h = document.createElement('p');
-    h.className = 'feld__label';
+    h.className = 'field__label';
     h.textContent = pin.posts.length === 1 ? '1 post at this place' : `${pin.posts.length} posts at this place`;
     body.appendChild(h);
 
@@ -372,7 +372,7 @@ export function showDetail(pinId, env) {
       a.textContent = post.username ? `@${post.username}` : 'Open on Instagram';
       const del = document.createElement('button');
       del.type = 'button';
-      del.className = 'btn btn--klein btn--gefahr';
+      del.className = 'btn btn--small btn--danger';
       del.textContent = 'Remove post';
       del.addEventListener('click', () => {
         store.removePost(pin.id, post.url);
@@ -387,11 +387,11 @@ export function showDetail(pinId, env) {
   }
 
   // --- Footer buttons ---
-  $('detail-speichern').onclick = () => {
+  $('detail-save').onclick = () => {
     const active = statusGroup.querySelector('[aria-checked="true"]');
     store.updatePin(pin.id, {
-      title: $('detail-titel').value.trim() || pin.title,
-      note: $('detail-notiz').value.trim(),
+      title: $('detail-title').value.trim() || pin.title,
+      note: $('detail-note').value.trim(),
       status: active?.dataset.status || pin.status,
       tags,
     });
@@ -400,20 +400,20 @@ export function showDetail(pinId, env) {
     toast('Saved.', 'success');
   };
 
-  $('detail-loeschen').onclick = () => {
+  $('detail-delete').onclick = () => {
     // No window.confirm: it blocks and looks bad on a phone.
-    const btn = $('detail-loeschen');
-    if (btn.dataset.sicher === 'ja') {
+    const btn = $('detail-delete');
+    if (btn.dataset.confirm === 'yes') {
       store.deletePin(pin.id);
       dlg.close();
       env.redraw();
       toast(`"${pin.title}" deleted.`, 'info');
       return;
     }
-    btn.dataset.sicher = 'ja';
+    btn.dataset.confirm = 'yes';
     btn.textContent = 'Really delete?';
     setTimeout(() => {
-      btn.dataset.sicher = '';
+      btn.dataset.confirm = '';
       btn.textContent = 'Delete';
     }, 4000);
   };
@@ -423,9 +423,9 @@ export function showDetail(pinId, env) {
 
 function field(label, makeElement) {
   const wrap = document.createElement('label');
-  wrap.className = 'feld';
+  wrap.className = 'field';
   const s = document.createElement('span');
-  s.className = 'feld__label';
+  s.className = 'field__label';
   s.textContent = label;
   wrap.append(s, makeElement());
   return wrap;
@@ -433,7 +433,7 @@ function field(label, makeElement) {
 
 function linkButton(text, href) {
   const a = document.createElement('a');
-  a.className = 'btn btn--klein';
+  a.className = 'btn btn--small';
   a.href = href;
   a.target = '_blank';
   a.rel = 'noopener';
@@ -447,8 +447,8 @@ function linkButton(text, href) {
 
 export function showImport(entries, sourceName, env) {
   const dlg = $('dlg-import');
-  const list = $('import-liste');
-  $('dlg-import-titel').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
+  const list = $('import-list');
+  $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
 
   const withCoords = entries.filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon));
   const withoutCoords = entries.length - withCoords.length;
@@ -459,7 +459,7 @@ export function showImport(entries, sourceName, env) {
   list.innerHTML = '';
   entries.forEach((e, i) => {
     const li = document.createElement('li');
-    li.className = 'importzeile';
+    li.className = 'importrow';
 
     const cb = document.createElement('input');
     cb.type = 'checkbox';
@@ -468,12 +468,12 @@ export function showImport(entries, sourceName, env) {
     cb.dataset.index = String(i);
 
     const lab = document.createElement('label');
-    lab.className = 'importzeile__name';
+    lab.className = 'importrow__name';
     lab.htmlFor = cb.id;
     lab.textContent = e.name;
 
     const addr = document.createElement('span');
-    addr.className = 'importzeile__adr';
+    addr.className = 'importrow__address';
     addr.textContent = e.address ||
       (Number.isFinite(e.lat) ? `${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}` : '');
 
@@ -481,7 +481,7 @@ export function showImport(entries, sourceName, env) {
 
     if (e.warning) {
       const w = document.createElement('span');
-      w.className = 'importzeile__warn';
+      w.className = 'importrow__warning';
       w.textContent = e.warning;
       li.appendChild(w);
     }
@@ -491,10 +491,10 @@ export function showImport(entries, sourceName, env) {
   const setAllChecked = (checked) => {
     for (const cb of list.querySelectorAll('input[type=checkbox]')) cb.checked = checked;
   };
-  $('import-alle').onclick = () => setAllChecked(true);
-  $('import-keine').onclick = () => setAllChecked(false);
+  $('import-all').onclick = () => setAllChecked(true);
+  $('import-none').onclick = () => setAllChecked(false);
 
-  $('import-uebernehmen').onclick = async () => {
+  $('import-apply').onclick = async () => {
     const selected = [...list.querySelectorAll('input[type=checkbox]:checked')]
       .map((cb) => entries[Number(cb.dataset.index)]);
     dlg.close();

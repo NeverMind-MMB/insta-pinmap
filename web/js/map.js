@@ -39,7 +39,7 @@ export const TILES = {
 export function pinIcon(color, multiple = false) {
   return L.divIcon({
     className: '',
-    html: `<div class="pinmark${multiple ? ' pinmark--mehr' : ''}" style="background:${color}"></div>`,
+    html: `<div class="pinmark${multiple ? ' pinmark--multi' : ''}" style="background:${color}"></div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 26],
     popupAnchor: [0, -24],

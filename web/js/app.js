@@ -34,7 +34,7 @@ function redraw() {
   map?.draw(pins);
   drawList(pins, (id) => showDetail(id, env));
   drawTagBar(redraw);
-  $('karte-leer').hidden = store.db.pins.length > 0;
+  $('map-empty').hidden = store.db.pins.length > 0;
 }
 
 /* ================================================================== *
@@ -47,14 +47,14 @@ function setView(name) {
     btn.classList.toggle('is-active', isActive);
     btn.setAttribute('aria-selected', String(isActive));
   }
-  for (const [view, id] of [['karte', 'ansicht-karte'], ['liste', 'ansicht-liste']]) {
+  for (const [view, id] of [['map', 'view-map'], ['list', 'view-list']]) {
     const el = $(id);
     const isActive = view === name;
     el.classList.toggle('is-active', isActive);
     // On large screens both are side by side; then hide nothing.
     el.hidden = isActive ? false : !window.matchMedia('(min-width: 780px)').matches ? true : false;
   }
-  if (name === 'karte') map?.remeasure();
+  if (name === 'map') map?.remeasure();
 }
 
 /* ================================================================== *
@@ -75,7 +75,7 @@ async function start() {
   }
 
   // 2) Map
-  map = new MainMap('karte', {
+  map = new MainMap('map', {
     onPinClick: (id) => showDetail(id, env),
   });
 
@@ -98,8 +98,8 @@ async function start() {
   }
 
   // 5) Location for "Nearest first", only when sorting by it
-  $('sortierung').addEventListener('change', () => {
-    if ($('sortierung').value === 'nearest' && !filter.location && navigator.geolocation) {
+  $('sort').addEventListener('change', () => {
+    if ($('sort').value === 'nearest' && !filter.location && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           filter.location = { lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -117,8 +117,8 @@ async function start() {
  * ================================================================== */
 
 function wireInput() {
-  const form = $('eingabe-form');
-  const field = $('eingabe-feld');
+  const form = $('input-form');
+  const field = $('input-field');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -181,21 +181,21 @@ function wireViews() {
   // Fix visibility when the width changes
   window.matchMedia('(min-width: 780px)').addEventListener('change', () => {
     const active = document.querySelector('.segmented__btn[data-view].is-active');
-    setView(active?.dataset.view || 'karte');
+    setView(active?.dataset.view || 'map');
   });
-  setView('karte');
+  setView('map');
 }
 
 function wireList() {
   let typingTimer = null;
-  $('suche').addEventListener('input', (e) => {
+  $('search').addEventListener('input', (e) => {
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => {
       filter.search = e.target.value;
       redraw();
     }, 150);
   });
-  $('sortierung').addEventListener('change', (e) => {
+  $('sort').addEventListener('change', (e) => {
     filter.sort = e.target.value;
     redraw();
   });
@@ -206,30 +206,30 @@ function wireList() {
  * ================================================================== */
 
 function wireSettings() {
-  const dlg = $('dlg-einstellungen');
+  const dlg = $('dlg-settings');
 
-  $('btn-einstellungen').addEventListener('click', () => {
-    $('einst-radius').value = store.settings.radiusM;
-    $('einst-radius-out').value = `${store.settings.radiusM} m`;
-    $('einst-kacheln').value = store.settings.tiles;
-    $('einst-import-status').textContent = '';
+  $('btn-settings').addEventListener('click', () => {
+    $('settings-radius').value = store.settings.radiusM;
+    $('settings-radius-out').value = `${store.settings.radiusM} m`;
+    $('settings-tiles').value = store.settings.tiles;
+    $('settings-import-status').textContent = '';
     dlg.showModal();
   });
 
-  $('einst-radius').addEventListener('input', (e) => {
+  $('settings-radius').addEventListener('input', (e) => {
     const v = Number(e.target.value);
-    $('einst-radius-out').value = `${v} m`;
+    $('settings-radius-out').value = `${v} m`;
     store.setSetting('radiusM', v);
   });
 
-  $('einst-kacheln').addEventListener('change', (e) => {
+  $('settings-tiles').addEventListener('change', (e) => {
     const v = TILES[e.target.value] ? e.target.value : 'osm';
     store.setSetting('tiles', v);
     map?.setTiles(v);
   });
 
   // --- Import from files ---
-  $('einst-importdatei').addEventListener('change', async (e) => {
+  $('settings-import-file').addEventListener('change', async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
     if (!files.length) return;
@@ -250,11 +250,11 @@ function wireSettings() {
         all.push(...entries);
         names.push(name);
       } catch (err) {
-        $('einst-import-status').textContent = `${f.name}: ${err.message}`;
+        $('settings-import-status').textContent = `${f.name}: ${err.message}`;
       }
     }
     if (!all.length) {
-      $('einst-import-status').textContent = 'The files contained no places.';
+      $('settings-import-status').textContent = 'The files contained no places.';
       return;
     }
     dlg.close();
@@ -262,28 +262,28 @@ function wireSettings() {
   });
 
   // --- Import from a link ---
-  $('einst-importlink-go').addEventListener('click', () => {
-    const link = $('einst-importlink').value.trim();
+  $('settings-import-link-go').addEventListener('click', () => {
+    const link = $('settings-import-link').value.trim();
     if (!link) return;
     try {
       const { name, entries } = readLink(link);
       if (!entries.length) {
-        $('einst-import-status').textContent = 'This link contains no place.';
+        $('settings-import-status').textContent = 'This link contains no place.';
         return;
       }
-      $('einst-importlink').value = '';
+      $('settings-import-link').value = '';
       dlg.close();
       showImport(entries, name, env);
     } catch (err) {
-      $('einst-import-status').textContent = err.message;
+      $('settings-import-status').textContent = err.message;
     }
   });
 
   // --- Backup ---
-  $('einst-export').addEventListener('click', exportJson);
-  $('einst-export-html').addEventListener('click', exportHtml);
+  $('settings-export').addEventListener('click', exportJson);
+  $('settings-export-html').addEventListener('click', exportHtml);
 
-  $('einst-restore').addEventListener('change', async (e) => {
+  $('settings-restore').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     e.target.value = '';
     if (!f) return;
@@ -302,15 +302,15 @@ function wireSettings() {
   });
 
   // --- Keys ---
-  $('einst-key-save').addEventListener('click', async () => {
-    const value = $('einst-key-liq').value.trim();
+  $('settings-key-save').addEventListener('click', async () => {
+    const value = $('settings-key-liq').value.trim();
     try {
       await fetch('/api/keys', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locationiq: value }),
       });
-      $('einst-key-liq').value = '';
+      $('settings-key-liq').value = '';
       toast(value ? 'Key saved.' : 'Key removed.', 'success');
     } catch (e) {
       toast('Saving failed: ' + e.message, 'error');
@@ -329,9 +329,9 @@ function wireShared() {
 
   // Clean up the address bar so a reload does not create anything twice
   history.replaceState(null, '', location.pathname);
-  $('eingabe-feld').value = shared.trim();
+  $('input-field').value = shared.trim();
   // Wait briefly so the map is ready before a dialog opens
-  setTimeout(() => $('eingabe-form').requestSubmit(), 350);
+  setTimeout(() => $('input-form').requestSubmit(), 350);
 }
 
 /* ================================================================== *

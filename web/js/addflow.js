@@ -163,8 +163,8 @@ async function addFromMapLink(link, env) {
  * ================================================================== */
 
 export async function openConfirm(cfg) {
-  const dlg = $('dlg-bestaetigen');
-  preview ??= new PreviewMap('best-karte');
+  const dlg = $('dlg-confirm');
+  preview ??= new PreviewMap('confirm-map');
 
   state = {
     ...cfg,
@@ -175,39 +175,39 @@ export async function openConfirm(cfg) {
   };
 
   // --- Source block ---
-  const sourceBlock = $('best-quelle');
+  const sourceBlock = $('confirm-source');
   if (cfg.post && (cfg.post.caption || cfg.post.thumb || cfg.post.username)) {
     sourceBlock.hidden = false;
-    const thumb = $('best-thumb');
+    const thumb = $('confirm-thumb');
     if (cfg.post.thumb) { thumb.src = cfg.post.thumb; thumb.hidden = false; thumb.alt = ''; }
     else thumb.hidden = true;
-    $('best-user').textContent = cfg.post.username ? `@${cfg.post.username}` : '';
-    $('best-caption').textContent = cfg.post.caption || '(no text in the post)';
+    $('confirm-user').textContent = cfg.post.username ? `@${cfg.post.username}` : '';
+    $('confirm-caption').textContent = cfg.post.caption || '(no text in the post)';
   } else {
     sourceBlock.hidden = true;
   }
 
   // --- Error notice plus embed as the fallback ---
-  const errorBox = $('best-fehler');
+  const errorBox = $('confirm-error');
   if (cfg.igError) {
     errorBox.hidden = false;
     errorBox.open = true;
-    $('best-fehler-text').textContent =
+    $('confirm-error-text').textContent =
       cfg.igError.message || 'Unknown reason.';
     const embed = embedLink(cfg.post?.url);
-    $('best-embed').innerHTML = embed
+    $('confirm-embed').innerHTML = embed
       ? `<iframe src="${embed}" loading="lazy" title="Instagram post"
            referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>`
       : '';
   } else {
     errorBox.hidden = true;
-    $('best-embed').innerHTML = '';
+    $('confirm-embed').innerHTML = '';
   }
 
   // --- Reset fields ---
-  $('best-titel').value = cfg.titleSuggestion || '';
-  $('best-notiz').value = cfg.note || '';
-  $('best-suche').value = '';
+  $('confirm-title').value = cfg.titleSuggestion || '';
+  $('confirm-note').value = cfg.note || '';
+  $('confirm-search').value = '';
   setStatus('wishlist');
   drawTags();
   drawTagSuggestions(cfg.tagSuggestions || []);
@@ -215,13 +215,13 @@ export async function openConfirm(cfg) {
 
   if (cfg.readyPlace) {
     choosePlace(cfg.readyPlace);
-    $('best-kandidaten').innerHTML = '';
-    $('best-status').textContent = 'The place came straight from the link. Please give it a quick check anyway.';
+    $('confirm-candidates').innerHTML = '';
+    $('confirm-status').textContent = 'The place came straight from the link. Please give it a quick check anyway.';
   } else {
-    $('best-vorschau').hidden = true;
-    $('best-speichern').disabled = true;
-    $('best-kandidaten').innerHTML = '';
-    $('best-status').textContent = '';
+    $('confirm-preview').hidden = true;
+    $('confirm-save').disabled = true;
+    $('confirm-candidates').innerHTML = '';
+    $('confirm-status').textContent = '';
   }
 
   dlg.showModal();
@@ -233,19 +233,19 @@ export async function openConfirm(cfg) {
   } else if (!cfg.readyPlace) {
     // Don't leave the search field empty: the cleaned-up post text is
     // almost always a better starting point than nothing.
-    $('best-suche').value = cfg.searchPrefill || '';
-    $('best-status').textContent = cfg.searchPrefill
+    $('confirm-search').value = cfg.searchPrefill || '';
+    $('confirm-status').textContent = cfg.searchPrefill
       ? 'No place could be derived from the text. The post text is ready as a search term: adjust it and search.'
       : 'No place could be derived from the text. Please search above yourself.';
-    $('best-suche').focus();
-    $('best-suche').select();
+    $('confirm-search').focus();
+    $('confirm-search').select();
   }
 }
 
 /** Queries the best candidates one after another and merges the matches. */
 async function searchCandidates(candidates, countries) {
-  const list = $('best-kandidaten');
-  const status = $('best-status');
+  const list = $('confirm-candidates');
+  const status = $('confirm-status');
   status.textContent = 'Searching for matching places …';
   list.innerHTML = '';
 
@@ -276,9 +276,9 @@ async function searchCandidates(candidates, countries) {
   if (!top.length) {
     status.textContent =
       'The place search knows none of these names. Please adjust and search again.';
-    $('best-suche').value = candidates[0]?.text || state.searchPrefill || '';
-    $('best-suche').focus();
-    $('best-suche').select();
+    $('confirm-search').value = candidates[0]?.text || state.searchPrefill || '';
+    $('confirm-search').focus();
+    $('confirm-search').select();
     return;
   }
 
@@ -292,30 +292,30 @@ async function searchCandidates(candidates, countries) {
 }
 
 function drawCandidates(matches) {
-  const list = $('best-kandidaten');
+  const list = $('confirm-candidates');
   list.innerHTML = '';
   for (const t of matches) {
     const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'kandidat';
+    btn.className = 'candidate';
     btn.setAttribute('aria-pressed', 'false');
     btn.innerHTML = `
-      <span class="kandidat__name"></span>
-      <span class="kandidat__adr"></span>
-      <span class="kandidat__art"></span>`;
-    btn.querySelector('.kandidat__name').textContent = t.name || '(no name)';
-    btn.querySelector('.kandidat__adr').textContent = t.address || '';
-    btn.querySelector('.kandidat__art').textContent = kindLabel(t);
+      <span class="candidate__name"></span>
+      <span class="candidate__address"></span>
+      <span class="candidate__kind"></span>`;
+    btn.querySelector('.candidate__name').textContent = t.name || '(no name)';
+    btn.querySelector('.candidate__address').textContent = t.address || '';
+    btn.querySelector('.candidate__kind').textContent = kindLabel(t);
     btn.addEventListener('click', () => {
-      for (const b of list.querySelectorAll('.kandidat')) b.setAttribute('aria-pressed', 'false');
+      for (const b of list.querySelectorAll('.candidate')) b.setAttribute('aria-pressed', 'false');
       btn.setAttribute('aria-pressed', 'true');
       choosePlace(t);
     });
     li.appendChild(btn);
     list.appendChild(li);
   }
-  list.querySelector('.kandidat')?.setAttribute('aria-pressed', 'true');
+  list.querySelector('.candidate')?.setAttribute('aria-pressed', 'true');
 }
 
 const KIND_LABELS = {
@@ -331,16 +331,16 @@ function kindLabel(t) {
 
 function choosePlace(place) {
   state.chosen = place;
-  $('best-vorschau').hidden = false;
-  $('best-name').textContent = place.name || '';
-  $('best-adresse').textContent = place.address || '';
-  $('best-koord').textContent = `${Number(place.lat).toFixed(5)}, ${Number(place.lon).toFixed(5)}`;
-  $('best-speichern').disabled = false;
+  $('confirm-preview').hidden = false;
+  $('confirm-name').textContent = place.name || '';
+  $('confirm-address').textContent = place.address || '';
+  $('confirm-coords').textContent = `${Number(place.lat).toFixed(5)}, ${Number(place.lon).toFixed(5)}`;
+  $('confirm-save').disabled = false;
 
   // The search term from the caption is often "Shop, City": good as search text,
   // bad as a pin name. As soon as a match is selected, take its clean name,
   // unless you have already typed something yourself.
-  const titleField = $('best-titel');
+  const titleField = $('confirm-title');
   if (place.name && !state.titleTyped) titleField.value = place.name;
 
   preview.show([{ lat: place.lat, lon: place.lon, color: '#b8543f', title: place.name }]);
@@ -349,7 +349,7 @@ function choosePlace(place) {
 /* ---------------- Tags in the dialog ---------------- */
 
 function drawTags() {
-  const ul = $('best-tags-gewaehlt');
+  const ul = $('confirm-tags-chosen');
   ul.innerHTML = '';
   for (const t of state.tags) {
     const li = document.createElement('li');
@@ -372,8 +372,8 @@ function drawTags() {
 }
 
 function drawTagSuggestions(suggestions) {
-  const ul = $('best-tags-vorschlag');
-  const hint = $('best-tags-hint');
+  const ul = $('confirm-tags-suggested');
+  const hint = $('confirm-tags-hint');
   ul.innerHTML = '';
   const remaining = suggestions.map(normTag).filter((t) => t && !state.tags.includes(t));
   hint.hidden = remaining.length === 0;
@@ -394,7 +394,7 @@ function drawTagSuggestions(suggestions) {
 }
 
 function fillTagDatalist() {
-  const dl = $('tag-vorschlagsliste');
+  const dl = $('tag-datalist');
   dl.innerHTML = '';
   for (const t of store.allTags()) {
     const o = document.createElement('option');
@@ -405,7 +405,7 @@ function fillTagDatalist() {
 
 function setStatus(value) {
   state.status = value;
-  for (const b of document.querySelectorAll('#dlg-bestaetigen [data-status]')) {
+  for (const b of document.querySelectorAll('#dlg-confirm [data-status]')) {
     const isActive = b.dataset.status === value;
     b.classList.toggle('is-active', isActive);
     b.setAttribute('aria-checked', String(isActive));
@@ -420,8 +420,8 @@ async function save(env) {
   const place = state.chosen;
   if (!place) return;
 
-  const title = $('best-titel').value.trim() || place.name || 'Untitled';
-  const note = $('best-notiz').value.trim();
+  const title = $('confirm-title').value.trim() || place.name || 'Untitled';
+  const note = $('confirm-note').value.trim();
   const post = state.post || null;
 
   // Look for neighbors that have not yet been explicitly kept separate
@@ -432,9 +432,9 @@ async function save(env) {
     const { pin: neighbor, distance } = neighbors[0];
     const decision = await askNearby(neighbor, distance, place, title);
 
-    if (decision === 'abbrechen') return;
+    if (decision === 'cancel') return;
 
-    if (decision === 'anhaengen') {
+    if (decision === 'attach') {
       if (post) {
         store.attachPost(neighbor.id, post);
         // Add the new post's tags to the existing pin
@@ -445,12 +445,12 @@ async function save(env) {
       } else {
         env.toast(`"${neighbor.title}" already exists here.`, 'info');
       }
-      $('dlg-bestaetigen').close();
+      $('dlg-confirm').close();
       env.redraw();
       env.map?.goToPin(neighbor.id);
       return;
     }
-    // 'neu' falls through and creates a separate pin
+    // 'new' falls through and creates a separate pin
     var keptApartFrom = neighbors.map((n) => n.pin);
   }
 
@@ -472,22 +472,22 @@ async function save(env) {
     });
   }
 
-  $('dlg-bestaetigen').close();
+  $('dlg-confirm').close();
   env.redraw();
   env.map?.goToPin(pin.id);
   env.toast(`"${pin.title}" saved.`, 'success');
 }
 
-/** Opens the neighbor dialog and returns 'anhaengen' | 'neu' | 'abbrechen'. */
+/** Opens the neighbor dialog and returns 'attach' | 'new' | 'cancel'. */
 function askNearby(neighbor, distance, place, title) {
   return new Promise((done) => {
-    const dlg = $('dlg-nachbar');
-    const nearbyMap = new PreviewMap('nachbar-karte');
+    const dlg = $('dlg-nearby');
+    const nearbyMap = new PreviewMap('nearby-map');
 
-    $('nachbar-text').textContent =
+    $('nearby-text').textContent =
       `"${title}" is ${distanceText(distance)} away from your pin "${neighbor.title}". ` +
       `Do the two belong together?`;
-    $('nachbar-anhaengen').textContent = `Attach to "${neighbor.title}"`;
+    $('nearby-attach').textContent = `Attach to "${neighbor.title}"`;
 
     nearbyMap.show([
       { lat: neighbor.lat, lon: neighbor.lon, color: store.pinColor(neighbor), title: neighbor.title },
@@ -497,7 +497,7 @@ function askNearby(neighbor, distance, place, title) {
     dlg.addEventListener('close', function onClose() {
       dlg.removeEventListener('close', onClose);
       nearbyMap.destroy();
-      done(dlg.returnValue || 'abbrechen');
+      done(dlg.returnValue || 'cancel');
     });
     dlg.showModal();
   });
@@ -508,61 +508,61 @@ function askNearby(neighbor, distance, place, title) {
  * ================================================================== */
 
 export function wireConfirm(env) {
-  $('best-speichern').addEventListener('click', () => save(env));
+  $('confirm-save').addEventListener('click', () => save(env));
 
   // Once you touch the title yourself, no match overwrites it any more.
-  $('best-titel').addEventListener('input', () => {
+  $('confirm-title').addEventListener('input', () => {
     if (state) state.titleTyped = true;
   });
 
-  for (const b of document.querySelectorAll('#dlg-bestaetigen [data-status]')) {
+  for (const b of document.querySelectorAll('#dlg-confirm [data-status]')) {
     b.addEventListener('click', () => setStatus(b.dataset.status));
   }
 
   // Add a tag by hand
   const tagAdd = () => {
-    const field = $('best-tag-feld');
+    const field = $('confirm-tag-input');
     const t = normTag(field.value);
     if (t && !state.tags.includes(t)) state.tags.push(t);
     field.value = '';
     drawTags();
     drawTagSuggestions(state.tagSuggestions || []);
   };
-  $('best-tag-add').addEventListener('click', tagAdd);
-  $('best-tag-feld').addEventListener('keydown', (e) => {
+  $('confirm-tag-add').addEventListener('click', tagAdd);
+  $('confirm-tag-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); tagAdd(); }
   });
 
   // Manual place search
   const runSearch = async () => {
-    const q = $('best-suche').value.trim();
+    const q = $('confirm-search').value.trim();
     if (!q) return;
-    $('best-status').textContent = 'Searching …';
+    $('confirm-status').textContent = 'Searching …';
     try {
       const j = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&limit=8`)).json();
       const matches = scoreMatches(j.results || [], {
         candidatePoints: 60, countries: state.countries || [],
       });
       if (!matches.length) {
-        $('best-status').textContent = 'Nothing found for that.';
-        $('best-kandidaten').innerHTML = '';
+        $('confirm-status').textContent = 'Nothing found for that.';
+        $('confirm-candidates').innerHTML = '';
         return;
       }
-      $('best-status').textContent = `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}:`;
+      $('confirm-status').textContent = `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}:`;
       drawCandidates(matches);
       choosePlace(matches[0]);
     } catch (e) {
-      $('best-status').textContent = 'The place search is not responding: ' + e.message;
+      $('confirm-status').textContent = 'The place search is not responding: ' + e.message;
     }
   };
-  $('best-suche-go').addEventListener('click', runSearch);
-  $('best-suche').addEventListener('keydown', (e) => {
+  $('confirm-search-go').addEventListener('click', runSearch);
+  $('confirm-search').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); runSearch(); }
   });
 
   // Clean up on close, so no iframe keeps loading in the background
-  $('dlg-bestaetigen').addEventListener('close', () => {
-    $('best-embed').innerHTML = '';
+  $('dlg-confirm').addEventListener('close', () => {
+    $('confirm-embed').innerHTML = '';
     preview?.destroy();
     preview = null;
   });

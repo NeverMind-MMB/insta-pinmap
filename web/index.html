@@ -17,7 +17,7 @@
 </head>
 <body>
 
-<a class="skip-link" href="#hauptinhalt">Skip to content</a>
+<a class="skip-link" href="#main-content">Skip to content</a>
 
 <header class="topbar">
   <h1 class="topbar__title">
@@ -30,10 +30,10 @@
 
   <div class="topbar__actions">
     <div class="segmented" role="tablist" aria-label="Switch view">
-      <button type="button" role="tab" id="tab-karte" aria-controls="ansicht-karte" aria-selected="true" class="segmented__btn is-active" data-view="karte">Map</button>
-      <button type="button" role="tab" id="tab-liste" aria-controls="ansicht-liste" aria-selected="false" class="segmented__btn" data-view="liste">List</button>
+      <button type="button" role="tab" id="tab-map" aria-controls="view-map" aria-selected="true" class="segmented__btn is-active" data-view="map">Map</button>
+      <button type="button" role="tab" id="tab-list" aria-controls="view-list" aria-selected="false" class="segmented__btn" data-view="list">List</button>
     </div>
-    <button type="button" class="iconbtn" id="btn-einstellungen" aria-label="Open settings" title="Settings">
+    <button type="button" class="iconbtn" id="btn-settings" aria-label="Open settings" title="Settings">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.8 1.7 1l.4 2.5h4l.4-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
     </button>
   </div>
@@ -43,191 +43,191 @@
   <ul class="tagbar__list" id="tagbar-list"></ul>
 </nav>
 
-<main id="hauptinhalt" class="layout">
+<main id="main-content" class="layout">
 
-  <section id="ansicht-karte" role="tabpanel" aria-labelledby="tab-karte" class="view view--karte is-active">
-    <div id="karte" class="karte" role="application" aria-label="World map with your saved places"></div>
-    <p class="karte__leer" id="karte-leer" hidden>
+  <section id="view-map" role="tabpanel" aria-labelledby="tab-map" class="view view--map is-active">
+    <div id="map" class="map" role="application" aria-label="World map with your saved places"></div>
+    <p class="map__empty" id="map-empty" hidden>
       No places saved yet.<br>
       <span>Paste an Instagram link below to get started.</span>
     </p>
   </section>
 
-  <section id="ansicht-liste" role="tabpanel" aria-labelledby="tab-liste" class="view view--liste" hidden>
-    <search class="suchzeile">
-      <label class="visually-hidden" for="suche">Search places</label>
-      <input type="search" id="suche" placeholder="Title, address, note, caption …" autocomplete="off" enterkeyhint="search">
-      <label class="visually-hidden" for="sortierung">Sort order</label>
-      <select id="sortierung">
+  <section id="view-list" role="tabpanel" aria-labelledby="tab-list" class="view view--list" hidden>
+    <search class="searchrow">
+      <label class="visually-hidden" for="search">Search places</label>
+      <input type="search" id="search" placeholder="Title, address, note, caption …" autocomplete="off" enterkeyhint="search">
+      <label class="visually-hidden" for="sort">Sort order</label>
+      <select id="sort">
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
         <option value="title">By title</option>
         <option value="nearest">Nearest first</option>
       </select>
     </search>
-    <p class="liste__zaehler" id="liste-zaehler" role="status"></p>
-    <ol class="liste" id="liste"></ol>
+    <p class="list__count" id="list-count" role="status"></p>
+    <ol class="list" id="list"></ol>
   </section>
 
 </main>
 
 <!-- Input bar: always reachable, this is the main way into the app -->
-<form class="eingabe" id="eingabe-form" autocomplete="off">
-  <label class="visually-hidden" for="eingabe-feld">Instagram link or place</label>
-  <input type="text" id="eingabe-feld" name="link"
+<form class="inputbar" id="input-form" autocomplete="off">
+  <label class="visually-hidden" for="input-field">Instagram link or place</label>
+  <input type="text" id="input-field" name="link"
          placeholder="Paste an Instagram link or search for a place"
          inputmode="url" enterkeyhint="go" spellcheck="false">
-  <button type="button" class="eingabe__paste" id="btn-paste" aria-label="Paste from clipboard" title="Paste from clipboard">
+  <button type="button" class="inputbar__paste" id="btn-paste" aria-label="Paste from clipboard" title="Paste from clipboard">
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
   </button>
-  <button type="submit" class="eingabe__go" id="btn-go">Add</button>
+  <button type="submit" class="inputbar__go" id="btn-go">Add</button>
 </form>
 
 <!-- ===================== Dialogs ===================== -->
 
 <!-- Confirm place -->
-<dialog class="sheet" id="dlg-bestaetigen" aria-labelledby="dlg-bestaetigen-titel">
+<dialog class="sheet" id="dlg-confirm" aria-labelledby="dlg-confirm-title">
   <form method="dialog" class="sheet__form">
     <header class="sheet__head">
-      <h2 id="dlg-bestaetigen-titel">Confirm place</h2>
-      <button type="submit" formnovalidate value="abbrechen" class="iconbtn" aria-label="Close">✕</button>
+      <h2 id="dlg-confirm-title">Confirm place</h2>
+      <button type="submit" formnovalidate value="cancel" class="iconbtn" aria-label="Close">✕</button>
     </header>
 
     <div class="sheet__body">
-      <div class="quelle" id="best-quelle" hidden>
-        <img class="quelle__thumb" id="best-thumb" alt="" hidden>
-        <div class="quelle__text">
-          <p class="quelle__user" id="best-user"></p>
-          <p class="quelle__caption" id="best-caption"></p>
+      <div class="source" id="confirm-source" hidden>
+        <img class="source__thumb" id="confirm-thumb" alt="" hidden>
+        <div class="source__text">
+          <p class="source__user" id="confirm-user"></p>
+          <p class="source__caption" id="confirm-caption"></p>
         </div>
       </div>
 
-      <details class="hinweis" id="best-fehler" hidden>
-        <summary id="best-fehler-titel">Could not read the Instagram text</summary>
-        <p id="best-fehler-text"></p>
+      <details class="notice" id="confirm-error" hidden>
+        <summary id="confirm-error-title">Could not read the Instagram text</summary>
+        <p id="confirm-error-text"></p>
         <p>You can view the post here and enter the place yourself:</p>
-        <div class="embedbox" id="best-embed"></div>
+        <div class="embedbox" id="confirm-embed"></div>
       </details>
 
-      <search class="ortsuche">
-        <label class="visually-hidden" for="best-suche">Search for a place</label>
-        <input type="search" id="best-suche" placeholder="Search for a place …" enterkeyhint="search" autocomplete="off">
-        <button type="button" class="btn btn--klein" id="best-suche-go">Search</button>
+      <search class="placesearch">
+        <label class="visually-hidden" for="confirm-search">Search for a place</label>
+        <input type="search" id="confirm-search" placeholder="Search for a place …" enterkeyhint="search" autocomplete="off">
+        <button type="button" class="btn btn--small" id="confirm-search-go">Search</button>
       </search>
 
-      <p class="kandidaten__label" id="best-status" role="status"></p>
-      <ul class="kandidaten" id="best-kandidaten"></ul>
+      <p class="candidates__label" id="confirm-status" role="status"></p>
+      <ul class="candidates" id="confirm-candidates"></ul>
 
-      <div class="vorschau" id="best-vorschau" hidden>
-        <div class="vorschau__karte" id="best-karte" role="img" aria-label="Map preview of the selected place"></div>
-        <div class="vorschau__info">
-          <p class="vorschau__name" id="best-name"></p>
-          <p class="vorschau__adresse" id="best-adresse"></p>
-          <p class="vorschau__koord" id="best-koord"></p>
+      <div class="preview" id="confirm-preview" hidden>
+        <div class="preview__map" id="confirm-map" role="img" aria-label="Map preview of the selected place"></div>
+        <div class="preview__info">
+          <p class="preview__name" id="confirm-name"></p>
+          <p class="preview__address" id="confirm-address"></p>
+          <p class="preview__coords" id="confirm-coords"></p>
         </div>
       </div>
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Details</legend>
 
-        <label class="feld">
-          <span class="feld__label">Title</span>
-          <input type="text" id="best-titel">
+        <label class="field">
+          <span class="field__label">Title</span>
+          <input type="text" id="confirm-title">
         </label>
 
-        <label class="feld">
-          <span class="feld__label">Note <em>(optional)</em></span>
-          <textarea id="best-notiz" rows="2" placeholder="What do you want to do there?"></textarea>
+        <label class="field">
+          <span class="field__label">Note <em>(optional)</em></span>
+          <textarea id="confirm-note" rows="2" placeholder="What do you want to do there?"></textarea>
         </label>
 
-        <div class="feld">
-          <span class="feld__label">Status</span>
-          <div class="segmented segmented--voll" role="radiogroup" aria-label="Status">
+        <div class="field">
+          <span class="field__label">Status</span>
+          <div class="segmented segmented--full" role="radiogroup" aria-label="Status">
             <button type="button" role="radio" aria-checked="true"  class="segmented__btn is-active" data-status="wishlist">Want to go</button>
             <button type="button" role="radio" aria-checked="false" class="segmented__btn" data-status="visited">Been there</button>
           </div>
         </div>
 
-        <div class="feld">
-          <span class="feld__label" id="best-tags-label">Tags</span>
-          <ul class="chips" id="best-tags-gewaehlt" aria-labelledby="best-tags-label"></ul>
-          <div class="tageingabe">
-            <input type="text" id="best-tag-feld" placeholder="Add tag …" list="tag-vorschlagsliste" autocomplete="off">
-            <datalist id="tag-vorschlagsliste"></datalist>
-            <button type="button" class="btn btn--klein" id="best-tag-add">+</button>
+        <div class="field">
+          <span class="field__label" id="confirm-tags-label">Tags</span>
+          <ul class="chips" id="confirm-tags-chosen" aria-labelledby="confirm-tags-label"></ul>
+          <div class="taginput">
+            <input type="text" id="confirm-tag-input" placeholder="Add tag …" list="tag-datalist" autocomplete="off">
+            <datalist id="tag-datalist"></datalist>
+            <button type="button" class="btn btn--small" id="confirm-tag-add">+</button>
           </div>
-          <p class="chips__label" id="best-tags-hint" hidden>Suggested from the post — tap to add:</p>
-          <ul class="chips chips--vorschlag" id="best-tags-vorschlag"></ul>
+          <p class="chips__label" id="confirm-tags-hint" hidden>Suggested from the post — tap to add:</p>
+          <ul class="chips chips--suggested" id="confirm-tags-suggested"></ul>
         </div>
       </fieldset>
     </div>
 
     <footer class="sheet__foot">
-      <button type="submit" formnovalidate value="abbrechen" class="btn btn--still">Cancel</button>
-      <button type="button" class="btn btn--haupt" id="best-speichern" disabled>Drop pin</button>
+      <button type="submit" formnovalidate value="cancel" class="btn btn--quiet">Cancel</button>
+      <button type="button" class="btn btn--primary" id="confirm-save" disabled>Drop pin</button>
     </footer>
   </form>
 </dialog>
 
 <!-- Nearby pin found -->
-<dialog class="sheet sheet--schmal" id="dlg-nachbar" aria-labelledby="dlg-nachbar-titel">
+<dialog class="sheet sheet--narrow" id="dlg-nearby" aria-labelledby="dlg-nearby-title">
   <form method="dialog" class="sheet__form">
     <header class="sheet__head">
-      <h2 id="dlg-nachbar-titel">There is already a pin here</h2>
-      <button type="submit" formnovalidate value="abbrechen" class="iconbtn" aria-label="Close">✕</button>
+      <h2 id="dlg-nearby-title">There is already a pin here</h2>
+      <button type="submit" formnovalidate value="cancel" class="iconbtn" aria-label="Close">✕</button>
     </header>
     <div class="sheet__body">
-      <p id="nachbar-text"></p>
-      <div class="vorschau__karte" id="nachbar-karte" role="img" aria-label="Both places on the map"></div>
+      <p id="nearby-text"></p>
+      <div class="preview__map" id="nearby-map" role="img" aria-label="Both places on the map"></div>
     </div>
-    <footer class="sheet__foot sheet__foot--gestapelt">
-      <button type="submit" formnovalidate value="anhaengen" class="btn btn--haupt" id="nachbar-anhaengen">Attach to existing pin</button>
-      <button type="submit" formnovalidate value="neu" class="btn">Create a separate pin anyway</button>
-      <button type="submit" formnovalidate value="abbrechen" class="btn btn--still">Cancel</button>
+    <footer class="sheet__foot sheet__foot--stacked">
+      <button type="submit" formnovalidate value="attach" class="btn btn--primary" id="nearby-attach">Attach to existing pin</button>
+      <button type="submit" formnovalidate value="new" class="btn">Create a separate pin anyway</button>
+      <button type="submit" formnovalidate value="cancel" class="btn btn--quiet">Cancel</button>
     </footer>
   </form>
 </dialog>
 
 <!-- Pin details -->
-<dialog class="sheet" id="dlg-detail" aria-labelledby="dlg-detail-titel">
+<dialog class="sheet" id="dlg-detail" aria-labelledby="dlg-detail-title">
   <form method="dialog" class="sheet__form">
     <header class="sheet__head">
-      <h2 id="dlg-detail-titel">Place</h2>
-      <button type="submit" formnovalidate value="zu" class="iconbtn" aria-label="Close">✕</button>
+      <h2 id="dlg-detail-title">Place</h2>
+      <button type="submit" formnovalidate value="close" class="iconbtn" aria-label="Close">✕</button>
     </header>
     <div class="sheet__body" id="detail-body"></div>
     <footer class="sheet__foot">
-      <button type="button" class="btn btn--gefahr" id="detail-loeschen">Delete</button>
-      <button type="button" class="btn btn--haupt" id="detail-speichern">Save</button>
+      <button type="button" class="btn btn--danger" id="detail-delete">Delete</button>
+      <button type="button" class="btn btn--primary" id="detail-save">Save</button>
     </footer>
   </form>
 </dialog>
 
 <!-- Settings -->
-<dialog class="sheet" id="dlg-einstellungen" aria-labelledby="dlg-einst-titel">
+<dialog class="sheet" id="dlg-settings" aria-labelledby="dlg-settings-title">
   <form method="dialog" class="sheet__form">
     <header class="sheet__head">
-      <h2 id="dlg-einst-titel">Settings</h2>
-      <button type="submit" formnovalidate value="zu" class="iconbtn" aria-label="Close">✕</button>
+      <h2 id="dlg-settings-title">Settings</h2>
+      <button type="submit" formnovalidate value="close" class="iconbtn" aria-label="Close">✕</button>
     </header>
     <div class="sheet__body">
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Pins</legend>
-        <label class="feld">
-          <span class="feld__label">Ask whether places belong together within this distance</span>
-          <span class="schieber">
-            <input type="range" id="einst-radius" min="20" max="1000" step="10" value="150">
-            <output id="einst-radius-out">150 m</output>
+        <label class="field">
+          <span class="field__label">Ask whether places belong together within this distance</span>
+          <span class="slider">
+            <input type="range" id="settings-radius" min="20" max="1000" step="10" value="150">
+            <output id="settings-radius-out">150 m</output>
           </span>
         </label>
       </fieldset>
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Map</legend>
-        <label class="feld">
-          <span class="feld__label">Map style</span>
-          <select id="einst-kacheln">
+        <label class="field">
+          <span class="field__label">Map style</span>
+          <select id="settings-tiles">
             <option value="osm">OpenStreetMap (default)</option>
             <option value="osm-de">OpenStreetMap Germany</option>
             <option value="topo">OpenTopoMap</option>
@@ -235,58 +235,58 @@
         </label>
       </fieldset>
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Import</legend>
-        <p class="feld__hilfe">
+        <p class="field__help">
           Apple Guides, Apple place links, Google Takeout (GeoJSON and list CSV),
           My&nbsp;Maps (KML/KMZ), GPX and GeoJSON.
         </p>
-        <label class="feld">
-          <span class="feld__label">Choose files</span>
-          <input type="file" id="einst-importdatei" accept=".json,.geojson,.csv,.kml,.kmz,.gpx,.zip" multiple>
+        <label class="field">
+          <span class="field__label">Choose files</span>
+          <input type="file" id="settings-import-file" accept=".json,.geojson,.csv,.kml,.kmz,.gpx,.zip" multiple>
         </label>
-        <label class="feld">
-          <span class="feld__label">Or paste a link (Apple Guide / place link)</span>
-          <span class="tageingabe">
-            <input type="text" id="einst-importlink" placeholder="https://guides.apple.com/?ug=…">
-            <button type="button" class="btn btn--klein" id="einst-importlink-go">Read</button>
+        <label class="field">
+          <span class="field__label">Or paste a link (Apple Guide / place link)</span>
+          <span class="taginput">
+            <input type="text" id="settings-import-link" placeholder="https://guides.apple.com/?ug=…">
+            <button type="button" class="btn btn--small" id="settings-import-link-go">Read</button>
           </span>
         </label>
-        <p class="feld__hilfe" id="einst-import-status" role="status"></p>
+        <p class="field__help" id="settings-import-status" role="status"></p>
       </fieldset>
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Backup</legend>
-        <p class="feld__hilfe">
+        <p class="field__help">
           Your data is stored as <code>data/pins.json</code> next to the program.
           A backup never hurts, though.
         </p>
-        <div class="knopfreihe">
-          <button type="button" class="btn" id="einst-export">Back up as JSON</button>
-          <button type="button" class="btn" id="einst-export-html">As a standalone HTML map</button>
+        <div class="buttonrow">
+          <button type="button" class="btn" id="settings-export">Back up as JSON</button>
+          <button type="button" class="btn" id="settings-export-html">As a standalone HTML map</button>
         </div>
-        <label class="feld">
-          <span class="feld__label">Restore a backup</span>
-          <input type="file" id="einst-restore" accept=".json">
+        <label class="field">
+          <span class="field__label">Restore a backup</span>
+          <input type="file" id="settings-restore" accept=".json">
         </label>
       </fieldset>
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Place search</legend>
-        <p class="feld__hilfe">
+        <p class="field__help">
           Photon is the default, then Nominatim. Both are free and need no account.
           A key is only needed if both fail.
         </p>
-        <label class="feld">
-          <span class="feld__label">LocationIQ key <em>(optional)</em></span>
-          <input type="password" id="einst-key-liq" placeholder="leave empty if not needed">
+        <label class="field">
+          <span class="field__label">LocationIQ key <em>(optional)</em></span>
+          <input type="password" id="settings-key-liq" placeholder="leave empty if not needed">
         </label>
-        <button type="button" class="btn btn--klein" id="einst-key-save">Save key</button>
+        <button type="button" class="btn btn--small" id="settings-key-save">Save key</button>
       </fieldset>
 
-      <fieldset class="feldgruppe">
+      <fieldset class="fieldgroup">
         <legend>Diagnostics</legend>
-        <p class="feld__hilfe">
+        <p class="field__help">
           Checks one by one whether Instagram, place search and map tiles are reachable.
         </p>
         <p><a href="/selftest.html" target="_blank" rel="noopener">Open self-test</a></p>
@@ -294,29 +294,29 @@
 
     </div>
     <footer class="sheet__foot">
-      <button type="submit" formnovalidate value="zu" class="btn btn--haupt">Done</button>
+      <button type="submit" formnovalidate value="close" class="btn btn--primary">Done</button>
     </footer>
   </form>
 </dialog>
 
 <!-- Import review -->
-<dialog class="sheet" id="dlg-import" aria-labelledby="dlg-import-titel">
+<dialog class="sheet" id="dlg-import" aria-labelledby="dlg-import-title">
   <form method="dialog" class="sheet__form">
     <header class="sheet__head">
-      <h2 id="dlg-import-titel">Places found</h2>
-      <button type="submit" formnovalidate value="abbrechen" class="iconbtn" aria-label="Close">✕</button>
+      <h2 id="dlg-import-title">Places found</h2>
+      <button type="submit" formnovalidate value="cancel" class="iconbtn" aria-label="Close">✕</button>
     </header>
     <div class="sheet__body">
       <p id="import-info" role="status"></p>
-      <div class="knopfreihe">
-        <button type="button" class="btn btn--klein" id="import-alle">Select all</button>
-        <button type="button" class="btn btn--klein" id="import-keine">Select none</button>
+      <div class="buttonrow">
+        <button type="button" class="btn btn--small" id="import-all">Select all</button>
+        <button type="button" class="btn btn--small" id="import-none">Select none</button>
       </div>
-      <ul class="importliste" id="import-liste"></ul>
+      <ul class="importlist" id="import-list"></ul>
     </div>
     <footer class="sheet__foot">
-      <button type="submit" formnovalidate value="abbrechen" class="btn btn--still">Cancel</button>
-      <button type="button" class="btn btn--haupt" id="import-uebernehmen">Import selected</button>
+      <button type="submit" formnovalidate value="cancel" class="btn btn--quiet">Cancel</button>
+      <button type="button" class="btn btn--primary" id="import-apply">Import selected</button>
     </footer>
   </form>
 </dialog>
