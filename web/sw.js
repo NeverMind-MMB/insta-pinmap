@@ -9,12 +9,24 @@
 
 const CACHE = 'insta-pinmap-app';
 
+/** A plain copy of a response: body read fully, never flagged as redirected. */
+async function rebuild(res) {
+  return new Response(await res.blob(), { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     if ((await cache.keys()).length === 0) {
       const info = await (await fetch('/version.json', { cache: 'reload' })).json();
-      await cache.addAll(['/version.json', ...info.files]);
+      const urls = ['/version.json', ...info.files];
+      const fresh = [];
+      for (const url of urls) {
+        const res = await fetch(new Request(url, { cache: 'reload' }));
+        if (!res.ok) throw new Error(`Download failed: ${url}`);
+        fresh.push([url, await rebuild(res)]);
+      }
+      for (const [url, copy] of fresh) await cache.put(url, copy);
     }
     await self.skipWaiting();
   })());
@@ -33,7 +45,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
   // Update checks and downloads must reach the network.
-  if (request.cache === 'no-store' || request.cache === 'reload') return;
+  if (request.mode !== 'navigate' && (request.cache === 'no-store' || request.cache === 'reload')) return;
 
   const key = request.mode === 'navigate' && (url.pathname === '/' || url.pathname === '/index.html')
     ? '/index.html'
@@ -41,6 +53,6 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.open(CACHE)
       .then((cache) => cache.match(key))
-      .then((hit) => hit || fetch(request))
+      .then((hit) => (hit && hit.redirected ? rebuild(hit) : hit) || fetch(request))
   );
 });

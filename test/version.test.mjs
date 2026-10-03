@@ -22,3 +22,21 @@ test('every listed file exists and every app module is listed', () => {
   for (const m of modules) assert.ok(info.files.includes(`/js/${m}`), `/js/${m} not in version.json`);
   assert.ok(info.files.includes('/index.html'));
 });
+
+test('rebuildResponse drops the redirected flag and keeps body, status and type', async () => {
+  const { rebuildResponse } = await import('../web/js/update.js');
+  const src = new Response('<!DOCTYPE html>hi', { status: 200, headers: { 'content-type': 'text/html' } });
+  Object.defineProperty(src, 'redirected', { value: true });
+  const out = await rebuildResponse(src);
+  assert.equal(out.redirected, false);
+  assert.equal(out.status, 200);
+  assert.equal(out.headers.get('content-type'), 'text/html');
+  assert.equal(await out.text(), '<!DOCTYPE html>hi');
+});
+
+test('sw.js has no version number and handles redirected cache hits', () => {
+  const sw = readFileSync(new URL('../web/sw.js', import.meta.url), 'utf8');
+  assert.ok(!/\d+\.\d+\.\d+/.test(sw));
+  assert.ok(sw.includes('hit.redirected'));
+  assert.ok(sw.includes("request.mode !== 'navigate'"));
+});
