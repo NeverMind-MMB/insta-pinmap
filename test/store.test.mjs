@@ -73,3 +73,31 @@ test('store.load without IndexedDB opens empty and records the error', async () 
   assert.equal(store.db.pins.length, 0);
   assert.match(store.lastError, /storage/i);
 });
+
+test('save after a failed load does not write and reports the error', async () => {
+  await store.load();
+  let reported = null;
+  store.onSaveError = (m) => { reported = m; };
+  const r = await store.save();
+  assert.equal(r.ok, false);
+  assert.ok(reported);
+  store.onSaveError = () => {};
+});
+
+test('normalizeDb skips non-object pins and posts instead of throwing', () => {
+  assert.deepEqual(normalizeDb({ pins: [null] }).pins, []);
+  const db = normalizeDb({ pins: [pin('a', '2026-01-01T00:00:00.000Z', { posts: [null, 'x'] })] });
+  assert.deepEqual(db.pins[0].posts, []);
+});
+
+test('removePost changes updatedAt and rebuilds postIndex', () => {
+  const post = { url: 'https://www.instagram.com/p/AAA111/', shortcode: 'AAA111' };
+  store.db = normalizeDb({ pins: [pin('a', '2026-01-01T00:00:00.000Z', { posts: [post] })] });
+  assert.ok(store.db.postIndex.AAA111);
+  store.removePost('a', post.url);
+  assert.deepEqual(store.pin('a').posts, []);
+  assert.notEqual(store.pin('a').updatedAt, '2026-01-01T00:00:00.000Z');
+  assert.equal(store.db.postIndex.AAA111, undefined);
+  clearTimeout(store._saveTimer);
+  store._saveTimer = null;
+});

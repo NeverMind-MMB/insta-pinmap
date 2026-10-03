@@ -234,7 +234,7 @@ function wireSettings() {
         const { entries, backup, name } = await readFile(f);
         if (backup) {
           store.replaceAll(backup);
-          await store.save();
+          if (!(await store.save()).ok) return;
           redraw();
           toast(`Backup restored: ${store.db.pins.length} places.`, 'success');
           dlg.close();
@@ -284,7 +284,7 @@ function wireSettings() {
       const j = JSON.parse(await f.text());
       if (!Array.isArray(j.pins)) throw new Error('This is not a backup of this app.');
       store.replaceAll(j);
-      await store.save();
+      if (!(await store.save()).ok) return;
       redraw();
       map?.fitTo(store.db.pins);
       toast(`Backup restored: ${store.db.pins.length} places.`, 'success');

@@ -565,9 +565,10 @@ async function applyImport(entries, sourceName, env) {
     created++;
   }
 
-  await store.save();
+  const saved = await store.save();
   env.redraw();
   hideToast();
+  if (!saved.ok) return;
 
   const parts = [`${created} ${created === 1 ? 'place' : 'places'} imported`];
   if (skipped) parts.push(`${skipped} skipped as duplicates`);

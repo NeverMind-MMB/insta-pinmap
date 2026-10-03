@@ -35,17 +35,20 @@ export const store = {
   onSaveError: () => {},
   _listeners: new Set(),
   _saveTimer: null,
+  _loadFailed: false,
 
   /* ---------------- Loading ---------------- */
 
   async load() {
     this.lastError = null;
+    this._loadFailed = false;
     try {
       const settings = (await idbGet(SETTINGS_KEY)) ?? readLegacySettings();
       this.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
       this.db = normalizeDb((await idbGet(DB_KEY)) || {});
     } catch (e) {
       this.lastError = `Phone storage is not available: ${e.message}`;
+      this._loadFailed = true;
       this.settings = { ...DEFAULT_SETTINGS, ...(readLegacySettings() || {}) };
       this.db = normalizeDb({});
     }
@@ -69,8 +72,18 @@ export const store = {
     return result;
   },
 
+  /** True while a change waits for its delayed save. */
+  hasPendingSave() { return this._saveTimer != null; },
+
   async save() {
     clearTimeout(this._saveTimer);
+    this._saveTimer = null;
+    if (this._loadFailed) {
+      // The stored collection could not be read; writing now could overwrite it with an empty one.
+      const message = this.lastError || 'Phone storage is not available.';
+      this.onSaveError(message);
+      return { ok: false, message };
+    }
     try {
       await idbSet(DB_KEY, this.db);
       return { ok: true };
@@ -144,6 +157,16 @@ export const store = {
       if (fields.lon != null) pin.lon = round7(fields.lon);
       pin.updatedAt = new Date().toISOString();
       return pin;
+    });
+  },
+
+  removePost(pinId, url) {
+    const code = shortcode(url);
+    this.change((db) => {
+      const pin = db.pins.find((p) => p.id === pinId);
+      if (!pin) return;
+      pin.posts = (pin.posts || []).filter((x) => shortcode(x.url) !== code);
+      pin.updatedAt = new Date().toISOString();
     });
   },
 
@@ -335,6 +358,7 @@ export function normalizeDb(raw) {
     .filter((d) => d && d.id && d.deletedAt)
     .map((d) => ({ id: String(d.id), deletedAt: String(d.deletedAt) }));
   db.pins = (Array.isArray(db.pins) ? db.pins : [])
+    .filter((p) => p && typeof p === 'object')
     .map((p) => ({
       id: p.id || newId('p'),
       lat: Number(p.lat),
@@ -347,7 +371,7 @@ export function normalizeDb(raw) {
       source: p.source || p.quelle || 'manual',
       createdAt: p.createdAt || new Date().toISOString(),
       updatedAt: p.updatedAt || p.createdAt || new Date().toISOString(),
-      posts: (Array.isArray(p.posts) ? p.posts : []).filter((x) => x && x.url).map((x) => ({
+      posts: (Array.isArray(p.posts) ? p.posts : []).filter((x) => x && typeof x === 'object' && x.url).map((x) => ({
         url: x.url,
         shortcode: x.shortcode || shortcode(x.url) || '',
         caption: String(x.caption || ''),
@@ -365,4 +389,13 @@ export function normalizeDb(raw) {
     .filter((t) => t.name);
 
   return buildIndex(db);
+}
+
+/* Pending changes are written when the page is hidden or closed. */
+if (typeof globalThis.addEventListener === 'function' && globalThis.document) {
+  const flush = () => { if (store.hasPendingSave()) store.save(); };
+  globalThis.document.addEventListener('visibilitychange', () => {
+    if (globalThis.document.visibilityState === 'hidden') flush();
+  });
+  globalThis.addEventListener('pagehide', flush);
 }
