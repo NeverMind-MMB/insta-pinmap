@@ -601,3 +601,10 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
   background: var(--surface); border-top: 1px solid var(--border);
 }
 .reminder > span { flex: 1 1 12rem; }
+
+#btn-settings { position: relative; }
+#btn-settings.has-update::after {
+  content: ''; position: absolute; top: 6px; right: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--surface);
+}

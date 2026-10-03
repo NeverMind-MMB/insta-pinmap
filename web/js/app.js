@@ -12,6 +12,9 @@ import {
 } from './ui.js';
 import { readFile, readLink } from './importers.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
+import { APP_VERSION, compareVersions } from './version.js';
+import { checkForUpdate, installUpdate } from './update.js';
+import { onServerVersion } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -97,6 +100,10 @@ async function start() {
     $('backup-reminder').hidden = true;
   });
   $('backup-reminder-later').addEventListener('click', () => { $('backup-reminder').hidden = true; });
+
+  onServerVersion((v) => {
+    if (compareVersions(v, APP_VERSION) > 0) $('btn-settings').classList.add('has-update');
+  });
 
   // 5) Service worker: makes the app installable and usable offline
   if ('serviceWorker' in navigator) {
@@ -213,6 +220,32 @@ function wireList() {
 
 function wireSettings() {
   const dlg = $('dlg-settings');
+
+  $('settings-version').textContent = APP_VERSION;
+  let pendingUpdate = null;
+  $('settings-update-check').addEventListener('click', async () => {
+    $('settings-update-status').textContent = 'Checking …';
+    $('settings-update-install').hidden = true;
+    try {
+      const u = await checkForUpdate();
+      pendingUpdate = u.available ? u.info : null;
+      $('settings-update-status').textContent = u.available
+        ? `Version ${u.latest} is available.`
+        : 'You have the latest version.';
+      $('settings-update-install').hidden = !u.available;
+    } catch (e) {
+      $('settings-update-status').textContent = `Couldn't check: ${e.message}`;
+    }
+  });
+  $('settings-update-install').addEventListener('click', async () => {
+    if (!pendingUpdate) return;
+    $('settings-update-status').textContent = 'Installing …';
+    try {
+      await installUpdate(pendingUpdate);
+    } catch (e) {
+      $('settings-update-status').textContent = `Install failed, nothing changed: ${e.message}`;
+    }
+  });
 
   $('btn-settings').addEventListener('click', () => {
     $('settings-radius').value = store.settings.radiusM;

@@ -547,7 +547,7 @@ async function networkChecks() {
       const reg = await navigator.serviceWorker.getRegistration('/');
       if (!reg) reasons.push('Service worker not registered yet — open the start page once');
     }
-    if (!window.isSecureContext) reasons.push('Not a secure origin — please open via 127.0.0.1 instead of the network address');
+    if (!window.isSecureContext) reasons.push('Not a secure origin — open the https address (or 127.0.0.1 when testing locally)');
     const m = await fetch('/manifest.webmanifest');
     if (!m.ok) reasons.push('manifest.webmanifest missing');
     if (reasons.length) throw new Error(reasons.join('; '));

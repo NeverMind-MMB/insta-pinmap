@@ -278,6 +278,16 @@
       </fieldset>
 
       <fieldset class="fieldgroup">
+        <legend>App</legend>
+        <p class="field__help">Version <span id="settings-version"></span></p>
+        <div class="buttonrow">
+          <button type="button" class="btn btn--small" id="settings-update-check">Check for updates</button>
+          <button type="button" class="btn btn--small btn--primary" id="settings-update-install" hidden>Install</button>
+        </div>
+        <p class="field__help" id="settings-update-status" role="status"></p>
+      </fieldset>
+
+      <fieldset class="fieldgroup">
         <legend>Diagnostics</legend>
         <p class="field__help">
           Checks one by one whether Instagram, place search and map tiles are reachable.
