@@ -294,22 +294,6 @@ function wireSettings() {
       toast(err.message, 'error', 6000);
     }
   });
-
-  // --- Keys ---
-  $('settings-key-save').addEventListener('click', async () => {
-    const value = $('settings-key-liq').value.trim();
-    try {
-      await fetch('/api/keys', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationiq: value }),
-      });
-      $('settings-key-liq').value = '';
-      toast(value ? 'Key saved.' : 'Key removed.', 'success');
-    } catch (e) {
-      toast('Saving failed: ' + e.message, 'error');
-    }
-  });
 }
 
 /* ================================================================== *

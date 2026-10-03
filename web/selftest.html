@@ -80,6 +80,8 @@ import { idbGet, idbSet } from './js/idb.js';
 import { buildBackupHtml, readBackupText } from './js/backup.js';
 import { shortcode, normalizeLink, distanceM, distanceText, findPost, buildIndex, nearbyPins } from './js/dedupe.js';
 import { placeCandidates, flagCountries, tagToWords, tagSuggestions, scoreMatches } from './js/extract.js';
+import { searchPlaces } from './js/geocode.js';
+import { fetchPost, resolveShortLink } from './js/api.js';
 import { readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows, readKml, readGpx } from './js/importers.js';
 
 const $ = (id) => document.getElementById(id);
@@ -396,6 +398,26 @@ function logicChecks() {
     near(e[0].lat, 47.4212, 1e-6);
     return 'Waypoint read';
   });
+
+  check('Work ticket timing on this device', async () => {
+    const { ticketMinute } = await import('./js/ticket.js');
+    const bits = Number(new URLSearchParams(location.search).get('bits')) || 20;
+    const runs = [];
+    // Measured in the same module worker the app uses, so the page stays responsive
+    // (a main-thread loop would stall the other checks' timers and fail "Map tiles").
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      await new Promise((resolve, reject) => {
+        const w = new Worker('/js/ticket-worker.js', { type: 'module' });
+        w.onmessage = () => { w.terminate(); resolve(); };
+        w.onerror = (e) => { w.terminate(); reject(new Error(e.message || 'Ticket worker failed')); };
+        w.postMessage({ code: `selftest${i}`, minute: ticketMinute(), difficulty: bits });
+      });
+      runs.push(performance.now() - t0);
+    }
+    const avg = runs.reduce((a, b) => a + b, 0) / runs.length;
+    return `${bits} bits: average ${(avg / 1000).toFixed(2)} s, slowest ${(Math.max(...runs) / 1000).toFixed(2)} s (5 runs)`;
+  });
 }
 
 /* =================== Connections =================== */
@@ -414,25 +436,13 @@ async function networkCheck(name, fn, { required = true } = {}) {
 async function networkChecks() {
   $('network').innerHTML = '';
 
-  await networkCheck('Mini server reachable', async () => {
-    const j = await (await fetch('/api/health')).json();
-    if (!j.ok) throw new Error('Response without ok');
-    return `${j.app} ${j.version} on Node ${j.node}${j.mock ? ' — MOCK MODE' : ''}`;
-  });
-
-  await networkCheck('Place search', async () => {
-    const j = await (await fetch('/api/geocode?q=' + encodeURIComponent('Brandenburger Tor Berlin') + '&limit=3')).json();
-    if (!j.results?.length) throw new Error('No match — are Photon and Nominatim both silent?');
+  await networkCheck('Place search (Photon / Nominatim, direct)', async () => {
+    const j = await searchPlaces('Brandenburger Tor Berlin', { limit: 3 });
+    if (!j.results.length) throw new Error('No match — are Photon and Nominatim both silent?');
     const t = j.results[0];
     if (Math.abs(t.lat - 52.5163) > 0.05) throw new Error(`Unexpected match: ${t.name} ${t.lat}/${t.lon}`);
     return `${j.provider}: "${t.name}" at ${t.lat.toFixed(4)}/${t.lon.toFixed(4)}`;
   });
-
-  await networkCheck('Reverse search (coordinate → address)', async () => {
-    const j = await (await fetch('/api/reverse?lat=49.4539&lon=11.0775')).json();
-    if (!j.ok) throw new Error(j.message || 'no response');
-    return j.result.address?.slice(0, 90) || j.result.name;
-  }, { required: false });
 
   await networkCheck('Map tiles', () => new Promise((resolve, reject) => {
     const img = new Image();
@@ -442,28 +452,18 @@ async function networkChecks() {
     img.src = `https://tile.openstreetmap.org/10/548/357.png?t=${Date.now()}`;
   }));
 
-  await networkCheck('Instagram fetch', async () => {
-    const testLink = new URLSearchParams(location.search).get('ig');
-    if (!testLink) {
-      throw new Error(
-        'Skipped — this needs a real post. ' +
-        'Open this page with a link, for example:\n' +
-        location.pathname + '?ig=https://www.instagram.com/p/XXXXXXX/'
-      );
-    }
-    const j = await (await fetch('/api/ig?url=' + encodeURIComponent(testLink))).json();
+  await networkCheck('Instagram fetch (with work ticket)', async () => {
+    const link = new URLSearchParams(location.search).get('ig') || 'https://www.instagram.com/p/BsOGulcndj-/';
+    const t0 = performance.now();
+    const j = await fetchPost(shortcode(link));
     if (!j.ok) throw new Error(`${j.reason}: ${j.message}`);
-    const parts = [`Strategy "${j.strategy}"`];
-    if (j.username) parts.push(`@${j.username}`);
-    if (j.caption) parts.push(`Text ${j.caption.length} characters: "${j.caption.slice(0, 60)}…"`);
-    if (j.thumb) parts.push('thumbnail present');
-    return parts.join(' · ');
+    return `@${j.username} · ${j.caption.length} characters · ${j.thumb ? 'thumbnail' : 'no thumbnail'} · ${Math.round(performance.now() - t0)} ms incl. ticket`;
   }, { required: false });
 
   await networkCheck('Resolve short links', async () => {
-    const j = await (await fetch('/api/resolve?url=' + encodeURIComponent('https://maps.app.goo.gl/'))).json();
-    if (!j.ok && !/resolv|redirect|404|not/i.test(j.message || '')) throw new Error(j.message);
-    return 'API responds (please check real short links in everyday use)';
+    const j = await resolveShortLink('https://example.com/');
+    if (j.ok || !/resolve/i.test(j.message || '')) throw new Error('Allowlist not applied');
+    return 'Worker answers and refuses foreign hosts';
   }, { required: false });
 
   await networkCheck('Page height layout', async () => {

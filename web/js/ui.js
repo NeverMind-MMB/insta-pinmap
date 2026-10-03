@@ -4,6 +4,9 @@
 
 import { store, normTag } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
+import { searchPlaces } from './geocode.js';
+import { resolveShortLink } from './api.js';
+import { googleCoordinates } from './importers.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -519,24 +522,19 @@ async function applyImport(entries, sourceName, env) {
 
     // Resolve short link
     if (!Number.isFinite(lat) && e.url && /goo\.gl|maps\.apple\/|g\.co/i.test(e.url)) {
-      try {
-        const j = await (await fetch(`/api/resolve?url=${encodeURIComponent(e.url)}`)).json();
-        if (j.ok && j.url) {
-          const { googleCoordinates } = await import('./importers.js');
-          const k = googleCoordinates(j.url);
-          if (k) { lat = k.lat; lon = k.lon; }
-        }
-      } catch { /* next attempt: search by name */ }
+      const j = await resolveShortLink(e.url);
+      if (j.ok && j.url) {
+        const k = googleCoordinates(j.url);
+        if (k) { lat = k.lat; lon = k.lon; }
+      }
     }
 
     // Search by name
     if (!Number.isFinite(lat)) {
-      try {
-        const q = [e.name, e.address].filter(Boolean).join(', ');
-        const j = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&limit=1`)).json();
-        const t = (j.results || [])[0];
-        if (t) { lat = t.lat; lon = t.lon; if (!e.address) e.address = t.address; }
-      } catch { /* give up */ }
+      const q = [e.name, e.address].filter(Boolean).join(', ');
+      const j = await searchPlaces(q, { limit: 1 });
+      const t = (j.results || [])[0];
+      if (t) { lat = t.lat; lon = t.lon; if (!e.address) e.address = t.address; }
     }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {

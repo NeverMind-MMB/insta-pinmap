@@ -16,6 +16,8 @@ import {
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText } from './extract.js';
 import { readLink } from './importers.js';
+import { searchPlaces } from './geocode.js';
+import { fetchPost, resolveShortLink } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -75,14 +77,8 @@ async function addFromInstagram(link, env) {
   }
 
   // 2) Fetch the caption
-  env.toast('Fetching the post text …', 'info', 8000);
-  let ig = { ok: false };
-  try {
-    const r = await fetch(`/api/ig?url=${encodeURIComponent(canonical)}`);
-    ig = await r.json();
-  } catch (e) {
-    ig = { ok: false, reason: 'netzwerk', message: e.message };
-  }
+  env.toast('Reading the post …', 'info', 15000);
+  const ig = await fetchPost(code);
   env.hideToast?.();
 
   const caption = ig.ok ? ig.caption || '' : '';
@@ -134,15 +130,9 @@ async function addFromMapLink(link, env) {
   // Short link? Resolve it first.
   if (!Number.isFinite(e0.lat) && /goo\.gl|maps\.apple\/|g\.co/i.test(e0.url || link)) {
     env.toast('Resolving the short link …', 'info', 8000);
-    try {
-      const r = await fetch(`/api/resolve?url=${encodeURIComponent(e0.url || link)}`);
-      const j = await r.json();
-      if (j.ok && j.url) {
-        env.hideToast?.();
-        return addFromMapLink(j.url, env);
-      }
-    } catch { /* then not */ }
+    const j = await resolveShortLink(e0.url || link);
     env.hideToast?.();
+    if (j.ok && j.url) return addFromMapLink(j.url, env);
   }
 
   return openConfirm({
@@ -251,16 +241,13 @@ async function searchCandidates(candidates, countries) {
 
   const all = [];
   const seen = new Set();
+  let searchDown = false;
 
   // At most three candidates, so the place search is not overrun.
   for (const k of candidates.slice(0, 3)) {
-    let matches = [];
-    try {
-      const url = `/api/geocode?q=${encodeURIComponent(k.text)}&limit=5` +
-        (countries.length === 1 ? `&cc=${countries[0]}` : '');
-      const j = await (await fetch(url)).json();
-      matches = j.results || [];
-    } catch { /* next candidate */ }
+    const j = await searchPlaces(k.text, { limit: 5, countryCode: countries.length === 1 ? countries[0] : '' });
+    const matches = j.results || [];
+    if (!j.ok) searchDown = true;
 
     for (const t of scoreMatches(matches, { candidatePoints: k.points, countries })) {
       const key = `${t.lat.toFixed(4)},${t.lon.toFixed(4)}`;
@@ -274,8 +261,9 @@ async function searchCandidates(candidates, countries) {
   const top = all.slice(0, 6);
 
   if (!top.length) {
-    status.textContent =
-      'The place search knows none of these names. Please adjust and search again.';
+    status.textContent = searchDown
+      ? "Place search isn't responding."
+      : 'The place search knows none of these names. Adjust and search again.';
     $('confirm-search').value = candidates[0]?.text || state.searchPrefill || '';
     $('confirm-search').focus();
     $('confirm-search').select();
@@ -538,8 +526,12 @@ export function wireConfirm(env) {
     const q = $('confirm-search').value.trim();
     if (!q) return;
     $('confirm-status').textContent = 'Searching …';
-    try {
-      const j = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&limit=8`)).json();
+    {
+      const j = await searchPlaces(q, { limit: 8 });
+      if (!j.ok) {
+        $('confirm-status').textContent = "Place search isn't responding.";
+        return;
+      }
       const matches = scoreMatches(j.results || [], {
         candidatePoints: 60, countries: state.countries || [],
       });
@@ -551,8 +543,6 @@ export function wireConfirm(env) {
       $('confirm-status').textContent = `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}:`;
       drawCandidates(matches);
       choosePlace(matches[0]);
-    } catch (e) {
-      $('confirm-status').textContent = 'The place search is not responding: ' + e.message;
     }
   };
   $('confirm-search-go').addEventListener('click', runSearch);
