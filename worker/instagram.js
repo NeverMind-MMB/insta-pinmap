@@ -90,7 +90,13 @@ export async function fetchPost(code, fetchFn = fetch) {
 export async function imageAsDataUrl(url, fetchFn = fetch, maxBytes = 200 * 1024) {
   if (!url) return '';
   try {
-    const res = await fetchFn(url);
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== 'https:') return '';
+    const host = parsedUrl.hostname;
+    const allowedHosts = ['cdninstagram.com', 'fbcdn.net', 'instagram.com'];
+    const isAllowed = allowedHosts.includes(host) || allowedHosts.some(h => host.endsWith('.' + h));
+    if (!isAllowed) return '';
+    const res = await fetchFn(url, { redirect: 'manual' });
     if (!res.ok) return '';
     const type = (res.headers.get('content-type') || '').split(';')[0].trim();
     if (!/^image\//.test(type)) return '';

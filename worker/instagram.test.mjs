@@ -74,8 +74,18 @@ test('fetchPost refuses anything that is not a shortcode', async () => {
 
 test('imageAsDataUrl: small image inlined, big or non-image dropped', async () => {
   const img = (bytes, type) => async () => new Response(new Uint8Array(bytes), { headers: { 'Content-Type': type } });
-  assert.match(await imageAsDataUrl('https://x/a.jpg', img([1, 2, 3], 'image/jpeg')), /^data:image\/jpeg;base64,AQID$/);
-  assert.equal(await imageAsDataUrl('https://x/a.jpg', img(new Array(300000).fill(0), 'image/jpeg')), '');
-  assert.equal(await imageAsDataUrl('https://x/a.html', img([1], 'text/html')), '');
+  assert.match(await imageAsDataUrl('https://scontent.cdninstagram.com/a.jpg', img([1, 2, 3], 'image/jpeg')), /^data:image\/jpeg;base64,AQID$/);
+  assert.equal(await imageAsDataUrl('https://scontent.cdninstagram.com/a.jpg', img(new Array(300000).fill(0), 'image/jpeg')), '');
+  assert.equal(await imageAsDataUrl('https://scontent.cdninstagram.com/a.html', img([1], 'text/html')), '');
   assert.equal(await imageAsDataUrl('', img([1], 'image/png')), '');
+});
+
+test('imageAsDataUrl: blocks http, foreign hosts, and look-alike domains without fetching', async () => {
+  const throwingFetch = async () => { throw new Error('must not fetch'); };
+  // HTTP URL
+  assert.equal(await imageAsDataUrl('http://scontent.cdninstagram.com/a.jpg', throwingFetch), '');
+  // Foreign host
+  assert.equal(await imageAsDataUrl('https://example.com/a.jpg', throwingFetch), '');
+  // Look-alike domain
+  assert.equal(await imageAsDataUrl('https://cdninstagram.com.evil.example/a.jpg', throwingFetch), '');
 });
