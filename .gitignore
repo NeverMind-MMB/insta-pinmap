@@ -1,12 +1,7 @@
-data/pins.json
-data/backups/
-data/keys.json
-data/server.log
-.server.pid
+# Wrangler local state
+.wrangler/
 node_modules/
 
 # Markdown stays local (only READMEs go into the repo)
 *.md
 !README.md
-
-.wrangler/
