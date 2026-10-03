@@ -1,7 +1,7 @@
 {
-  "name": "Ortsammlung — places from Instagram",
-  "short_name": "Ortsammlung",
-  "description": "Personal world map for places from Instagram posts.",
+  "name": "Insta Pinmap",
+  "short_name": "Insta Pinmap",
+  "description": "Your own map of places from Instagram posts.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -19,20 +19,15 @@
     { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "share_target": {
-    "action": "/share",
-    "method": "POST",
-    "enctype": "application/x-www-form-urlencoded",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
+    "action": "/",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
   },
   "shortcuts": [
     {
-      "name": "Add place",
+      "name": "Add a place",
       "short_name": "Add",
-      "url": "/?fokus=eingabe",
+      "url": "/?focus=input",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]

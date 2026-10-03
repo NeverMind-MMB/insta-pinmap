@@ -158,7 +158,7 @@ function wireInput() {
       field.value = text.trim();
       form.requestSubmit();
     } catch {
-      toast('The browser does not allow access to the clipboard. Please paste by hand.', 'info', 5000);
+      toast('Your browser blocked the clipboard. Tap the field, then tap Paste.', 'info', 6000);
       field.focus();
     }
   });
@@ -335,13 +335,13 @@ function wireSettings() {
 
 function wireShared() {
   const params = new URLSearchParams(location.search);
-  const shared = params.get('shared') || params.get('url') || params.get('text');
+  const shared = params.get('url') || params.get('text') || params.get('title') || params.get('shared');
+  const focus = params.get('focus') === 'input';
+  if (shared || focus) history.replaceState(null, '', location.pathname);
+  if (focus) $('input-field').focus();
   if (!shared) return;
-
-  // Clean up the address bar so a reload does not create anything twice
-  history.replaceState(null, '', location.pathname);
-  $('input-field').value = shared.trim();
-  // Wait briefly so the map is ready before a dialog opens
+  $('input-field').value = [params.get('url'), params.get('text')].filter(Boolean).join(' ').trim() || shared.trim();
+  // Wait a moment so the map stands before a dialog opens
   setTimeout(() => $('input-form').requestSubmit(), 350);
 }
 

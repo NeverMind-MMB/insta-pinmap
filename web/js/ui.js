@@ -421,6 +421,20 @@ export function showDetail(pinId, env) {
     }, 4000);
   };
 
+  const snapshot = () => JSON.stringify({
+    title: $('detail-title').value.trim(),
+    note: $('detail-note').value.trim(),
+    status: statusGroup.querySelector('[aria-checked="true"]')?.dataset.status,
+    tags,
+  });
+  const initial = snapshot();
+  const warnUnsaved = () => { $('detail-unsaved').hidden = false; };
+  $('detail-unsaved').hidden = true;
+  $('detail-close').onclick = () => (snapshot() === initial ? dlg.close('close') : warnUnsaved());
+  dlg.oncancel = (e) => { if (snapshot() !== initial) { e.preventDefault(); warnUnsaved(); } };
+  $('detail-unsaved-save').onclick = () => $('detail-save').click();
+  $('detail-unsaved-discard').onclick = () => { $('detail-unsaved').hidden = true; dlg.close('close'); };
+
   dlg.showModal();
 }
 

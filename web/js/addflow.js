@@ -12,7 +12,7 @@ import { store, normTag } from './store.js';
 import { PreviewMap } from './map.js';
 import {
   shortcode, normalizeLink, embedLink, isInstagramLink,
-  findPost, nearbyPins, wantedApart, markApart, distanceText,
+  findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText } from './extract.js';
 import { readLink } from './importers.js';
@@ -412,34 +412,26 @@ async function save(env) {
   const note = $('confirm-note').value.trim();
   const post = state.post || null;
 
-  // Look for neighbors that have not yet been explicitly kept separate
-  const radius = store.settings.radiusM;
-  const neighbors = nearbyPins(store.db, place.lat, place.lon, radius);
-
+  const neighbors = nearbyPins(store.db, place.lat, place.lon, store.settings.radiusM);
+  let keepApartFrom = [];
   if (neighbors.length) {
-    const { pin: neighbor, distance } = neighbors[0];
-    const decision = await askNearby(neighbor, distance, place, title);
-
-    if (decision === 'cancel') return;
-
-    if (decision === 'attach') {
+    const answer = await askNearby(neighbors, place, title);
+    if (answer.action === 'cancel') return;
+    if (answer.action === 'attach') {
+      const target = answer.pin;
       if (post) {
-        store.attachPost(neighbor.id, post);
-        // Add the new post's tags to the existing pin
-        if (state.tags.length) {
-          store.updatePin(neighbor.id, { tags: [...new Set([...(neighbor.tags || []), ...state.tags])] });
-        }
-        env.toast(`Post attached to "${neighbor.title}" — now ${neighbor.posts.length} posts at this pin.`, 'success');
+        store.attachPost(target.id, post);
+        if (state.tags.length) store.updatePin(target.id, { tags: [...new Set([...(target.tags || []), ...state.tags])] });
+        env.toast(`Post attached to "${target.title}" — ${store.pin(target.id).posts.length} posts at this pin now.`, 'success');
       } else {
-        env.toast(`"${neighbor.title}" already exists here.`, 'info');
+        env.toast(`"${target.title}" is already here.`, 'info');
       }
       $('dlg-confirm').close();
       env.redraw();
-      env.map?.goToPin(neighbor.id);
+      env.map?.goToPin(target.id);
       return;
     }
-    // 'new' falls through and creates a separate pin
-    var keptApartFrom = neighbors.map((n) => n.pin);
+    keepApartFrom = neighbors.map((n) => n.pin);
   }
 
   const pin = store.addPin({
@@ -454,11 +446,7 @@ async function save(env) {
   });
 
   // Remember that these pins are meant to stay separate
-  if (typeof keptApartFrom !== 'undefined') {
-    store.change(() => {
-      for (const n of keptApartFrom) markApart(pin, n);
-    });
-  }
+  if (keepApartFrom.length) store.change(() => { for (const n of keepApartFrom) markApart(pin, n); });
 
   $('dlg-confirm').close();
   env.redraw();
@@ -466,27 +454,45 @@ async function save(env) {
   env.toast(`"${pin.title}" saved.`, 'success');
 }
 
-/** Opens the neighbor dialog and returns 'attach' | 'new' | 'cancel'. */
-function askNearby(neighbor, distance, place, title) {
+/** Lets the user attach to one of the nearby pins, make a new pin, or cancel. */
+function askNearby(neighbors, place, title) {
   return new Promise((done) => {
     const dlg = $('dlg-nearby');
-    const nearbyMap = new PreviewMap('nearby-map');
+    const map = new PreviewMap('nearby-map');
+    let chosen = null;
 
-    $('nearby-text').textContent =
-      `"${title}" is ${distanceText(distance)} away from your pin "${neighbor.title}". ` +
-      `Do the two belong together?`;
-    $('nearby-attach').textContent = `Attach to "${neighbor.title}"`;
+    $('nearby-text').textContent = neighbors.length === 1
+      ? `"${title}" is ${distanceText(neighbors[0].distance)} from your pin "${neighbors[0].pin.title}". Do they belong together?`
+      : `"${title}" is close to ${neighbors.length} of your pins. Attach it to one, or make a new pin.`;
 
-    nearbyMap.show([
-      { lat: neighbor.lat, lon: neighbor.lon, color: store.pinColor(neighbor), title: neighbor.title },
+    const list = $('nearby-list');
+    list.innerHTML = '';
+    for (const { pin, distance } of neighbors) {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'candidate';
+      btn.innerHTML = '<span class="candidate__name"></span><span class="candidate__address"></span>';
+      btn.querySelector('.candidate__name').textContent = `Attach to "${pin.title}"`;
+      btn.querySelector('.candidate__address').textContent = `${distanceText(distance)} away`;
+      btn.addEventListener('click', () => { chosen = pin; dlg.close('attach'); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    }
+
+    map.show([
+      ...neighbors.map(({ pin }) => ({ lat: pin.lat, lon: pin.lon, color: store.pinColor(pin), title: pin.title })),
       { lat: place.lat, lon: place.lon, color: '#b8543f', title },
     ]);
 
     dlg.addEventListener('close', function onClose() {
       dlg.removeEventListener('close', onClose);
-      nearbyMap.destroy();
-      done(dlg.returnValue || 'cancel');
+      map.destroy();
+      const v = dlg.returnValue;
+      done(v === 'attach' && chosen ? { action: 'attach', pin: chosen }
+        : v === 'new' ? { action: 'new' } : { action: 'cancel' });
     });
+    dlg.returnValue = '';
     dlg.showModal();
   });
 }
