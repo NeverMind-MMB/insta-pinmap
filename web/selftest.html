@@ -75,6 +75,7 @@
 </main>
 
 <script type="module">
+import { idbGet, idbSet } from './js/idb.js';
 import { shortcode, normalizeLink, distanceM, distanceText, findPost, buildIndex, nearbyPins } from './js/dedupe.js';
 import { placeCandidates, flagCountries, tagToWords, tagSuggestions, scoreMatches } from './js/extract.js';
 import { readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows, readKml, readGpx } from './js/importers.js';
@@ -109,12 +110,10 @@ function showSummary() {
 function check(name, fn) {
   const li = addRow('logic', name);
   const t0 = performance.now();
-  try {
-    const info = fn();
-    setResult(li, 'ok', info || '', performance.now() - t0);
-  } catch (e) {
-    setResult(li, 'fail', e.message, performance.now() - t0);
-  }
+  Promise.resolve().then(fn).then(
+    (info) => setResult(li, 'ok', info || '', performance.now() - t0),
+    (e) => setResult(li, 'fail', e.message, performance.now() - t0),
+  );
 }
 
 function equal(a, b, was = '') {
@@ -327,6 +326,14 @@ function logicChecks() {
     return '!3d!4d preferred, @ as fallback';
   });
 
+  check('Phone storage (IndexedDB) saves and loads', async () => {
+    const probe = { at: Date.now() };
+    await idbSet('selftest-probe', probe);
+    const back = await idbGet('selftest-probe');
+    if (JSON.stringify(back) !== JSON.stringify(probe)) throw new Error('Read back something else');
+    return 'Written and read back';
+  });
+
   check('Parse CSV', () => {
     const z = csvRows('Title,Note,URL\n"Café, klein","Sagt ""hallo""",https://x.y\nZwei,,https://a.b\n');
     equal(z.length, 3);
@@ -400,18 +407,6 @@ async function networkChecks() {
     const j = await (await fetch('/api/health')).json();
     if (!j.ok) throw new Error('Response without ok');
     return `${j.app} ${j.version} on Node ${j.node}${j.mock ? ' — MOCK MODE' : ''}`;
-  });
-
-  await networkCheck('Read and write data', async () => {
-    const before = await (await fetch('/api/pins')).json();
-    if (!before.ok) throw new Error(before.message || 'Reading failed');
-    const r = await fetch('/api/pins', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(before.db),
-    });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.message || 'Writing failed');
-    return `${j.count} pins read and written back unchanged`;
   });
 
   await networkCheck('Place search', async () => {

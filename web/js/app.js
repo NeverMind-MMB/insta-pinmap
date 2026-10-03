@@ -62,17 +62,10 @@ function setView(name) {
  * ================================================================== */
 
 async function start() {
-  // 1) Load data
-  try {
-    const { conflict } = await store.load();
-    if (conflict) {
-      toast('There were still unsaved changes in the browser. They have been applied.', 'info', 6000);
-      store.replaceAll(conflict);
-      await store.save();
-    }
-  } catch (e) {
-    toast(e.message, 'error', 12000);
-  }
+  // 1) Data
+  await store.load();
+  store.onSaveError = () => toast("Couldn't save. Please save a backup.", 'error', 8000);
+  if (store.lastError) toast("Couldn't open phone storage. Pins won't be saved. Please save a backup.", 'error', 0);
 
   // 2) Map
   map = new MainMap('map', {

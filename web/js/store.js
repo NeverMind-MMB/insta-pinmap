@@ -1,23 +1,24 @@
 /**
- * store.js — data storage.
+ * store.js — pins and settings, kept in IndexedDB on this device.
  *
- * data/pins.json on disk is the source of truth. The browser keeps a working
- * copy and writes it back in batches. In addition, a copy is kept in
- * localStorage after every change: if the server ever fails to respond,
- * nothing is lost and the app offers to apply the unsaved state on the
- * next start.
+ * The whole collection is one object ("db") stored under one key and written
+ * shortly after each change. Deleted pins are remembered in db.deleted, so
+ * that loading an older backup (and later sync) cannot bring them back.
  */
 
 import { buildIndex, newId, shortcode } from './dedupe.js';
+import { idbGet, idbSet } from './idb.js';
 
-const EMERGENCY_KEY = 'insta-pinmap.emergency-copy';
-const SETTINGS_KEY = 'insta-pinmap.settings';
+const DB_KEY = 'db';
+const SETTINGS_KEY = 'settings';
+const LEGACY_SETTINGS_KEY = 'insta-pinmap.settings';
 
 export const DEFAULT_SETTINGS = {
   radiusM: 150,
   tiles: 'osm',
   customStopTags: [],
-  lastView: null,     // { lat, lon, zoom }
+  lastView: null,        // { lat, lon, zoom }
+  lastBackupAt: null,    // ISO string of the last "Save backup"
 };
 
 /** Colors for tags, strong enough to tell apart on the map. */
@@ -27,82 +28,56 @@ const COLORS = [
 ];
 
 export const store = {
-  db: { version: 1, tags: [], pins: [], postIndex: {}, settings: {} },
+  db: normalizeDb({}),
   settings: { ...DEFAULT_SETTINGS },
-  serverUp: false,
+  lastError: null,
+  persistent: false,
+  onSaveError: () => {},
   _listeners: new Set(),
   _saveTimer: null,
-  _writing: false,
 
   /* ---------------- Loading ---------------- */
 
   async load() {
-    this.settings = { ...DEFAULT_SETTINGS, ...readLocal(SETTINGS_KEY, {}) };
-
+    this.lastError = null;
     try {
-      const r = await fetch('/api/pins', { cache: 'no-store' });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.message || 'Server responded with an error');
-      this.db = normalizeDb(j.db);
-      this.serverUp = true;
+      const settings = (await idbGet(SETTINGS_KEY)) ?? readLegacySettings();
+      this.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+      this.db = normalizeDb((await idbGet(DB_KEY)) || {});
     } catch (e) {
-      this.serverUp = false;
-      const emergency = readLocal(EMERGENCY_KEY, null);
-      this.db = emergency ? normalizeDb(emergency) : normalizeDb({});
-      throw new Error(
-        'The mini server is not responding. ' +
-        (emergency
-          ? 'Continuing with the last copy from the browser; nothing is saved until the server is running again.'
-          : 'Is it running? Start it with "node server.js".')
-      );
+      this.lastError = `Phone storage is not available: ${e.message}`;
+      this.settings = { ...DEFAULT_SETTINGS, ...(readLegacySettings() || {}) };
+      this.db = normalizeDb({});
     }
-
-    // Were there unsaved changes last time?
-    const emergency = readLocal(EMERGENCY_KEY, null);
-    if (this.serverUp && emergency && emergency.changedAt > (this.db.changedAt || 0)) {
-      return { conflict: emergency };
-    }
-    return {};
+    // Asking can wait on a permission prompt (Firefox), so never block start-up on it.
+    try {
+      Promise.resolve(globalThis.navigator?.storage?.persist?.())
+        .then((ok) => { this.persistent = ok === true; }, () => {});
+    } catch { /* not supported */ }
   },
 
   /* ---------------- Saving ---------------- */
 
-  /** Collects changes and writes them in batches, so not every keystroke touches the disk. */
+  /** Applies a change, redraws listeners and saves shortly after. */
   change(fn) {
     const result = fn(this.db);
     this.db.changedAt = Date.now();
     buildIndex(this.db);
-    writeLocal(EMERGENCY_KEY, this.db);
     this._notify();
-
     clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => this.save(), 400);
+    this._saveTimer = setTimeout(() => this.save(), 300);
     return result;
   },
 
   async save() {
-    if (!this.serverUp) return { ok: false, message: 'No server.' };
-    if (this._writing) {
-      clearTimeout(this._saveTimer);
-      this._saveTimer = setTimeout(() => this.save(), 300);
-      return { ok: true, deferred: true };
-    }
-    this._writing = true;
+    clearTimeout(this._saveTimer);
     try {
-      const r = await fetch('/api/pins', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.db),
-      });
-      const j = await r.json();
-      if (j.ok) {
-        try { localStorage.removeItem(EMERGENCY_KEY); } catch { /* doesn't matter */ }
-      }
-      return j;
+      await idbSet(DB_KEY, this.db);
+      return { ok: true };
     } catch (e) {
+      this.lastError = e.message;
+      this.onSaveError(e.message);
       return { ok: false, message: e.message };
-    } finally {
-      this._writing = false;
     }
   },
 
@@ -110,7 +85,7 @@ export const store = {
 
   setSetting(name, value) {
     this.settings[name] = value;
-    writeLocal(SETTINGS_KEY, this.settings);
+    idbSet(SETTINGS_KEY, this.settings).catch(() => { /* settings are not critical */ });
     this._notify();
   },
 
@@ -175,19 +150,9 @@ export const store = {
   deletePin(id) {
     this.change((db) => {
       db.pins = db.pins.filter((p) => p.id !== id);
-      for (const p of db.pins) {
-        if (p.keptApartFrom) p.keptApartFrom = p.keptApartFrom.filter((x) => x !== id);
-      }
-    });
-  },
-
-  removePost(pinId, url) {
-    const code = shortcode(url);
-    this.change((db) => {
-      const pin = db.pins.find((p) => p.id === pinId);
-      if (!pin) return;
-      pin.posts = (pin.posts || []).filter((x) => shortcode(x.url) !== code);
-      pin.updatedAt = new Date().toISOString();
+      for (const p of db.pins) p.keptApartFrom = p.keptApartFrom.filter((x) => x !== id);
+      db.deleted = db.deleted.filter((d) => d.id !== id);
+      db.deleted.push({ id, deletedAt: new Date().toISOString() });
     });
   },
 
@@ -224,15 +189,88 @@ export const store = {
     return JSON.stringify({ ...this.db, exportedAt: new Date().toISOString() }, null, 2);
   },
 
-  replaceAll(foreign) {
-    const fresh = normalizeDb(foreign);
+  /** "Add to my pins": merge rule from the spec, section 4.1. */
+  mergeIn(incoming) {
+    const result = mergeDb(this.db, incoming);
+    this.change((db) => Object.assign(db, result.db));
+    return { added: result.added, updated: result.updated, skipped: result.skipped };
+  },
+
+  /** "Replace everything". */
+  replaceAll(incoming) {
+    const next = normalizeDb(incoming);
     this.change((db) => {
-      db.pins = fresh.pins;
-      db.tags = fresh.tags;
-      db.version = fresh.version || 1;
+      db.pins = next.pins;
+      db.tags = next.tags;
+      db.deleted = next.deleted;
+      db.version = next.version || 1;
     });
   },
 };
+
+/* ------------------------------------------------------------------ *
+ * Merge
+ * ------------------------------------------------------------------ */
+
+const time = (s) => Date.parse(s) || 0;
+
+/**
+ * Merges another collection into ours. Pure: returns a new db.
+ *  - incoming pin on our deleted list, deleted at or after its last change → skipped
+ *  - incoming pin changed after that deletion → restored, deletion entry dropped
+ *  - pin on both sides → newer updatedAt wins
+ *  - new pin whose post is already saved on one of our pins → skipped
+ * Incoming deletions remove our pins unless we changed them afterwards.
+ */
+export function mergeDb(local, incoming) {
+  const a = normalizeDb(structuredClone(local));
+  const b = normalizeDb(incoming);
+  const stats = { added: 0, updated: 0, skipped: 0 };
+
+  const deleted = new Map(a.deleted.map((d) => [d.id, d.deletedAt]));
+  for (const d of b.deleted) {
+    if (!deleted.has(d.id) || time(d.deletedAt) > time(deleted.get(d.id))) deleted.set(d.id, d.deletedAt);
+  }
+
+  const pins = new Map(a.pins.map((p) => [p.id, p]));
+  for (const [id, at] of [...deleted]) {
+    const mine = pins.get(id);
+    if (!mine) continue;
+    if (time(at) >= time(mine.updatedAt)) pins.delete(id);
+    else deleted.delete(id);
+  }
+
+  const savedCodes = () => new Set([...pins.values()].flatMap((p) => p.posts.map((x) => x.shortcode)).filter(Boolean));
+
+  for (const pin of b.pins) {
+    if (deleted.has(pin.id)) {
+      if (time(deleted.get(pin.id)) >= time(pin.updatedAt)) { stats.skipped++; continue; }
+      deleted.delete(pin.id);
+    }
+    const mine = pins.get(pin.id);
+    if (mine) {
+      if (time(pin.updatedAt) > time(mine.updatedAt)) { pins.set(pin.id, pin); stats.updated++; }
+      else stats.skipped++;
+      continue;
+    }
+    const codes = savedCodes();
+    if (pin.posts.some((x) => x.shortcode && codes.has(x.shortcode))) { stats.skipped++; continue; }
+    pins.set(pin.id, pin);
+    stats.added++;
+  }
+
+  const tags = [...a.tags];
+  for (const t of b.tags) if (!tags.some((x) => x.name === t.name)) tags.push(t);
+
+  const db = buildIndex({
+    ...a,
+    pins: [...pins.values()],
+    tags,
+    deleted: [...deleted].map(([id, deletedAt]) => ({ id, deletedAt })),
+    changedAt: Date.now(),
+  });
+  return { db, ...stats };
+}
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -271,20 +309,31 @@ function rememberTags(db, tags) {
   }
 }
 
-/** Brings foreign or older data into the expected shape. */
+function readLegacySettings() {
+  try {
+    const s = globalThis.localStorage?.getItem(LEGACY_SETTINGS_KEY);
+    return s ? JSON.parse(s) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Brings foreign or older collections into the expected shape. */
 export function normalizeDb(raw) {
+  raw = raw && typeof raw === 'object' ? raw : {};
   const db = {
     version: 1,
     tags: [],
     pins: [],
     postIndex: {},
     settings: {},
-    changedAt: 0,
-    ...(raw && typeof raw === 'object' ? raw : {}),
+    ...raw,
   };
-  // Old backups used `stand` for the change time.
-  db.changedAt = Number(raw?.changedAt ?? raw?.stand ?? 0) || 0;
+  db.changedAt = Number(raw.changedAt ?? raw.stand ?? 0) || 0;
   delete db.stand;
+  db.deleted = (Array.isArray(raw.deleted) ? raw.deleted : [])
+    .filter((d) => d && d.id && d.deletedAt)
+    .map((d) => ({ id: String(d.id), deletedAt: String(d.deletedAt) }));
   db.pins = (Array.isArray(db.pins) ? db.pins : [])
     .map((p) => ({
       id: p.id || newId('p'),
@@ -316,21 +365,4 @@ export function normalizeDb(raw) {
     .filter((t) => t.name);
 
   return buildIndex(db);
-}
-
-function readLocal(key, fallback) {
-  try {
-    const s = localStorage.getItem(key);
-    return s ? JSON.parse(s) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeLocal(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* Storage full or blocked; the server is the source of truth anyway */
-  }
 }
