@@ -8,3 +8,5 @@ node_modules/
 # Markdown stays local (only READMEs go into the repo)
 *.md
 !README.md
+
+.wrangler/

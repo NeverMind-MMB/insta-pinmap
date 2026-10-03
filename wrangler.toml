@@ -1,0 +1,18 @@
+name = "insta-pinmap"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[assets]
+directory = "./web"
+binding = "ASSETS"
+
+[vars]
+WORK_DIFFICULTY = "20"
+
+# Per-address limit for /api/ig. If `wrangler deploy` rejects this block on the
+# free plan, delete it — worker/index.js then uses its in-memory fallback.
+[[ratelimits]]
+name = "IG_LIMIT"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
