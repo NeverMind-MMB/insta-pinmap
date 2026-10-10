@@ -28,6 +28,9 @@ function stubApplePlaces(plan = {}) {
     const n = calls.length;
     if (plan[n] === 'throw') throw new TypeError('Failed to fetch');
     if (plan[n] === 429) return new Response(JSON.stringify({ ok: false, reason: 'rate-limit' }), { status: 429 });
+    if (typeof plan[n] === 'string' && plan[n].startsWith('429:')) {
+      return new Response('{}', { status: 429, headers: { 'Retry-After': plan[n].slice(4) } });
+    }
     const ids = new URL(String(url), 'https://pinmap.example').searchParams.get('ids').split(',');
     const places = ids.map((id) => (id.endsWith('7')
       ? { id, ok: false }
@@ -62,7 +65,7 @@ test('resolveApplePlaces: on 429 waits for the next minute once, then goes on', 
     sleep: async (ms) => { waits.push(ms); },
   });
   assert.equal(waits.length, 1);
-  assert.ok(waits[0] > 0 && waits[0] <= 61000, `waited ${waits[0]} ms`);
+  assert.equal(waits[0], 61000, 'no Retry-After: a fixed 61 s');
   assert.ok(progress.some((p) => p[0] === 10 && p[2] > 0), 'the wait is shown');
   assert.equal(calls.length, 4, 'the refused batch is sent again');
   assert.equal(found.size, 21);
@@ -80,4 +83,18 @@ test('resolveApplePlaces: a second 429 or a network error leaves the rest unreso
 
   stubApplePlaces();
   assert.equal((await resolveApplePlaces([], () => {})).size, 0);
+});
+
+test('resolveApplePlaces: a Retry-After header (seconds) sets the wait; garbage or more than 5 minutes falls back to 61 s', async () => {
+  for (const [header, expected] of [['5', 5000], ['0', 61000], ['abc', 61000], ['-3', 61000], ['3600', 61000]]) {
+    stubApplePlaces({ 1: `429:${header}` });
+    const waits = [];
+    const progress = [];
+    const found = await resolveApplePlaces(ids23.slice(0, 3), (d, t, info) => progress.push(info?.waitSeconds ?? 0), {
+      sleep: async (ms) => { waits.push(ms); },
+    });
+    assert.deepEqual(waits, [expected], `Retry-After ${header}`);
+    assert.ok(progress.includes(expected / 1000), 'the wait is shown in seconds');
+    assert.equal(found.size, 3);
+  }
 });

@@ -21,6 +21,12 @@ const APPLE_HOST = 'maps.apple.com';
 const MAX_HEAD_BYTES = 256 * 1024;
 const TITLE_SUFFIX = / - Apple Maps\s*$/;
 
+/**
+ * Overlap kept from the previous text when looking for </head> in a new chunk,
+ * so a tag split across chunks is found ("</head" plus some whitespace).
+ */
+const HEAD_END_OVERLAP = 16;
+
 /** Reads the body only until </head> (or MAX_HEAD_BYTES) and cancels the rest. */
 export async function readHead(res, maxBytes = MAX_HEAD_BYTES) {
   if (!res.body) return '';
@@ -33,8 +39,10 @@ export async function readHead(res, maxBytes = MAX_HEAD_BYTES) {
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
+      const from = Math.max(0, text.length - HEAD_END_OVERLAP);
       text += decoder.decode(value, { stream: true });
-      if (/<\/head\s*>/i.test(text) || bytes >= maxBytes) break;
+      // Only the new chunk (plus the overlap) is searched: linear, not quadratic.
+      if (/<\/head\s*>/i.test(text.slice(from)) || bytes >= maxBytes) break;
     }
   } finally {
     reader.cancel().catch(() => {});
@@ -77,7 +85,10 @@ export async function lookUpPlace(id, fetchFn, userAgent) {
     return failed;
   }
   let finalHost = '';
-  try { finalHost = new URL(res.url).hostname.toLowerCase(); } catch { /* stays '' */ }  if (res.status !== 200 || finalHost !== APPLE_HOST) {
+  try { finalHost = new URL(res.url).hostname.toLowerCase(); } catch { /* stays '' */ }
+
+  // Only a 200 that ended on maps.apple.com itself is read.
+  if (res.status !== 200 || finalHost !== APPLE_HOST) {
     res.body?.cancel().catch(() => {});
     return failed;
   }

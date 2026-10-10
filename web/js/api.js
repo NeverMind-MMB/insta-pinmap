@@ -84,10 +84,20 @@ const APPLE_BATCH = 10; // the Worker takes at most 10 IDs per call
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const RATE_LIMIT_WAIT_MS = 61000; // the Worker counts per minute; one minute plus a second is always enough
+
+/** Retry-After in whole seconds (1..300) → ms; anything else → the fixed wait. */
+function retryAfterMs(header) {
+  const s = String(header ?? '').trim();
+  if (!/^\d+$/.test(s)) return RATE_LIMIT_WAIT_MS;
+  const n = Number(s);
+  return n >= 1 && n <= 300 ? n * 1000 : RATE_LIMIT_WAIT_MS;
+}
+
 /**
  * Looks up Apple Maps places by ID through the Worker, 10 per call, one call after the other.
  * onProgress(done, total, info) after each call; info.waitSeconds while waiting for the rate limit.
- * After a 429 it waits for the next minute once; a second 429 or a network error leaves the
+ * After a 429 it waits once (Retry-After seconds if given, else 61 s); a second 429 or a network error leaves the
  * remaining IDs unresolved. Never throws.
  * @returns {Promise<Map<string, {id, ok, name, address, lat, lon}>>} only the places found
  */
@@ -105,8 +115,8 @@ export async function resolveApplePlaces(ids, onProgress = () => {}, { sleep = w
       if (res.status === 429) {
         if (waited) break;
         waited = true;
-        const ms = 60000 - (Date.now() % 60000) + 1000;
-        onProgress(done, ids.length, { waitSeconds: Math.ceil(ms / 1000) });
+        const ms = retryAfterMs(res.headers.get('Retry-After'));
+        onProgress(done, ids.length, { waitSeconds: ms / 1000 });
         await sleep(ms);
         continue;
       }

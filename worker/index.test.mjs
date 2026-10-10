@@ -314,3 +314,45 @@ test('apple-places: refused from other sites', async () => {
   assert.equal(res.status, 403);
   assert.equal(fetch.calls.length, 0);
 });
+
+import { readHead } from './applemaps.js';
+
+/** A response whose body arrives in the given chunks; counts how many chunks were pulled. */
+function chunkedResponse(chunks) {
+  const enc = new TextEncoder();
+  let i = 0;
+  const stats = { pulled: 0, cancelled: false };
+  const body = new ReadableStream({
+    pull(controller) {
+      if (i >= chunks.length) { controller.close(); return; }
+      stats.pulled++;
+      controller.enqueue(enc.encode(chunks[i++]));
+    },
+    cancel() { stats.cancelled = true; },
+  }, { highWaterMark: 0 });
+  return { res: new Response(body), stats };
+}
+
+test('readHead: finds </head> split across two chunks and stops reading there', async () => {
+  const { res, stats } = chunkedResponse([
+    '<html><head><title>A</title><meta property="og:title" content="A"></he',
+    'ad><body>',
+    '<meta property="og:title" content="Body">',
+    '</body></html>',
+  ]);
+  const head = await readHead(res);
+  assert.equal(head, '<html><head><title>A</title><meta property="og:title" content="A">');
+  assert.equal(stats.pulled, 2, 'later chunks are not read');
+  assert.equal(stats.cancelled, true);
+});
+
+test('readHead: </HEAD > with spaces split over chunks, and the byte cap still applies', async () => {
+  const split = chunkedResponse(['<head>x</HE', 'AD  ', '>rest', 'more']);
+  assert.equal(await readHead(split.res), '<head>x');
+  assert.equal(split.stats.pulled, 3);
+
+  const big = chunkedResponse(['<head>', 'a'.repeat(100), 'b'.repeat(100), 'c'.repeat(100)]);
+  const head = await readHead(big.res, 150);
+  assert.equal(big.stats.pulled, 3, 'stops once the cap is reached');
+  assert.ok(head.startsWith('<head>a') && !head.includes('c'));
+});
