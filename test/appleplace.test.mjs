@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseApplePlaceHtml, parseShortcutResults, shortcutInput, SHORTCUT_RUN_URL,
+  parseApplePlaceHtml, parseShortcutResults, parseShortcutPages, parseShortcutPaste, shortcutInput, SHORTCUT_RUN_URL,
   applyShortcutResults, savePendingGuide, loadPendingGuide, clearPendingGuide, PENDING_GUIDE_KEY,
 } from '../web/js/appleplace.js';
 import { appleIdEntries } from '../web/js/importers.js';
@@ -197,4 +197,63 @@ test('parseShortcutResults: a later id with exactly the name and coordinates of 
   ].join('\n');
   const r = parseShortcutResults(text);
   assert.deepEqual([...r.keys()], ['1', '4']);
+});
+
+/* ---------- parseShortcutPages / parseShortcutPaste (raw pages pasted by the short Shortcut) ---------- */
+
+function applePage(id, opts = {}) {
+  return appleHead(opts).replace('<div id="app">', `<div id="app" data-ref="${id}">`);
+}
+
+test('parseShortcutPages: assigns pages to guide ids, ignores junk, unrelated and coordinate-less pages', () => {
+  const text = [
+    'leading junk\nhttps://maps.apple.com/place?auid=1',
+    applePage('111', { name: 'Alpha', lat: '48.1', lon: '11.5', title: 'Alpha in Munich, Germany - Apple Maps' }),
+    applePage('999', { name: 'Unrelated' }),
+    applePage('222', { name: 'Beta &amp; Co', lat: '52,5', lon: '13.4', title: 'Beta &amp; Co in Berlin, Germany - Apple Maps' }),
+    applePage('333', { lat: 'x', lon: 'y' }),
+  ].join('\n');
+  const m = parseShortcutPages(text, ['111', '222', '333', '444']);
+  assert.deepEqual([...m.keys()], ['111', '222']);
+  assert.deepEqual(m.get('111'), { name: 'Alpha', lat: 48.1, lon: 11.5, address: 'Munich, Germany' });
+  assert.deepEqual(m.get('222'), { name: 'Beta & Co', lat: 52.5, lon: 13.4, address: 'Berlin, Germany' });
+});
+
+test('parseShortcutPages: a later page for an id already filled does not overwrite it; claimId is the fallback', () => {
+  const claim = appleHead({ name: 'Claimed', lat: '1', lon: '2' }).replace('<div id="app">', '<a href="https://business.apple.com/?claimId=555">');
+  const text = applePage('111', { name: 'First' }) + applePage('111', { name: 'Second' }) + claim;
+  const m = parseShortcutPages(text, ['111', '555']);
+  assert.equal(m.get('111').name, 'First');
+  assert.equal(m.get('555').name, 'Claimed');
+});
+
+test('parseShortcutPages: <html without a doctype and lowercase doctype also start pages', () => {
+  const a = applePage('111', { name: 'A' }).replace('<!DOCTYPE html>\n', '');
+  const b = applePage('222', { name: 'B' }).replace('<!DOCTYPE html>', '<!doctype html>');
+  const m = parseShortcutPages(`${a}\n${b}`, ['111', '222']);
+  assert.deepEqual([...m.keys()], ['111', '222']);
+});
+
+test('parseShortcutPages: 2 MB paste of 45 pages parses in under 500 ms', () => {
+  const pad = '<script>' + 'x'.repeat(43000) + '</script>';
+  const ids = Array.from({ length: 45 }, (_, i) => String(4000000000000000000n + BigInt(i)));
+  const text = ids.map((id, i) => applePage(id, { name: `P${i}`, lat: '48.5', lon: '9.5' })
+    .replace('</div></body>', `${pad}</div></body>`)).join('\n');
+  assert.ok(text.length > 1.9e6);
+  const t0 = performance.now();
+  const m = parseShortcutPages(text, ids);
+  const ms = performance.now() - t0;
+  console.log(`2 MB parse: ${ms.toFixed(1)} ms`);
+  assert.equal(m.size, 45);
+  assert.ok(ms < 500, `took ${ms} ms`);
+});
+
+test('parseShortcutPaste: HTML path when <html is present (any case), else the @@ format', () => {
+  const ids = ['111'];
+  const html = parseShortcutPaste(applePage('111', { name: 'Alpha' }), ids);
+  assert.equal(html.get('111').name, 'Alpha');
+  const html2 = parseShortcutPaste(applePage('111', { name: 'Alpha' }).replace(/<html/, '<HTML'), ids);
+  assert.equal(html2.size, 1);
+  const line = 'https://maps.apple.com/place?auid=111@@Beta@@1@@2@@Somewhere';
+  assert.equal(parseShortcutPaste(line, ids).get('111').name, 'Beta');
 });

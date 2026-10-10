@@ -8,7 +8,7 @@ import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
-  shortcutInput, SHORTCUT_RUN_URL, parseShortcutResults, applyShortcutResults, appleIdOf,
+  shortcutInput, SHORTCUT_RUN_URL, parseShortcutPaste, applyShortcutResults, appleIdOf,
   savePendingGuide, clearPendingGuide,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
@@ -667,7 +667,7 @@ function wireAppleLookup(guide, entries, onResults) {
   $('import-apple-run').onclick = () => openExternal(SHORTCUT_RUN_URL);
 
   const useResults = (text) => {
-    const results = parseShortcutResults(text);
+    const results = parseShortcutPaste(text, guide.appleIds);
     const found = applyShortcutResults(entries, results);
     onResults(results);
     toast(`Found ${found} of ${total} ${total === 1 ? 'place' : 'places'}.`, found ? 'success' : 'info', 5000);
