@@ -47,7 +47,7 @@ html,body{margin:0;height:100%;font:16px/1.5 system-ui,sans-serif;background:#16
 .leaflet-popup-content h3{margin:0 0 4px;font-size:15px}
 .leaflet-popup-content p{margin:0 0 4px;color:#555}
 .leaflet-popup-content .g{display:inline-block;font-size:11px;background:#eee;border-radius:99px;padding:1px 7px;margin:2px 3px 0 0}
-#i{position:absolute;z-index:600;left:10px;top:10px;right:10px;background:rgba(22,24,28,.9);padding:8px 12px;border-radius:10px;font-size:13px}
+#i{position:absolute;z-index:600;left:54px;top:10px;right:10px;background:rgba(22,24,28,.9);padding:8px 12px;border-radius:10px;font-size:13px}
 </style></head><body>
 <div id="k"></div><div id="i">${pins.length} places · backup of ${date} · read-only. To restore: Insta Pinmap → Settings → Load backup.</div>
 <script type="application/json" id="${BACKUP_SCRIPT_ID}">${jsonForScript(db)}</script>

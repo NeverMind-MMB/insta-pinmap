@@ -83,6 +83,7 @@ async function start() {
   wireList();
   wireSettings();
   wireShared();
+  guardDialogEnter();
 
   redraw();
   if (store.db.pins.length && !store.settings.lastView) {
@@ -134,6 +135,8 @@ async function start() {
 function wireInput() {
   const form = $('input-form');
   const field = $('input-field');
+  let submitted = '';
+  env.inputDone = () => { if (field.value.trim() === submitted) field.value = ''; };
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -141,8 +144,9 @@ function wireInput() {
     if (!value || $('btn-go').disabled) return;
     $('btn-go').disabled = true;
     try {
+      // The field is cleared by env.inputDone once something was saved; closing the dialog keeps the link.
+      submitted = value;
       await startAdd(value, env);
-      field.value = '';
     } catch (err) {
       console.error(err);
       toast('Something went wrong: ' + err.message, 'error', 6000);
@@ -299,7 +303,7 @@ function wireSettings() {
   });
 
   // --- Import from a link ---
-  $('settings-import-link-go').addEventListener('click', () => {
+  const readImportLink = () => {
     const link = $('settings-import-link').value.trim();
     if (!link) return;
     try {
@@ -314,6 +318,10 @@ function wireSettings() {
     } catch (err) {
       $('settings-import-status').textContent = err.message;
     }
+  };
+  $('settings-import-link-go').addEventListener('click', readImportLink);
+  $('settings-import-link').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); readImportLink(); }
   });
 
   // --- Backup ---
@@ -341,6 +349,17 @@ function wireSettings() {
 /* ================================================================== *
  * Shared content
  * ================================================================== */
+
+/** Enter in a text field of a dialog form would submit it and close the dialog. */
+function guardDialogEnter() {
+  for (const form of document.querySelectorAll('dialog form')) {
+    form.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=button])')) {
+        e.preventDefault();
+      }
+    });
+  }
+}
 
 function wireShared() {
   const params = new URLSearchParams(location.search);

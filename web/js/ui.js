@@ -16,10 +16,29 @@ const $ = (id) => document.getElementById(id);
 
 let toastTimer = null;
 
+/**
+ * The toast is a popover, so it lives in the top layer like modal dialogs.
+ * Showing it again after each message puts it above a dialog opened earlier.
+ * Without popover support it moves into the open dialog instead.
+ */
+function placeToast(el) {
+  if (typeof el.showPopover === 'function') {
+    try {
+      if (el.matches(':popover-open')) el.hidePopover();
+      el.showPopover();
+    } catch { /* stays a normal element */ }
+    return;
+  }
+  const open = [...document.querySelectorAll('dialog[open]')].pop();
+  const home = open || document.body;
+  if (el.parentElement !== home) home.appendChild(el);
+}
+
 export function toast(text, kind = 'info', durationMs = 3200) {
   const el = $('toast');
   el.textContent = text;
   el.dataset.kind = kind;
+  placeToast(el);
   el.classList.add('is-on');
   clearTimeout(toastTimer);
   if (durationMs > 0) toastTimer = setTimeout(() => el.classList.remove('is-on'), durationMs);
@@ -511,9 +530,15 @@ export function showImport(entries, sourceName, env) {
     list.appendChild(li);
   });
 
+  const updateApply = () => {
+    $('import-apply').disabled = !list.querySelector('input[type=checkbox]:checked');
+  };
   const setAllChecked = (checked) => {
     for (const cb of list.querySelectorAll('input[type=checkbox]')) cb.checked = checked;
+    updateApply();
   };
+  list.onchange = updateApply;
+  updateApply();
   $('import-all').onclick = () => setAllChecked(true);
   $('import-none').onclick = () => setAllChecked(false);
 

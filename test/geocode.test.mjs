@@ -27,3 +27,37 @@ test('makeQueue keeps the gap and survives a failing call', async () => {
   assert.equal(times.length, 3);
   assert.ok(times[1] - times[0] >= 95 && times[2] - times[1] >= 95, `gaps ${times[1] - times[0]}, ${times[2] - times[1]}`);
 });
+
+import { searchPlaces } from '../web/js/geocode.js';
+
+async function withFetch(stub, fn) {
+  const real = globalThis.fetch;
+  globalThis.fetch = stub;
+  try { return await fn(); } finally { globalThis.fetch = real; }
+}
+const json = (body, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => body });
+
+test('searchPlaces: both providers answer with nothing is ok with no results', async () => {
+  const r = await withFetch(async (url) => json(String(url).includes('photon') ? { features: [] } : []),
+    () => searchPlaces('asdfqwerzxcv'));
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.results, []);
+});
+
+test('searchPlaces: both providers failing is not ok', async () => {
+  const r = await withFetch(async (url) => {
+    if (String(url).includes('photon')) throw new Error('offline');
+    return json({}, false);
+  }, () => searchPlaces('Hallstatt'));
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.results, []);
+});
+
+test('searchPlaces: empty Photon falls back to Nominatim hits', async () => {
+  const r = await withFetch(async (url) => json(String(url).includes('photon') ? { features: [] }
+    : [{ lat: '47.56', lon: '13.64', display_name: 'Hallstatt, Austria', type: 'village', class: 'place' }]),
+  () => searchPlaces('Hallstatt'));
+  assert.equal(r.ok, true);
+  assert.equal(r.provider, 'nominatim');
+  assert.equal(r.results.length, 1);
+});

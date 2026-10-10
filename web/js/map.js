@@ -66,6 +66,11 @@ export class MainMap {
       start ? start.zoom : 5
     );
 
+    // The map area shrinks when the backup reminder shows or hides; Leaflet has to learn the new size.
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => this.map.invalidateSize()).observe(this.map.getContainer());
+    }
+
     this.tileLayer = null;
     this.setTiles(store.settings.tiles);
 

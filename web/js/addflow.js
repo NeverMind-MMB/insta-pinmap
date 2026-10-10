@@ -71,6 +71,7 @@ async function addFromInstagram(link, env) {
   const existing = findPost(store.db, canonical);
   if (existing) {
     env.toast(`You already saved this post: "${existing.pin.title}"`, 'info');
+    env.inputDone?.();
     env.map?.goToPin(existing.pin.id);
     env.showDetail?.(existing.pin.id);
     return;
@@ -78,8 +79,12 @@ async function addFromInstagram(link, env) {
 
   // 2) Fetch the caption
   env.toast('Reading the post …', 'info', 15000);
-  const ig = await fetchPost(code);
-  env.hideToast?.();
+  let ig;
+  try {
+    ig = await fetchPost(code);
+  } finally {
+    env.hideToast?.();
+  }
 
   const caption = ig.ok ? ig.caption || '' : '';
   const { candidates, countries } = placeCandidates(caption, {
@@ -119,6 +124,7 @@ async function addFromMapLink(link, env, resolved = false) {
   // An Apple Guide brings several places at once, so it goes through the import.
   if (parsed.entries.length > 1) {
     env.showImport?.(parsed.entries, parsed.name);
+    env.inputDone?.();
     return;
   }
 
@@ -409,6 +415,10 @@ function setStatus(value) {
  * Saving, including the proximity check
  * ================================================================== */
 
+function postsAtPin(n) {
+  return n === 1 ? '1 post at this pin' : `${n} posts at this pin`;
+}
+
 async function save(env) {
   const place = state.chosen;
   if (!place) return;
@@ -427,11 +437,12 @@ async function save(env) {
       if (post) {
         store.attachPost(target.id, post);
         if (state.tags.length) store.updatePin(target.id, { tags: [...new Set([...(target.tags || []), ...state.tags])] });
-        env.toast(`Post attached to "${target.title}" — ${store.pin(target.id).posts.length} posts at this pin now.`, 'success');
+        env.toast(`Post attached to "${target.title}" — ${postsAtPin(store.pin(target.id).posts.length)} now.`, 'success');
       } else {
         env.toast(`"${target.title}" is already here.`, 'info');
       }
       $('dlg-confirm').close();
+      env.inputDone?.();
       env.redraw();
       env.map?.goToPin(target.id);
       return;
@@ -454,6 +465,7 @@ async function save(env) {
   if (keepApartFrom.length) store.change(() => { for (const n of keepApartFrom) markApart(pin, n); });
 
   $('dlg-confirm').close();
+  env.inputDone?.();
   env.redraw();
   env.map?.goToPin(pin.id);
   env.toast(`"${pin.title}" saved.`, 'success');

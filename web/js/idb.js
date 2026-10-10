@@ -15,18 +15,22 @@ function open() {
   if (typeof indexedDB === 'undefined') {
     return Promise.reject(new Error('This browser has no storage for apps (IndexedDB).'));
   }
-  opening ??= new Promise((resolve, reject) => {
+  if (opening) return opening;
+  const mine = new Promise((resolve, reject) => {
+    // Only reset `opening` while it still is this connection's promise, not a newer one.
+    const reset = () => { if (opening === mine) opening = null; };
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME);
     req.onsuccess = () => {
       const db = req.result;
-      db.onclose = () => { opening = null; };
-      db.onversionchange = () => { db.close(); opening = null; };
+      db.onclose = reset;
+      db.onversionchange = () => { db.close(); reset(); };
       resolve(db);
     };
-    req.onerror = () => { opening = null; reject(req.error || new Error('Storage could not be opened.')); };
+    req.onerror = () => { reset(); reject(req.error || new Error('Storage could not be opened.')); };
   });
-  return opening;
+  opening = mine;
+  return mine;
 }
 
 function run(mode, action, retried = false) {

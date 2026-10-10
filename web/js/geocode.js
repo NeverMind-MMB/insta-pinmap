@@ -66,6 +66,8 @@ export async function searchPlaces(q, { limit = 8, countryCode = '', lang = brow
   const query = String(q || '').trim();
   if (!query) return { ok: true, results: [], provider: 'none' };
 
+  let answered = false;   // at least one provider replied successfully
+
   try {
     const u = new URL('https://photon.komoot.io/api/');
     u.searchParams.set('q', query);
@@ -74,6 +76,7 @@ export async function searchPlaces(q, { limit = 8, countryCode = '', lang = brow
     const res = await photonQueue(() => fetch(u.href));
     if (res.ok) {
       const results = normPhoton(await res.json());
+      answered = true;
       if (results.length) return { ok: true, results, provider: 'photon' };
     }
   } catch { /* fall through to Nominatim */ }
@@ -89,9 +92,12 @@ export async function searchPlaces(q, { limit = 8, countryCode = '', lang = brow
     const res = await nominatimQueue(() => fetch(u.href));
     if (res.ok) {
       const results = normNominatim(await res.json());
+      answered = true;
       if (results.length) return { ok: true, results, provider: 'nominatim' };
     }
   } catch { /* nothing left */ }
 
+  // A provider answered, but knows nothing: that is a result, not an outage.
+  if (answered) return { ok: true, results: [], provider: 'none' };
   return { ok: false, results: [], provider: 'none', message: "Place search isn't responding." };
 }

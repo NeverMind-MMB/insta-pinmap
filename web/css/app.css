@@ -513,6 +513,8 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
 /* ---------- Notification ---------- */
 
 .toast {
+  /* A popover brings its own UA box (margin auto, border, inset); reset what matters. */
+  margin: 0; border: 0; right: auto; top: auto; overflow: visible;
   position: fixed; left: 50%; bottom: calc(var(--inputbar-h) + 16px + env(safe-area-inset-bottom));
   transform: translate(-50%, 12px);
   max-width: min(92vw, 460px);

@@ -63,7 +63,7 @@ version exists. **Settings → App → Check for updates → Install.**
 - Reading a post sends only the post's code to the app's helper on Cloudflare,
   together with a small computed "work ticket" that keeps scripts from misusing it.
 - Short map links (maps.app.goo.gl, maps.apple) are expanded by the same helper;
-  it sees only the short link.
+  it sees the short link, where it points to, and your IP address.
 - Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
 - Map images come from OpenStreetMap.
