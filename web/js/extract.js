@@ -132,6 +132,88 @@ export function flagCountries(text) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Country and region words → country code
+ * ------------------------------------------------------------------ */
+
+/**
+ * German and English names of countries and unambiguous regions.
+ * Data, so the German words stay German.
+ *
+ * Deliberately NOT included, because they clash with food, names or other
+ * places: turkey, chile, georgia, jordan, china (porcelain) and "island"
+ * (an ordinary English word; "iceland" is in).
+ */
+const COUNTRY_WORDS = {
+  // Countries
+  DE: 'deutschland germany',
+  AT: 'österreich oesterreich austria',
+  CH: 'schweiz switzerland suisse svizzera',
+  IT: 'italien italy italia',
+  FR: 'frankreich france',
+  ES: 'spanien spain españa espana',
+  PT: 'portugal',
+  NL: 'niederlande netherlands holland',
+  BE: 'belgien belgium',
+  DK: 'dänemark daenemark denmark',
+  NO: 'norwegen norway norge',
+  SE: 'schweden sweden sverige',
+  FI: 'finnland finland',
+  IS: 'iceland',
+  IE: 'irland ireland',
+  GB: 'schottland scotland england wales',
+  GR: 'griechenland greece',
+  HR: 'kroatien croatia hrvatska',
+  SI: 'slowenien slovenia',
+  CZ: 'tschechien czechia',
+  PL: 'polen poland polska',
+  HU: 'ungarn hungary',
+  JP: 'japan',
+  TH: 'thailand',
+  ID: 'indonesien indonesia',
+  US: 'usa',
+  CA: 'kanada canada',
+  AU: 'australien australia',
+  NZ: 'neuseeland',
+  MA: 'marokko morocco',
+  // Regions
+  _DE: 'bayern bavaria franken allgäu allgaeu schwarzwald rügen sylt',
+  _AT: 'tirol salzkammergut steiermark kärnten kaernten salzburgerland wachau',
+  _IT: 'südtirol suedtirol dolomiten dolomites toskana tuscany sizilien sicily sardinien sardinia amalfi cinqueterre',
+  _PT: 'algarve madeira azoren azores',
+  _FR: 'provence bretagne brittany normandie normandy korsika corsica',
+  _ES: 'mallorca andalusien andalusia kanaren canaries teneriffa tenerife',
+  _NO: 'lofoten',
+  _ID: 'bali',
+};
+
+const WORD_TO_COUNTRY = new Map();
+for (const [key, words] of Object.entries(COUNTRY_WORDS)) {
+  for (const w of words.split(' ')) WORD_TO_COUNTRY.set(w, key.replace('_', ''));
+}
+
+/**
+ * Country codes named in a text by country or region words, in order of
+ * first appearance. Whole words only; hashtags are split with tagToWords
+ * first ("#VisitAustria" counts, "#bavarianalps" does not).
+ */
+export function countryHints(text) {
+  const spaced = String(text || '').replace(/#([\p{L}\p{N}_]+)/gu, (_, tag) => ' ' + tagToWords(tag) + ' ');
+  const out = [];
+  for (const m of spaced.toLowerCase().matchAll(/[\p{L}]+/gu)) {
+    const cc = WORD_TO_COUNTRY.get(m[0]);
+    if (cc && !out.includes(cc)) out.push(cc);
+  }
+  return out;
+}
+
+/** Flag emoji for a 2-letter country code; '' for anything else. */
+export function flagEmoji(countryCode) {
+  const cc = String(countryCode || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  return String.fromCodePoint(0x1f1e6 + cc.charCodeAt(0) - 65, 0x1f1e6 + cc.charCodeAt(1) - 65);
+}
+
+/* ------------------------------------------------------------------ *
  * Small helpers
  * ------------------------------------------------------------------ */
 
@@ -217,7 +299,7 @@ const MARKERS = [
 /**
  * @param {string} caption   the post text
  * @param {object} [extra]   { username, location } if available
- * @returns {{candidates: Array, countries: string[], hashtags: string[]}}
+ * @returns {{candidates: Array, countries: string[], hashtags: string[], hintedCountries: string[]}}
  */
 export function placeCandidates(caption, extra = {}) {
   const text = String(caption || '');
@@ -335,7 +417,9 @@ export function placeCandidates(caption, extra = {}) {
     .sort((a, b) => b.points - a.points || a.text.length - b.text.length)
     .slice(0, 8);
 
-  return { candidates, countries, hashtags };
+  const hintedCountries = countryHints(text).filter((c) => !countries.includes(c));
+
+  return { candidates, countries, hashtags, hintedCountries };
 }
 
 /* ------------------------------------------------------------------ *
@@ -396,10 +480,10 @@ const KIND_POINTS = {
 /**
  * Rates geocoder matches for a candidate.
  * @param {Array} matches  normalized matches from the server
- * @param {object} ctx     { candidatePoints, countries }
+ * @param {object} ctx     { candidatePoints, countries, hintedCountries }
  */
 export function scoreMatches(matches, ctx = {}) {
-  const { candidatePoints = 50, countries = [] } = ctx;
+  const { candidatePoints = 50, countries = [], hintedCountries = [] } = ctx;
   return matches
     .map((t) => {
       let p = candidatePoints;
@@ -409,6 +493,9 @@ export function scoreMatches(matches, ctx = {}) {
       if (countries.length) {
         // A flag in the post is a strong signal
         p += countries.includes(t.countryCode) ? 35 : -25;
+      } else if (hintedCountries.length) {
+        // A country or region word is weaker, and only counts without a flag
+        p += hintedCountries.includes(t.countryCode) ? 20 : -10;
       }
       if (!t.address) p -= 5;
       return { ...t, points: Math.round(p) };

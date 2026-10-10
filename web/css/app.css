@@ -420,7 +420,10 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
 .candidate[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 /* Assign columns and rows explicitly, otherwise automatic placement
    pushes the type badge in front of the name. */
-.candidate__name { grid-column: 1; grid-row: 1; font-size: .9375rem; font-weight: 600; }
+.candidate__title { grid-column: 1; grid-row: 1; display: flex; align-items: baseline; gap: 6px; font-size: .9375rem; font-weight: 600; }
+.candidate__flag { flex: none; }
+.candidate__flag:empty { display: none; }
+.preview__address .candidate__flag { margin-right: 6px; }
 .candidate__address  { grid-column: 1; grid-row: 2; font-size: .8125rem; color: var(--text-muted); }
 .candidate__kind  {
   grid-column: 2; grid-row: 1 / span 2; align-self: center; justify-self: end;

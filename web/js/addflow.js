@@ -14,7 +14,7 @@ import {
   shortcode, normalizeLink, embedLink, isInstagramLink,
   findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
-import { placeCandidates, scoreMatches, tagSuggestions, cleanedText } from './extract.js';
+import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji } from './extract.js';
 import { readLink } from './importers.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
@@ -87,7 +87,7 @@ async function addFromInstagram(link, env) {
   }
 
   const caption = ig.ok ? ig.caption || '' : '';
-  const { candidates, countries } = placeCandidates(caption, {
+  const { candidates, countries, hintedCountries } = placeCandidates(caption, {
     username: ig.username, location: ig.location,
   });
 
@@ -101,6 +101,7 @@ async function addFromInstagram(link, env) {
     titleSuggestion: candidates[0]?.text || '',
     candidates,
     countries,
+    hintedCountries,
     searchPrefill: cleanedText(caption),
     tagSuggestions: tagSuggestions(caption, store.settings.customStopTags),
     env,
@@ -230,7 +231,7 @@ export async function openConfirm(cfg) {
 
   // --- Look up candidates ---
   if (!cfg.readyPlace && cfg.candidates?.length) {
-    await searchCandidates(cfg.candidates, cfg.countries || []);
+    await searchCandidates(cfg.candidates, cfg.countries || [], cfg.hintedCountries || []);
   } else if (!cfg.readyPlace) {
     // Don't leave the search field empty: the cleaned-up post text is
     // almost always a better starting point than nothing.
@@ -244,7 +245,7 @@ export async function openConfirm(cfg) {
 }
 
 /** Queries the best candidates one after another and merges the matches. */
-async function searchCandidates(candidates, countries) {
+async function searchCandidates(candidates, countries, hintedCountries = []) {
   const list = $('confirm-candidates');
   const status = $('confirm-status');
   status.textContent = 'Searching for matching places …';
@@ -260,7 +261,7 @@ async function searchCandidates(candidates, countries) {
     const matches = j.results || [];
     if (!j.ok) searchDown = true;
 
-    for (const t of scoreMatches(matches, { candidatePoints: k.points, countries })) {
+    for (const t of scoreMatches(matches, { candidatePoints: k.points, countries, hintedCountries })) {
       const key = `${t.lat.toFixed(4)},${t.lon.toFixed(4)}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -300,9 +301,10 @@ function drawCandidates(matches) {
     btn.className = 'candidate';
     btn.setAttribute('aria-pressed', 'false');
     btn.innerHTML = `
-      <span class="candidate__name"></span>
+      <span class="candidate__title"><span class="candidate__flag" aria-hidden="true"></span><span class="candidate__name"></span></span>
       <span class="candidate__address"></span>
       <span class="candidate__kind"></span>`;
+    btn.querySelector('.candidate__flag').textContent = flagEmoji(t.countryCode);
     btn.querySelector('.candidate__name').textContent = t.name || '(no name)';
     btn.querySelector('.candidate__address').textContent = t.address || '';
     btn.querySelector('.candidate__kind').textContent = kindLabel(t);
@@ -332,7 +334,17 @@ function choosePlace(place) {
   state.chosen = place;
   $('confirm-preview').hidden = false;
   $('confirm-name').textContent = place.name || '';
-  $('confirm-address').textContent = place.address || '';
+  const addr = $('confirm-address');
+  addr.textContent = '';
+  const flag = flagEmoji(place.countryCode);
+  if (flag) {
+    const f = document.createElement('span');
+    f.className = 'candidate__flag';
+    f.setAttribute('aria-hidden', 'true');
+    f.textContent = flag;
+    addr.appendChild(f);
+  }
+  addr.appendChild(document.createTextNode(place.address || ''));
   $('confirm-coords').textContent = `${Number(place.lat).toFixed(5)}, ${Number(place.lon).toFixed(5)}`;
   $('confirm-save').disabled = false;
 
@@ -490,7 +502,8 @@ function askNearby(neighbors, place, title) {
       btn.type = 'button';
       btn.className = 'candidate';
       btn.innerHTML = '<span class="candidate__name"></span><span class="candidate__address"></span>';
-      btn.querySelector('.candidate__name').textContent = `Attach to "${pin.title}"`;
+      btn.querySelector('.candidate__flag').textContent = flagEmoji(t.countryCode);
+    btn.querySelector('.candidate__name').textContent = `Attach to "${pin.title}"`;
       btn.querySelector('.candidate__address').textContent = `${distanceText(distance)} away`;
       btn.addEventListener('click', () => { chosen = pin; dlg.close('attach'); });
       li.appendChild(btn);
@@ -556,7 +569,7 @@ export function wireConfirm(env) {
         return;
       }
       const matches = scoreMatches(j.results || [], {
-        candidatePoints: 60, countries: state.countries || [],
+        candidatePoints: 60, countries: state.countries || [], hintedCountries: state.hintedCountries || [],
       });
       if (!matches.length) {
         $('confirm-status').textContent = 'Nothing found for that.';

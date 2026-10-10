@@ -7,7 +7,8 @@ pins stay on your phone.
 
 Paste or share an Instagram link. The app reads the post's text, suggests where
 the place is, you confirm, and the pin is on your map. Hashtags can become tags
-with one tap.
+with one tap. It also reads country flags and country/region words in the caption to put
+the right place first, and shows each match's country flag.
 
 - One post belongs to exactly one pin. Pasting the same link again jumps to it.
 - Several posts can share a pin. If a new place is close to pins you already
