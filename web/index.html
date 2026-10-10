@@ -78,6 +78,11 @@
   <button type="button" class="btn btn--small btn--primary" id="backup-reminder-save">Save backup</button>
   <button type="button" class="btn btn--small btn--quiet" id="backup-reminder-later">Later</button>
 </div>
+<div class="reminder" id="guide-reminder" role="status" hidden>
+  <span id="guide-reminder-text">Continue the Apple Guide import</span>
+  <button type="button" class="btn btn--small btn--primary" id="guide-reminder-continue">Continue</button>
+  <button type="button" class="btn btn--small btn--quiet" id="guide-reminder-discard">Discard</button>
+</div>
 <form class="inputbar" id="input-form" autocomplete="off">
   <label class="visually-hidden" for="input-field">Instagram link or place</label>
   <input type="text" id="input-field" name="link"
@@ -324,6 +329,28 @@
     </header>
     <div class="sheet__body">
       <p id="import-info" role="status"></p>
+      <div class="notice" id="import-apple" hidden>
+        <p id="import-apple-text"></p>
+        <div class="buttonrow">
+          <button type="button" class="btn btn--small btn--primary" id="import-apple-shortcut">Look up with iPhone Shortcut</button>
+          <button type="button" class="btn btn--small" id="import-apple-paste">Paste results</button>
+        </div>
+        <div id="import-apple-copy" hidden>
+          <p>Copy this list, then run the Shortcut:</p>
+          <textarea id="import-apple-list" rows="4" readonly aria-label="Apple Maps places for the Shortcut"></textarea>
+          <div class="buttonrow">
+            <button type="button" class="btn btn--small" id="import-apple-run">Run the Shortcut</button>
+          </div>
+        </div>
+        <div id="import-apple-manual" hidden>
+          <p>Paste the Shortcut's results here:</p>
+          <textarea id="import-apple-results" rows="4" aria-label="Shortcut results"></textarea>
+          <div class="buttonrow">
+            <button type="button" class="btn btn--small btn--primary" id="import-apple-use">Use these results</button>
+          </div>
+        </div>
+        <p class="field__help">On a computer: see README → Apple Guides</p>
+      </div>
       <div class="buttonrow">
         <button type="button" class="btn btn--small" id="import-all">Select all</button>
         <button type="button" class="btn btn--small" id="import-none">Select none</button>

@@ -4,7 +4,7 @@
 
 import { store, DEFAULT_SETTINGS } from './store.js';
 import { MainMap, TILES } from './map.js';
-import { startAdd, wireConfirm, guideImportEntries } from './addflow.js';
+import { startAdd, wireConfirm, guideImportEntries, guideOf } from './addflow.js';
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
@@ -15,6 +15,7 @@ import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
 import { onServerVersion } from './api.js';
+import { loadPendingGuide, clearPendingGuide } from './appleplace.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,7 +27,7 @@ const env = {
   get map() { return map; },
   redraw,
   showDetail: (id) => showDetail(id, env),
-  showImport: (e, n) => showImport(e, n, env),
+  showImport: (e, n, guide) => showImport(e, n, env, guide),
 };
 
 /* ================================================================== *
@@ -100,6 +101,9 @@ async function start() {
     if (await exportBackup()) $('backup-reminder').hidden = true;
   });
   $('backup-reminder-later').addEventListener('click', () => { $('backup-reminder').hidden = true; });
+
+  // 4b) An Apple Guide import left for the Shortcuts app and the page was reloaded
+  wireGuideReminder();
 
   onServerVersion((v) => {
     if (compareVersions(v, APP_VERSION) > 0) $('btn-settings').classList.add('has-update');
@@ -303,10 +307,9 @@ function wireSettings() {
   });
 
   // --- Import from a link ---
-  let readingLink = false;
-  const readImportLink = async () => {
+  const readImportLink = () => {
     const link = $('settings-import-link').value.trim();
-    if (!link || readingLink) return;
+    if (!link) return;
     let parsed;
     try {
       parsed = readLink(link);
@@ -318,18 +321,10 @@ function wireSettings() {
       $('settings-import-status').textContent = 'This link contains no place.';
       return;
     }
-    readingLink = true;
-    $('settings-import-link-go').disabled = true;
-    try {
-      const entries = await guideImportEntries(parsed, env);
-      $('settings-import-link').value = '';
-      $('settings-import-status').textContent = '';
-      dlg.close();
-      showImport(entries, parsed.name, env);
-    } finally {
-      readingLink = false;
-      $('settings-import-link-go').disabled = false;
-    }
+    $('settings-import-link').value = '';
+    $('settings-import-status').textContent = '';
+    dlg.close();
+    showImport(guideImportEntries(parsed), parsed.name, env, guideOf(parsed));
   };
   $('settings-import-link-go').addEventListener('click', readImportLink);
   $('settings-import-link').addEventListener('keydown', (e) => {
@@ -355,6 +350,31 @@ function wireSettings() {
     } catch (err) {
       toast(err.message, 'error', 6000);
     }
+  });
+}
+
+/* ================================================================== *
+ * Apple Guide import waiting for the Shortcut
+ * ================================================================== */
+
+/** Offers to reopen a guide import (younger than 24 h) that the page lost on the way to the Shortcuts app. */
+function wireGuideReminder() {
+  const pending = loadPendingGuide();
+  if (pending && !document.querySelector('dialog[open]')) {
+    $('guide-reminder-text').textContent = pending.title
+      ? `Continue the Apple Guide import: ${pending.title}`
+      : 'Continue the Apple Guide import';
+    $('guide-reminder').hidden = false;
+  }
+  $('guide-reminder-continue').addEventListener('click', () => {
+    $('guide-reminder').hidden = true;
+    const guide = loadPendingGuide();
+    if (!guide) { toast('This import is older than a day. Read the guide link again.', 'info', 6000); return; }
+    showImport(guideImportEntries(guide), guide.title || 'Apple Guide', env, guide);
+  });
+  $('guide-reminder-discard').addEventListener('click', () => {
+    clearPendingGuide();
+    $('guide-reminder').hidden = true;
   });
 }
 

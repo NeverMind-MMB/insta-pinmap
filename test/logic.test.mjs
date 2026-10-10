@@ -223,7 +223,7 @@ test('Apple Guide: looked-up places become import entries, unknown ones stay unc
   });
   equal(e[1].lat, null); equal(e[1].lon, null);
   equal(e[1].name, 'Apple Maps place');
-  equal(e[1].warning, "Couldn't look this place up.");
+  equal(e[1].warning, 'Look this place up with the Shortcut or the computer script.');
   equal(e[1].checked, false, 'unchecked by default');
   ok(isAppleIdLink(e[1].url), 'auid link recognized');
   ok(!isAppleIdLink('https://maps.apple.com/place?coordinate=1,2'), 'other Apple link');

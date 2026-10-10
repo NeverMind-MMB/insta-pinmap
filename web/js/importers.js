@@ -2,8 +2,9 @@
  * importers.js — read places from other sources.
  *
  * Everything runs in the browser. Only three things need help from outside:
- * resolving short links, looking up Apple Maps places of a guide (the app's
- * helper) and searching by name when coordinates are missing.
+ * resolving short links (the app's helper), looking up Apple Maps places of a
+ * guide (an iPhone Shortcut or a computer script, see appleplace.js) and
+ * searching by name when coordinates are missing.
  *
  * Every function returns entries of the form:
  *   { name, address, lat, lon, url, source, note, warning }
@@ -26,8 +27,9 @@ import { kml, gpx } from '../vendor/togeojson.js';
  *          f5 = name of the place
  *        places Apple Maps knows carry only their Apple place ID:
  *          f1 = 9902 (varint), f2 = Apple place ID (uint64 varint)
- *        Those are real places too; their name and coordinates are looked up
- *        through the app's helper (/api/apple-places, see appleIdEntries).
+ *        Those are real places too; maps.apple.com doesn't answer the app's
+ *        helper, so the user looks them up with the iPhone Shortcut or the
+ *        computer script (see appleplace.js and appleIdEntries).
  * ================================================================== */
 
 /** f1 value that marks an f2 entry as an Apple place ID reference. */
@@ -188,7 +190,7 @@ export function isAppleIdLink(url) {
 /**
  * Import entries for a guide's Apple place IDs, in ID order.
  * @param {string[]} ids
- * @param {Map<string, {name, address, lat, lon}>} found  places the helper looked up
+ * @param {Map<string, {name, address, lat, lon}>} found  places already looked up
  * IDs that could not be looked up stay in the list without coordinates and unchecked,
  * so the user sees them; the import never searches them by name.
  */
@@ -203,7 +205,7 @@ export function appleIdEntries(ids, found) {
     }
     return {
       name: 'Apple Maps place', address: '', lat: null, lon: null,
-      url: appleIdLink(id), source: 'apple-guide', note: '', warning: "Couldn't look this place up.",
+      url: appleIdLink(id), source: 'apple-guide', note: '', warning: 'Look this place up with the Shortcut or the computer script.',
       checked: false,
     };
   });

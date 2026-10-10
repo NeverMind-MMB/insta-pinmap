@@ -7,6 +7,10 @@ import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
+import {
+  shortcutInput, SHORTCUT_RUN_URL, parseShortcutResults, applyShortcutResults, appleIdOf,
+  savePendingGuide, clearPendingGuide,
+} from './appleplace.js';
 import { formatDay } from './extract.js';
 
 const $ = (id) => document.getElementById(id);
@@ -511,73 +515,175 @@ function linkButton(text, href) {
  * Import dialog
  * ================================================================== */
 
-export function showImport(entries, sourceName, env) {
+/**
+ * @param {Array} entries  import rows; `checked: false` starts a row unchecked
+ * @param {{title, entries, appleIds} | null} guide  an Apple Guide with Apple Maps
+ *   places still to look up: shows the Shortcut notice and keeps the guide for 24 h
+ */
+export function showImport(entries, sourceName, env, guide = null) {
   const dlg = $('dlg-import');
   const list = $('import-list');
   $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
 
+  const checked = entries.map((e) => e.checked !== false);
   const noCoords = (e) => !Number.isFinite(e.lat) || !Number.isFinite(e.lon);
-  const notFound = entries.filter((e) => noCoords(e) && isAppleIdLink(e.url)).length;
-  const toLookUp = entries.filter(noCoords).length - notFound;
-  const notes = [];
-  if (toLookUp) notes.push(`${toLookUp} of them have no coordinates; these will be looked up on import`);
-  if (notFound) notes.push(`${notFound} Apple Maps ${notFound === 1 ? 'place' : 'places'} couldn't be looked up and ${notFound === 1 ? 'is' : 'are'} unchecked`);
-  $('import-info').textContent =
-    `${entries.length} ${entries.length === 1 ? 'place' : 'places'} found` +
-    (notes.length ? ` — ${notes.join('; ')}.` : '.');
 
-  list.innerHTML = '';
-  entries.forEach((e, i) => {
-    const li = document.createElement('li');
-    li.className = 'importrow';
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = e.checked !== false;
-    cb.id = `imp-${i}`;
-    cb.dataset.index = String(i);
-
-    const lab = document.createElement('label');
-    lab.className = 'importrow__name';
-    lab.htmlFor = cb.id;
-    lab.textContent = e.name;
-
-    const addr = document.createElement('span');
-    addr.className = 'importrow__address';
-    addr.textContent = e.address ||
-      (Number.isFinite(e.lat) ? `${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}` : '');
-
-    li.append(cb, lab, addr);
-
-    if (e.warning) {
-      const w = document.createElement('span');
-      w.className = 'importrow__warning';
-      w.textContent = e.warning;
-      li.appendChild(w);
-    }
-    list.appendChild(li);
-  });
+  const drawInfo = () => {
+    const open = entries.filter((e) => noCoords(e) && isAppleIdLink(e.url)).length;
+    const toLookUp = entries.filter(noCoords).length - open;
+    const notes = [];
+    if (toLookUp) notes.push(`${toLookUp} of them have no coordinates; these will be looked up on import`);
+    if (open) notes.push(`${open} Apple Maps ${open === 1 ? 'place still needs a lookup and is' : 'places still need a lookup and are'} unchecked`);
+    $('import-info').textContent =
+      `${entries.length} ${entries.length === 1 ? 'place' : 'places'} found` +
+      (notes.length ? ` — ${notes.join('; ')}.` : '.');
+  };
 
   const updateApply = () => {
-    $('import-apply').disabled = !list.querySelector('input[type=checkbox]:checked');
+    $('import-apply').disabled = !checked.some(Boolean);
   };
-  const setAllChecked = (checked) => {
-    for (const cb of list.querySelectorAll('input[type=checkbox]')) cb.checked = checked;
+
+  const drawRows = () => {
+    list.innerHTML = '';
+    entries.forEach((e, i) => {
+      const li = document.createElement('li');
+      li.className = 'importrow';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = checked[i];
+      cb.id = `imp-${i}`;
+      cb.dataset.index = String(i);
+
+      const lab = document.createElement('label');
+      lab.className = 'importrow__name';
+      lab.htmlFor = cb.id;
+      lab.textContent = e.name;
+
+      const addr = document.createElement('span');
+      addr.className = 'importrow__address';
+      addr.textContent = e.address ||
+        (Number.isFinite(e.lat) ? `${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}` : '');
+
+      li.append(cb, lab, addr);
+
+      if (e.warning) {
+        const w = document.createElement('span');
+        w.className = 'importrow__warning';
+        w.textContent = e.warning;
+        li.appendChild(w);
+      }
+      list.appendChild(li);
+    });
     updateApply();
   };
-  list.onchange = updateApply;
-  updateApply();
+
+  const setAllChecked = (value) => {
+    checked.fill(value);
+    for (const cb of list.querySelectorAll('input[type=checkbox]')) cb.checked = value;
+    updateApply();
+  };
+  list.onchange = (ev) => {
+    const i = Number(ev.target?.dataset?.index);
+    if (Number.isInteger(i)) checked[i] = ev.target.checked;
+    updateApply();
+  };
   $('import-all').onclick = () => setAllChecked(true);
   $('import-none').onclick = () => setAllChecked(false);
 
+  drawInfo();
+  drawRows();
+  wireAppleLookup(guide, entries, (results) => {
+    entries.forEach((e, i) => { if (results.has(appleIdOf(e.url))) checked[i] = true; });
+    drawInfo();
+    drawRows();
+  });
+
+  // The guide waits in storage until this dialog is done with it, so a trip to
+  // the Shortcuts app survives iOS unloading the page.
+  if (guide) savePendingGuide(guide);
+  dlg.onclose = () => {
+    dlg.onclose = null;
+    if (guide) {
+      clearPendingGuide();
+      $('guide-reminder').hidden = true;
+    }
+  };
+
   $('import-apply').onclick = async () => {
-    const selected = [...list.querySelectorAll('input[type=checkbox]:checked')]
-      .map((cb) => entries[Number(cb.dataset.index)]);
+    const selected = entries.filter((_, i) => checked[i]);
     dlg.close();
     await applyImport(selected, sourceName, env);
   };
 
   dlg.showModal();
+}
+
+/** Opens an app link such as shortcuts://… the way a tapped link would. */
+function openExternal(url) {
+  const a = document.createElement('a');
+  a.href = url;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/**
+ * The notice above the import list for a guide's Apple Maps places: hands the
+ * places to the iPhone Shortcut and takes its results back. Clipboard access
+ * happens right in the tap handlers (iOS allows it only there); where it is
+ * refused, a text box takes its place.
+ */
+function wireAppleLookup(guide, entries, onResults) {
+  const box = $('import-apple');
+  box.hidden = !guide;
+  $('import-apple-copy').hidden = true;
+  $('import-apple-manual').hidden = true;
+  $('import-apple-results').value = '';
+  if (!guide) return;
+
+  const total = guide.appleIds.length;
+  $('import-apple-text').textContent =
+    `${total} ${total === 1 ? 'place is an Apple Maps place' : 'places are Apple Maps places'}. ` +
+    "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
+  const input = shortcutInput(guide.appleIds);
+
+  $('import-apple-shortcut').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(input);
+    } catch {
+      $('import-apple-list').value = input;
+      $('import-apple-copy').hidden = false;
+      $('import-apple-list').focus();
+      $('import-apple-list').select();
+      return;
+    }
+    openExternal(SHORTCUT_RUN_URL);
+  };
+  $('import-apple-run').onclick = () => openExternal(SHORTCUT_RUN_URL);
+
+  const useResults = (text) => {
+    const results = parseShortcutResults(text);
+    const found = applyShortcutResults(entries, results);
+    onResults(results);
+    toast(`Found ${found} of ${total} ${total === 1 ? 'place' : 'places'}.`, found ? 'success' : 'info', 5000);
+    return found;
+  };
+  $('import-apple-paste').onclick = async () => {
+    let text;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      $('import-apple-manual').hidden = false;
+      $('import-apple-results').focus();
+      return;
+    }
+    // Nothing usable in the clipboard: offer the text box as well.
+    if (!useResults(text)) $('import-apple-manual').hidden = false;
+  };
+  $('import-apple-use').onclick = () => {
+    if (useResults($('import-apple-results').value)) $('import-apple-manual').hidden = true;
+  };
 }
 
 async function applyImport(entries, sourceName, env) {

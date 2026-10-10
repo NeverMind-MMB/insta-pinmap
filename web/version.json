@@ -1,5 +1,5 @@
 {
-  "version": "2.0.3",
+  "version": "2.0.4",
   "files": [
     "/index.html",
     "/selftest.html",
@@ -7,6 +7,7 @@
     "/css/app.css",
     "/js/addflow.js",
     "/js/api.js",
+    "/js/appleplace.js",
     "/js/app.js",
     "/js/backup.js",
     "/js/dedupe.js",

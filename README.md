@@ -23,7 +23,7 @@ from Apple Guides, Apple and Google Maps links, Google Takeout, My Maps
 
 | Import from | Where the places come from |
 |---|---|
-| Apple Guides | Names and coordinates come from the link; known Apple Maps places are looked up through the app's helper. |
+| Apple Guides | Names and coordinates come from the link; places Apple Maps knows are looked up from your phone or computer (see "Apple Guides"). |
 | Apple and Google Maps links | The link itself; short links are expanded by the app's helper. |
 | Google Takeout, Google list CSV, My Maps, GPX, GeoJSON | The file itself. |
 
@@ -61,6 +61,55 @@ Your pins are stored in the app on your phone. Nothing is uploaded.
 - If your last backup is older than 30 days, the app reminds you.
 - Removing the app from the home screen deletes its pins. Save a backup first.
 
+## Apple Guides
+
+An Apple Guide link carries the name and coordinates of places you added as an
+address or a pin. Places Apple Maps itself knows (shops, cafés, sights) are in
+the link only as an ID. Apple doesn't share them with the app's helper, so the
+import dialog shows them as unchecked "Apple Maps place" rows and offers two ways
+to look them up.
+
+### Option A — iPhone Shortcut
+
+Build it once in the Shortcuts app (action names as in the English Shortcuts app):
+
+1. Shortcuts app → **+** → name the shortcut exactly **Insta Pinmap Apple**.
+2. Add **Get Clipboard**.
+3. Add **Split Text** → by **New Lines**.
+4. Add **Repeat with Each** (items = Split Text).
+5. Inside the loop: **Get Contents of URL** (URL = Repeat Item).
+6. Inside the loop: **Match Text** with the pattern `og:title" content="([^"]*)"`
+   in Contents of URL → **Get Group at Index** 1 → **Set Variable** `Name`.
+7. The same three actions for `latitude" content="([^"]*)"` → `Lat`,
+   `longitude" content="([^"]*)"` → `Lon`, and
+   `<title>[^<]* in ([^<]*) - Apple Maps` → `Address`
+   (each **Match Text** again in Contents of URL).
+8. Inside the loop: **Text** = `Repeat Item@@Name@@Lat@@Lon@@Address`
+   (insert the variables) → **Add to Variable** `Results`.
+9. After the loop: **Combine Text** (Results, with **New Lines**) →
+   **Copy to Clipboard** → **Show Notification** "Done. Go back to Insta Pinmap
+   and tap Paste results."
+
+Then, in the app's import dialog, tap **Look up with iPhone Shortcut**, allow
+Shortcuts to run, go back to the app, tap **Paste results** and **Import selected**.
+If the app was closed meanwhile, it offers **Continue the Apple Guide import**
+(for 24 hours).
+
+The Shortcut fetches the pages from your phone's own connection.
+
+### Option B — computer
+
+With Node.js installed, in this project's folder:
+
+```
+node tools/apple-guide.mjs "<guide link>"
+```
+
+It looks up the places one per second and writes `<guide title>.geojson` with all
+places of the guide (or give a file name as a second argument). Load that file in
+the app: **Settings → Import → Choose files**. To get it onto the phone, send it
+via AirDrop, iCloud Drive or mail.
+
 ## Updates
 
 The app never updates by itself. A small dot on the settings button means a new
@@ -73,8 +122,9 @@ version exists. **Settings → App → Check for updates → Install.**
   together with a small computed "work ticket" that keeps scripts from misusing it.
 - Short map links (maps.app.goo.gl, maps.apple) are expanded by the same helper;
   it sees the short link, where it points to, and your IP address.
-- Apple Guides name the places Apple Maps knows only by an ID. The same helper asks
-  Apple Maps for their name and coordinates; it sees those IDs and your IP address.
+- Apple Maps places of an Apple Guide are looked up by the iPhone Shortcut or the
+  computer script (see "Apple Guides"), straight from your own connection to Apple Maps.
+  The app's helper is not involved.
 - Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
 - Map images come from OpenStreetMap.
@@ -137,6 +187,7 @@ Good to know:
 
 - `web/` — the app: plain HTML, CSS and ES modules, no build step.
 - `worker/` — the Cloudflare Worker: `/api/ig` and `/api/resolve`.
+- `tools/apple-guide.mjs` — Apple Guide → GeoJSON on a computer (see "Apple Guides").
 - Tests: `node --test "test/*.test.mjs" "worker/*.test.mjs"` (Node 24, no install).
 - Local run: `npx --yes wrangler@4 dev`, then open `http://127.0.0.1:8787`.
 

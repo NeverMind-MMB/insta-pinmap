@@ -1,15 +1,16 @@
 /**
  * index.js — Insta Pinmap Worker.
  *
- * Serves web/ as static files (configured in wrangler.toml) and answers three
+ * Serves web/ as static files (configured in wrangler.toml) and answers two
  * routes the phone cannot do itself because of CORS:
- *   /api/ig            caption of an Instagram post (needs a work ticket)
- *   /api/resolve       where a short map link points to
- *   /api/apple-places  name and coordinates of Apple Maps places by ID (Apple Guides)
+ *   /api/ig       caption of an Instagram post (needs a work ticket)
+ *   /api/resolve  where a short map link points to
+ *
+ * Apple Maps places of Apple Guides are not looked up here: maps.apple.com
+ * refuses Cloudflare's servers (see web/js/appleplace.js).
  */
 
 import { fetchPost, imageAsDataUrl } from './instagram.js';
-import { lookUpPlaces, parseIds, MAX_APPLE_IDS } from './applemaps.js';
 import { verifyTicket } from './ticket.js';
 import { ticketMinute } from '../web/js/ticket.js';
 import versionInfo from '../web/version.json' with { type: 'json' };
@@ -22,7 +23,6 @@ const SHORT_LINK_HOSTS = [
 const MAX_HOPS = 5;
 const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const MEMORY_LIMIT = 20; // per address and minute, used when the rate-limit binding is missing
-const APPLE_LIMIT = 10;  // /api/apple-places: up to 10 lookups each, so a smaller budget
 const memoryHits = new Map();
 
 function json(body, status = 200, extraHeaders = {}) {
@@ -49,17 +49,16 @@ function isShortLinkHost(hostname) {
   return SHORT_LINK_HOSTS.some((h) => host === h || host.endsWith('.' + h));
 }
 
-/** `binding`: name of the rate-limit binding; `limit`: the same budget for the in-memory fallback. */
-async function overLimit(bindings, key, binding = 'IG_LIMIT', limit = MEMORY_LIMIT) {
-  if (bindings[binding]) {
-    const { success } = await bindings[binding].limit({ key });
+async function overLimit(bindings, key) {
+  if (bindings.IG_LIMIT) {
+    const { success } = await bindings.IG_LIMIT.limit({ key });
     return !success;
   }
   const memoryKey = `${key}:${ticketMinute()}`;
   const hits = (memoryHits.get(memoryKey) || 0) + 1;
   memoryHits.set(memoryKey, hits);
   if (memoryHits.size > 5000) memoryHits.clear();
-  return hits > limit;
+  return hits > MEMORY_LIMIT;
 }
 
 function tooMany(extraHeaders = {}) {
@@ -149,15 +148,6 @@ async function handleResolve(url, request, bindings, deps) {
   return failed();
 }
 
-async function handleApplePlaces(url, request, bindings, deps) {
-  if (await overLimit(bindings, `apple:${clientAddress(request)}`, 'APPLE_LIMIT', APPLE_LIMIT)) return tooMany();
-  const ids = parseIds(url.searchParams.get('ids'));
-  if (!ids) {
-    return json({ ok: false, message: `Expected 1 to ${MAX_APPLE_IDS} Apple place IDs.` }, 400);
-  }
-  return json({ ok: true, places: await lookUpPlaces(ids, deps.fetch, BROWSER_UA) });
-}
-
 /** All routes. Tests replace `deps.fetch`; the default calls the global fetch. */
 export async function handleRequest(request, bindings, deps = { fetch: (...args) => fetch(...args) }) {
   const url = new URL(request.url);
@@ -166,7 +156,6 @@ export async function handleRequest(request, bindings, deps = { fetch: (...args)
   if (fromOtherSite(request)) return json({ ok: false, reason: 'forbidden', message: 'Not available.' }, 403);
   if (url.pathname === '/api/ig') return handleInstagram(url, request, bindings, deps);
   if (url.pathname === '/api/resolve') return handleResolve(url, request, bindings, deps);
-  if (url.pathname === '/api/apple-places') return handleApplePlaces(url, request, bindings, deps);
   return json({ ok: false, message: 'Not found.' }, 404);
 }
 
