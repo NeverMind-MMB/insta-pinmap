@@ -537,37 +537,71 @@ const EN_MONTH_WORDS = [
 ];
 /** English month words that are also everyday lowercase words ("you may", "we march"). */
 const LOWERCASE_WORDS = new Set(['may', 'march', 'mar']);
+/** Lowercase words that may follow "Jan 14" without making "Jan" look like a name ("with Jan 2 friends"). */
+const AFTER_JAN_DAY = new Set([
+  'at', 'from', 'to', 'till', 'until', 'through', 'thru', 'in', 'on', 'and', 'or', 'the', 'starting', 'onwards',
+  'ab', 'bis', 'um', 'im', 'von', 'vom', 'an',
+]);
 
 const EN_MONTH = String.raw`(${[...EN_MONTH_WORDS].sort((a, b) => b.length - a.length).join('|')})\.?(?!\p{L})`;
-/** Between two days: a range or a pair ("1. und 2. Oktober" → 1–2 Oct). */
+/** Between two days of one month: a range, or a pair ("1. und 2. Oktober"). */
 const DASH = String.raw`\s*(?:[-–—]|bis|to|until|till|und|and|&)\s*`;
+/** Between two dates in different months: a range only. */
+const RANGE_DASH = String.raw`\s*(?:[-–—]|bis(?:\s+zum)?|to|until|till|through)\s*`;
+const PAIR_WORD = /(?:^|[^\p{L}])(?:und|and)(?!\p{L})|&/iu;
 /** A number followed by one of these is a time, price, distance or count, not a day. */
-const NOT_A_DAY = String.raw`(?!\s*(?:uhr|h|am|pm|a\.m\.|p\.m\.|€|eur|euro|km|m|mi|miles?|min|mal|x|%|tage?|days?|years?|jahre?|stunden|hours?|weeks?|wochen)(?!\p{L}))`;
+const NOT_A_DAY = String.raw`(?!\s*(?:uhr|h|am|pm|a\.m\.|p\.m\.|€|eur|euro|\$|dollars?|km|k|m|mi|miles?|min|mal|x|%|°|grad|tage?|days?|years?|jahre?|stunden|hours?|weeks?|wochen|stars|sterne|leute|personen|people|gänge|gäste|guests)(?!\p{L}))`;
 const YEAR = String.raw`(?:,?\s+(\d{4})(?!\d))?`;
 /** Before a day number: no letter, digit, dash or number/price sign ("9.000", "€14.09", "v2.0"). */
 const LEAD_NUM = String.raw`(^|[^\p{L}\p{N}.,:/€$£_\-–—])`;
 const LEAD_WORD = String.raw`(^|[^\p{L}\p{N}_])`;
 const MONTH_PREFIX = String.raw`(?:im|in|this|next|diesen|nächsten|kommenden|anfang|mitte|ende|early|mid|late|end of|beginning of|start of)`;
+const END = String.raw`(?![\d:]|[.,]\d)`;
 
-/** Each pattern reads { d1, d2, month | monthWord, year } from its match; group 1 is the lead character. */
+/**
+ * "with Jan 2 friends": "Jan <day>" without ordinal, range or year is the name when "with"
+ * comes before it or an ordinary lowercase word follows it.
+ */
+function janIsName(m, monthWord, plainDay) {
+  if (!plainDay || !/^jan$/i.test(monthWord)) return false;
+  const start = m.index + m[1].length;
+  if (/^jan\./i.test(m.input.slice(start))) return false;
+  if (/(?:^|[^\p{L}])(?:with|mit)\s+$/iu.test(m.input.slice(0, start))) return true;
+  const next = m.input.slice(m.index + m[0].length).match(/^\s+(\p{Ll}+)(?!\p{L})/u);
+  return Boolean(next && !AFTER_JAN_DAY.has(next[1]));
+}
+
+/**
+ * Each pattern reads { d1, m1, d2, m2, year, pair, lowerOk, nameLike } from its match
+ * (m1/m2: month number or month word; m2 only for spans across two months).
+ * Group 1 is the lead character.
+ */
 const DATE_PATTERNS = [
+  // 30.09.–02.10.(2026) · 14.09.–16.09.2026 · 15.12.2026–06.01.2027 (the year at the end counts)
+  { re: String.raw`${LEAD_NUM}${DAY}\.(\d{1,2})\.(?:\d{4}|\d{2})?${RANGE_DASH}${DAY}\.(\d{1,2})\.(\d{4}|\d{2})?(?!\d|\.\d)`,
+    read: (m) => ({ d1: m[2], m1: m[3], d2: m[4], m2: m[5], year: m[6] }) },
   // 14.09.2026 · 14.9.26 · 14.09. · 14.–16.09. · 14.-16.9.2026
   { re: String.raw`${LEAD_NUM}${DAY}\.(?:${DASH}${DAY}\.)?(\d{1,2})\.(\d{4}|\d{2})?(?!\d|\.\d)`,
-    read: (m) => ({ d1: m[2], d2: m[3], month: m[4], year: m[5] }) },
+    read: (m) => ({ d1: m[2], d2: m[3], m1: m[4], year: m[5], pair: PAIR_WORD.test(m[0]) }) },
+  // vom 15. März bis 31. Oktober (2026) · 15 March – 31 October
+  { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})\s*(?:of\s+)?${MONTH}(?:,?\s+\d{4})?${RANGE_DASH}${DAY}(?:\.|${ORD})\s*(?:of\s+)?${MONTH}${YEAR}`,
+    read: (m) => ({ d1: m[2], m1: m[3], d2: m[4], m2: m[5], year: m[6], lowerOk: true }) },
   // 14. September (2026) · 14.–16. September · 14. bis 16. September · 14 Sep · 14-16 Sep 2026 · 14th of September
   { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})(?:${DASH}${DAY}(?:\.|${ORD}))?${NOT_A_DAY}\s*(?:of\s+)?${MONTH}${YEAR}`,
-    read: (m) => ({ d1: m[2], d2: m[3], monthWord: m[4], year: m[5] }) },
+    read: (m) => ({ d1: m[2], d2: m[3], m1: m[4], year: m[5], pair: PAIR_WORD.test(m[0]), lowerOk: true }) },
+  // Oct 12 – Nov 3 · from March 15 to October 31(, 2026)
+  { re: String.raw`${LEAD_WORD}${EN_MONTH}\s*${DAY}${ORD}(?:,?\s+\d{4})?${RANGE_DASH}${EN_MONTH}\s*${DAY}${ORD}${NOT_A_DAY}${YEAR}${END}`,
+    read: (m) => ({ m1: m[2], d1: m[3], m2: m[4], d2: m[5], year: m[6] }) },
   // September 14(, 2026) · Sept 14-16 · Sep 14th — not "Sep 10 km", "June 10am-2pm", "Sept 9-17 Uhr"
-  { re: String.raw`${LEAD_WORD}${EN_MONTH}\s*${DAY}(${ORD})(?:${DASH}${DAY}${ORD})?${NOT_A_DAY}(?!${DASH}\d)${YEAR}(?![\d:]|[.,]\d)`,
-    read: (m) => ({ monthWord: m[2], d1: m[3], d2: m[5], year: m[6],
-      // "with Jan 2 friends": a bare "Jan <day>" is too often the name; it needs an ordinal, range or year.
-      nameLike: /^jan$/i.test(m[2]) && !/^jan\./i.test(m[0].slice(m[1].length)) && !m[4] && !m[5] && !m[6] }) },
+  { re: String.raw`${LEAD_WORD}${EN_MONTH}\s*${DAY}(${ORD})(?:${DASH}${DAY}${ORD})?${NOT_A_DAY}(?!${DASH}\d)${YEAR}${END}`,
+    read: (m) => ({ m1: m[2], d1: m[3], d2: m[5], year: m[6], pair: PAIR_WORD.test(m[0]),
+      nameLike: janIsName(m, m[2], !m[4] && !m[5] && !m[6]) }) },
   // im / in / this / Ende / Anfang September (2026) — not when a day follows
   { re: String.raw`${LEAD_WORD}${MONTH_PREFIX}[\s-]+${MONTH}(?:\s+(\d{4})(?!\d)|(?!\s*\d))`,
-    read: (m) => ({ monthWord: m[2], year: m[3] }) },
+    read: (m) => ({ m1: m[2], year: m[3] }) },
   // September 2026
   { re: String.raw`${LEAD_WORD}${MONTH}\s+(\d{4})(?!\d)`,
-    read: (m) => ({ monthWord: m[2], year: m[3] }) },
+    read: (m) => ({ m1: m[2], year: m[3] }) },
 ].map((p) => ({ ...p, re: new RegExp(p.re, 'giu') }));
 
 /** Links, @handles, hashtags and phone numbers never hold the event date. */
@@ -604,33 +638,61 @@ export function formatDay(iso) {
   return `${d} ${SHORT_MONTHS[m - 1]} ${y}`;
 }
 
-/** Applies the year rules to what a pattern read; null if it is no real date. */
-function resolveDate({ d1, d2, month, monthWord, year, nameLike }, postedAt, today) {
+/** Month number from a pattern's month part, or 0 ("you may 14 …" is no month). */
+function monthOf(value, lowerOk) {
+  if (value == null) return 0;
+  if (/^\d+$/.test(value)) return Number(value);
+  const word = value.toLowerCase();
+  if (!lowerOk && LOWERCASE_WORDS.has(word) && value[0] === word[0]) return 0;
+  return MONTH_WORDS[word] || 0;
+}
+
+/** Days between an anchor day and a span (0 when the anchor lies inside it). */
+function spanDistance(s, anchor) {
+  if (s.from <= anchor && anchor <= s.to) return 0;
+  return Math.min(dayDistance(s.from, anchor), dayDistance(s.to, anchor));
+}
+
+/** Readable span: "14 Sep 2026", "14–16 Sep 2026", "Sep 2026", "15 Mar – 31 Oct 2026", "15 Dec 2026 – 6 Jan 2027". */
+function spanText({ y1, m1, d1, y2, m2, d2 }, monthOnly) {
+  const a = SHORT_MONTHS[m1 - 1];
+  const b = SHORT_MONTHS[m2 - 1];
+  if (monthOnly) return `${a} ${y1}`;
+  if (m1 === m2 && y1 === y2) return d1 === d2 ? `${d1} ${a} ${y1}` : `${d1}–${d2} ${a} ${y1}`;
+  if (y1 === y2) return `${d1} ${a} – ${d2} ${b} ${y1}`;
+  return `${d1} ${a} ${y1} – ${d2} ${b} ${y2}`;
+}
+
+/** Applies the year rules to what a pattern read; null if it is no real (or no useful) date. */
+function resolveDate({ d1, m1, d2, m2, year, pair, lowerOk, nameLike }, postedAt, today) {
   if (nameLike) return null;
-  if (monthWord != null) {
-    const word = monthWord.toLowerCase();
-    if (LOWERCASE_WORDS.has(word) && monthWord[0] === word[0]) return null; // "you may 14 …", "we march 4 …"
-    month = MONTH_WORDS[word];
-  }
-  month = Number(month);
-  if (!(month >= 1 && month <= 12)) return null;
+  const month1 = monthOf(m1, lowerOk);
+  const month2 = m2 == null ? month1 : monthOf(m2, lowerOk);
+  if (!(month1 >= 1 && month1 <= 12 && month2 >= 1 && month2 <= 12)) return null;
 
   const monthOnly = d1 == null;
   const first = monthOnly ? 1 : Number(d1);
-  const lastDay = monthOnly || d2 == null ? null : Number(d2);
-  if (first < 1 || (lastDay != null && lastDay < first)) return null;
+  let last = monthOnly || d2 == null ? null : Number(d2);
+  // "1. und 2. Oktober" is a span; "Dec 24 & 31" or "14. und 21. September" are two dates: take the first.
+  if (pair && last !== first + 1) last = null;
+  if (first < 1 || (last != null && last < 1)) return null;
+  if (month1 === month2 && last != null && last < first) return null;
+  const wrap = month2 < month1 ? 1 : 0; // "15.12.–06.01." ends in the next year
 
+  /** The span that starts in year yy, or null if a day does not exist. */
   const span = (yy) => {
-    const last = monthOnly ? daysIn(yy, month) : lastDay ?? first;
-    return last > daysIn(yy, month) ? null : { from: isoOf(yy, month, first), to: isoOf(yy, month, last), last };
+    const y2 = yy + wrap;
+    const end = monthOnly ? daysIn(yy, month1) : last ?? first;
+    if (first > daysIn(yy, month1) || end > daysIn(y2, month2)) return null;
+    const parts = { y1: yy, m1: month1, d1: first, y2, m2: month2, d2: end };
+    return { from: isoOf(yy, month1, first), to: isoOf(y2, month2, end), parts };
   };
 
   const posted = isRealDay(postedAt) ? postedAt : '';
-  const explicit = year != null;
-  let y;
-  let r;
-  if (explicit) {
-    y = year.length === 2 ? 2000 + Number(year) : Number(year);
+  let r = null;
+  if (year != null) {
+    // A written year belongs to the end of the span.
+    const y = (year.length === 2 ? 2000 + Number(year) : Number(year)) - wrap;
     if (y < 1900 || y > 2199) return null;
     r = span(y);
     if (!r) return null;
@@ -643,27 +705,25 @@ function resolveDate({ d1, d2, month, monthWord, year, nameLike }, postedAt, tod
     const anchorYear = Number(anchor.slice(0, 4));
     for (const yy of [anchorYear - 1, anchorYear, anchorYear + 1]) {
       const s = span(yy);
-      if (s && (!r || dayDistance(s.from, anchor) < dayDistance(r.from, anchor))) { r = s; y = yy; }
+      if (s && (!r || spanDistance(s, anchor) < spanDistance(r, anchor))) r = s;
     }
     if (!r) return null;
   }
 
-  const mon = SHORT_MONTHS[month - 1];
-  const text = monthOnly ? `${mon} ${y}`
-    : r.last === first ? `${first} ${mon} ${y}`
-      : `${first}–${r.last} ${mon} ${y}`;
+  const text = spanText(r.parts, monthOnly);
+  // Still running or to come (a season that is on right now counts too).
   if (r.to >= today) return { from: r.from, to: r.to, monthOnly, yearly: false, text };
 
   // Already over: most likely something that comes back every year. Recurring events
-  // rarely keep their exact days, so only the month of the next occurrence is suggested.
-  let next = y + 1;
-  while (isoOf(next, month, daysIn(next, month)) < today) next++;
+  // rarely keep their exact days, so only the start month of the next occurrence is suggested.
+  let next = r.parts.y1 + 1;
+  while (isoOf(next, month1, daysIn(next, month1)) < today) next++;
   return {
-    from: isoOf(next, month, 1),
-    to: isoOf(next, month, daysIn(next, month)),
+    from: isoOf(next, month1, 1),
+    to: isoOf(next, month1, daysIn(next, month1)),
     monthOnly: true,
     yearly: true,
-    text: `${mon} ${next}, probably yearly (last: ${text})`,
+    text: `${SHORT_MONTHS[month1 - 1]} ${next}, probably yearly (last: ${text})`,
   };
 }
 

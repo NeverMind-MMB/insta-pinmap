@@ -225,3 +225,76 @@ test('formatDay: short English day', () => {
   assert.equal(formatDay('2026-02-30'), '');
   assert.equal(formatDay('nonsense'), '');
 });
+
+/* ---------------- Fix round 2 ---------------- */
+
+test('eventDate: a bare "Jan <day>" is a date unless it reads like the name Jan', () => {
+  for (const [caption, day] of [['Jan 14', 14], ['Opens Jan 14', 14], ['Jan 14 at 8pm', 14],
+    ['Join us Jan 10!', 10], ['Sat, Jan 10', 10], ['jan 14', 14]]) {
+    assert.equal(ev(caption)?.text, `${day} Jan 2027`, caption);
+  }
+  assert.equal(ev('with Jan 2 friends'), null);
+  assert.equal(ev('Kaffee mit Jan 2 Stunden lang'), null);
+  assert.equal(ev('Jan 3 kids, one table'), null);
+});
+
+const NOT_DAYS = [
+  'Juni bis August 18 Grad Wassertemperatur',
+  'Oct 5 stars on Tripadvisor',
+  'Sept 5 dollar cocktails',
+  'Sep 10 k run',
+  'Aug 5 Leute gesucht',
+  'Jun 3 Gänge Menü',
+  'Apr 4 Personen',
+  'Nov 20° im Schatten',
+  'Dec 8 $ drinks',
+  'Mar 12 guests max',
+];
+for (const caption of NOT_DAYS) {
+  test(`eventDate gives no day for "${caption}"`, () => {
+    assert.equal(ev(caption), null);
+  });
+}
+
+test('eventDate: "und / and / &" is a span only for two days in a row', () => {
+  assert.equal(ev('am 1. und 2. Oktober').text, '1–2 Oct 2026');
+  assert.equal(ev('Open Oct 3 and 4').text, '3–4 Oct 2026');
+  assert.equal(ev('Dec 24 & 31').text, '24 Dec 2026');
+  assert.equal(ev('14. und 21. September').text, '14 Sep 2026');
+  assert.equal(ev('Markt am 5. & 12.9.').text, '5 Sep 2026');
+});
+
+test('eventDate: lowercase may / march count as months when the day comes first', () => {
+  const spring = { postedAt: '2026-04-01', today: '2026-04-02' };
+  assert.equal(ev('see you 14 may 2026', spring).text, '14 May 2026');
+  assert.equal(ev('14 march 2027', spring).text, '14 Mar 2027');
+  assert.equal(ev('we march 4 miles', spring), null);
+  assert.equal(ev('you may 14 times try', spring), null);
+});
+
+test('eventDate: spans across two months', () => {
+  assert.deepEqual(ev('Herbstfest 30.09.–02.10.'),
+    { from: '2026-09-30', to: '2026-10-02', monthOnly: false, yearly: false, text: '30 Sep – 2 Oct 2026' });
+  assert.equal(ev('Pop-up Oct 12 – Nov 3').text, '12 Oct – 3 Nov 2026');
+  assert.deepEqual(ev('Biergarten geöffnet vom 15. März bis 31. Oktober'),
+    { from: '2026-03-15', to: '2026-10-31', monthOnly: false, yearly: false, text: '15 Mar – 31 Oct 2026' });
+  assert.equal(ev('Open from March 15 to October 31').text, '15 Mar – 31 Oct 2026');
+  assert.equal(ev('Open from March 15, 2026 to October 31, 2026').text, '15 Mar – 31 Oct 2026');
+  assert.equal(ev('15. März 2026 bis 31. Oktober 2026').text, '15 Mar – 31 Oct 2026');
+});
+
+test('eventDate: a span over New Year ends in the next year', () => {
+  assert.deepEqual(ev('Eisbahn 15.12.–06.01.'),
+    { from: '2026-12-15', to: '2027-01-06', monthOnly: false, yearly: false, text: '15 Dec 2026 – 6 Jan 2027' });
+  assert.equal(ev('Wintermarkt 15.12.–06.01.2027').from, '2026-12-15');
+  assert.equal(ev('Wintermarkt 15.12.2026–06.01.2027').to, '2027-01-06');
+  // Seen in January while it is still on: the running season, not next winter.
+  assert.equal(ev('Eisbahn 1.12.–28.02.', { postedAt: '2027-01-15', today: '2027-01-20' }).text, '1 Dec 2026 – 28 Feb 2027');
+});
+
+test('eventDate: a running season is not yearly; an ended one gives its start month next year', () => {
+  assert.equal(ev('vom 15. März bis 31. Oktober', { postedAt: '2026-10-20', today: '2026-10-25' }).yearly, false);
+  assert.deepEqual(ev('vom 15. März bis 31. Oktober', { postedAt: '2025-05-01', today: '2026-11-05' }),
+    { from: '2027-03-01', to: '2027-03-31', monthOnly: true, yearly: true,
+      text: 'Mar 2027, probably yearly (last: 15 Mar – 31 Oct 2025)' });
+});
