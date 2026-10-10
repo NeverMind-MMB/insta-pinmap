@@ -529,7 +529,20 @@ const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH = String.raw`(${Object.keys(MONTH_WORDS).sort((a, b) => b.length - a.length).join('|')})\.?(?!\p{L})`;
 const DAY = String.raw`(\d{1,2})`;
 const ORD = String.raw`(?:st|nd|rd|th)?`;
-const DASH = String.raw`\s*(?:[-–—]|bis|to|until|till)\s*`;
+/** Month words that "Month day" may start with: English (and shared) only — German never writes "März 10". */
+const EN_MONTH_WORDS = [
+  'january', 'jan', 'february', 'feb', 'march', 'mar', 'april', 'apr', 'may', 'june', 'jun',
+  'july', 'jul', 'august', 'aug', 'september', 'sept', 'sep', 'october', 'oct', 'november', 'nov',
+  'december', 'dec',
+];
+/** English month words that are also everyday lowercase words ("you may", "we march"). */
+const LOWERCASE_WORDS = new Set(['may', 'march', 'mar']);
+
+const EN_MONTH = String.raw`(${[...EN_MONTH_WORDS].sort((a, b) => b.length - a.length).join('|')})\.?(?!\p{L})`;
+/** Between two days: a range or a pair ("1. und 2. Oktober" → 1–2 Oct). */
+const DASH = String.raw`\s*(?:[-–—]|bis|to|until|till|und|and|&)\s*`;
+/** A number followed by one of these is a time, price, distance or count, not a day. */
+const NOT_A_DAY = String.raw`(?!\s*(?:uhr|h|am|pm|a\.m\.|p\.m\.|€|eur|euro|km|m|mi|miles?|min|mal|x|%|tage?|days?|years?|jahre?|stunden|hours?|weeks?|wochen)(?!\p{L}))`;
 const YEAR = String.raw`(?:,?\s+(\d{4})(?!\d))?`;
 /** Before a day number: no letter, digit, dash or number/price sign ("9.000", "€14.09", "v2.0"). */
 const LEAD_NUM = String.raw`(^|[^\p{L}\p{N}.,:/€$£_\-–—])`;
@@ -542,11 +555,13 @@ const DATE_PATTERNS = [
   { re: String.raw`${LEAD_NUM}${DAY}\.(?:${DASH}${DAY}\.)?(\d{1,2})\.(\d{4}|\d{2})?(?!\d|\.\d)`,
     read: (m) => ({ d1: m[2], d2: m[3], month: m[4], year: m[5] }) },
   // 14. September (2026) · 14.–16. September · 14. bis 16. September · 14 Sep · 14-16 Sep 2026 · 14th of September
-  { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})(?:${DASH}${DAY}(?:\.|${ORD}))?\s*(?:of\s+)?${MONTH}${YEAR}`,
+  { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})(?:${DASH}${DAY}(?:\.|${ORD}))?${NOT_A_DAY}\s*(?:of\s+)?${MONTH}${YEAR}`,
     read: (m) => ({ d1: m[2], d2: m[3], monthWord: m[4], year: m[5] }) },
-  // September 14(, 2026) · Sept 14-16 · Sep 14th
-  { re: String.raw`${LEAD_WORD}${MONTH}\s*${DAY}${ORD}(?:${DASH}${DAY}${ORD})?${YEAR}(?![\d:]|[.,]\d)`,
-    read: (m) => ({ monthWord: m[2], d1: m[3], d2: m[4], year: m[5] }) },
+  // September 14(, 2026) · Sept 14-16 · Sep 14th — not "Sep 10 km", "June 10am-2pm", "Sept 9-17 Uhr"
+  { re: String.raw`${LEAD_WORD}${EN_MONTH}\s*${DAY}(${ORD})(?:${DASH}${DAY}${ORD})?${NOT_A_DAY}(?!${DASH}\d)${YEAR}(?![\d:]|[.,]\d)`,
+    read: (m) => ({ monthWord: m[2], d1: m[3], d2: m[5], year: m[6],
+      // "with Jan 2 friends": a bare "Jan <day>" is too often the name; it needs an ordinal, range or year.
+      nameLike: /^jan$/i.test(m[2]) && !/^jan\./i.test(m[0].slice(m[1].length)) && !m[4] && !m[5] && !m[6] }) },
   // im / in / this / Ende / Anfang September (2026) — not when a day follows
   { re: String.raw`${LEAD_WORD}${MONTH_PREFIX}[\s-]+${MONTH}(?:\s+(\d{4})(?!\d)|(?!\s*\d))`,
     read: (m) => ({ monthWord: m[2], year: m[3] }) },
@@ -569,6 +584,14 @@ function isRealDay(iso) {
   return mo >= 1 && mo <= 12 && d >= 1 && d <= daysIn(y, mo);
 }
 
+const dayMs = (iso) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+const dayDistance = (a, b) => Math.abs(dayMs(a) - dayMs(b));
+
+function addDays(iso, days) {
+  const d = new Date(dayMs(iso) + days * 86400000);
+  return isoOf(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+}
+
 function localToday() {
   const d = new Date();
   return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate());
@@ -582,10 +605,12 @@ export function formatDay(iso) {
 }
 
 /** Applies the year rules to what a pattern read; null if it is no real date. */
-function resolveDate({ d1, d2, month, monthWord, year }, postedAt, today) {
+function resolveDate({ d1, d2, month, monthWord, year, nameLike }, postedAt, today) {
+  if (nameLike) return null;
   if (monthWord != null) {
-    if (monthWord.toLowerCase() === 'may' && monthWord[0] !== 'M') return null; // "you may 14 …"
-    month = MONTH_WORDS[monthWord.toLowerCase()];
+    const word = monthWord.toLowerCase();
+    if (LOWERCASE_WORDS.has(word) && monthWord[0] === word[0]) return null; // "you may 14 …", "we march 4 …"
+    month = MONTH_WORDS[word];
   }
   month = Number(month);
   if (!(month >= 1 && month <= 12)) return null;
@@ -595,25 +620,31 @@ function resolveDate({ d1, d2, month, monthWord, year }, postedAt, today) {
   const lastDay = monthOnly || d2 == null ? null : Number(d2);
   if (first < 1 || (lastDay != null && lastDay < first)) return null;
 
-  const explicit = year != null;
-  let y = explicit
-    ? (year.length === 2 ? 2000 + Number(year) : Number(year))
-    : Number((isRealDay(postedAt) ? postedAt : today).slice(0, 4));
-  if (y < 1900 || y > 2199) return null;
-
   const span = (yy) => {
     const last = monthOnly ? daysIn(yy, month) : lastDay ?? first;
     return last > daysIn(yy, month) ? null : { from: isoOf(yy, month, first), to: isoOf(yy, month, last), last };
   };
-  let r = span(y);
-  if (!r) return null;
 
-  let yearly = false;
-  if (!explicit && r.to < today) {
-    // No year and already over: most likely something that comes back every year.
-    yearly = true;
-    const start = y;
-    do { y++; r = span(y); } while ((!r || r.to < today) && y < start + 8);
+  const posted = isRealDay(postedAt) ? postedAt : '';
+  const explicit = year != null;
+  let y;
+  let r;
+  if (explicit) {
+    y = year.length === 2 ? 2000 + Number(year) : Number(year);
+    if (y < 1900 || y > 2199) return null;
+    r = span(y);
+    if (!r) return null;
+    // History ("Seit 14.09.2015", "Born on 14.09.1985") is no event to go to.
+    const cutoff = posted ? addDays(posted, -30) : addDays(today, -365);
+    if (r.to < cutoff) return null;
+  } else {
+    // The occurrence closest to the post date (or today): a December post about "14.01." means next January.
+    const anchor = posted || today;
+    const anchorYear = Number(anchor.slice(0, 4));
+    for (const yy of [anchorYear - 1, anchorYear, anchorYear + 1]) {
+      const s = span(yy);
+      if (s && (!r || dayDistance(s.from, anchor) < dayDistance(r.from, anchor))) { r = s; y = yy; }
+    }
     if (!r) return null;
   }
 
@@ -621,12 +652,28 @@ function resolveDate({ d1, d2, month, monthWord, year }, postedAt, today) {
   const text = monthOnly ? `${mon} ${y}`
     : r.last === first ? `${first} ${mon} ${y}`
       : `${first}–${r.last} ${mon} ${y}`;
-  return { from: r.from, to: r.to, monthOnly, yearly, text: yearly ? `${text} (probably yearly)` : text };
+  if (r.to >= today) return { from: r.from, to: r.to, monthOnly, yearly: false, text };
+
+  // Already over: most likely something that comes back every year. Recurring events
+  // rarely keep their exact days, so only the month of the next occurrence is suggested.
+  let next = y + 1;
+  while (isoOf(next, month, daysIn(next, month)) < today) next++;
+  return {
+    from: isoOf(next, month, 1),
+    to: isoOf(next, month, daysIn(next, month)),
+    monthOnly: true,
+    yearly: true,
+    text: `${mon} ${next}, probably yearly (last: ${text})`,
+  };
 }
 
 /**
  * The date an event in the caption takes place, if the caption names one.
  * The first date in the text wins.
+ * Without a year, the occurrence closest to the post date (or today) is meant.
+ * Explicit dates more than 30 days before the post (a year before today without
+ * a post date) are history and skipped. A date that is over becomes the month
+ * of its next occurrence: "Sep 2027, probably yearly (last: 14–16 Sep 2025)".
  * @param {string} caption
  * @param {object} [ctx]  { postedAt: 'YYYY-MM-DD' | '', today: 'YYYY-MM-DD' (default: today) }
  * @returns {null | {from: string, to: string, monthOnly: boolean, yearly: boolean, text: string}}

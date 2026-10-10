@@ -73,25 +73,73 @@ test('eventDate: without a post date the year comes from today', () => {
   assert.equal(r.text, '14 Sep 2026');
 });
 
-test('eventDate: date already past and no year given → probably yearly, next occurrence', () => {
-  const r = ev('14. September', { postedAt: '2025-08-01', today: '2026-10-10' });
-  assert.deepEqual(r, { from: '2027-09-14', to: '2027-09-14', monthOnly: false, yearly: true, text: '14 Sep 2027 (probably yearly)' });
-  const may = ev('Opens May 2');
-  assert.deepEqual(may, { from: '2027-05-02', to: '2027-05-02', monthOnly: false, yearly: true, text: '2 May 2027 (probably yearly)' });
+/** Shape of a rolled-forward suggestion: the whole month of the next occurrence. */
+const yearlyMonth = (year, mm, last) => ({
+  from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(new Date(Date.UTC(year, Number(mm), 0)).getUTCDate()).padStart(2, '0')}`,
+  monthOnly: true, yearly: true,
+  text: `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(mm) - 1]} ${year}, probably yearly (last: ${last})`,
 });
 
-test('eventDate: a past range or month rolls forward as a whole', () => {
-  assert.deepEqual(ev('Fest 1.-3.8.', { today: '2026-08-15' }),
-    { from: '2027-08-01', to: '2027-08-03', monthOnly: false, yearly: true, text: '1–3 Aug 2027 (probably yearly)' });
-  assert.deepEqual(ev('Immer im März', { today: '2026-08-15' }),
-    { from: '2027-03-01', to: '2027-03-31', monthOnly: true, yearly: true, text: 'Mar 2027 (probably yearly)' });
+test('eventDate: past day without a year → month of the next occurrence, probably yearly', () => {
+  assert.deepEqual(ev('14. September', { postedAt: '2025-08-01', today: '2026-10-10' }),
+    yearlyMonth(2027, '09', '14 Sep 2025'));
+  assert.deepEqual(ev('14.–16. September', { postedAt: '2025-08-01', today: '2026-10-10' }),
+    { from: '2027-09-01', to: '2027-09-30', monthOnly: true, yearly: true, text: 'Sep 2027, probably yearly (last: 14–16 Sep 2025)' });
+  assert.deepEqual(ev('Opens May 2'), yearlyMonth(2027, '05', '2 May 2026'));
+});
+
+test('eventDate: a past range or month rolls forward to the next year’s month', () => {
+  assert.deepEqual(ev('Fest 1.-3.8.', { today: '2026-08-15' }), yearlyMonth(2027, '08', '1–3 Aug 2026'));
+  assert.deepEqual(ev('Immer im März', { today: '2026-08-15' }), yearlyMonth(2027, '03', 'Mar 2026'));
+  assert.deepEqual(ev('Wir waren im September da', { postedAt: '2025-08-01', today: '2026-10-10' }),
+    { from: '2027-09-01', to: '2027-09-30', monthOnly: true, yearly: true, text: 'Sep 2027, probably yearly (last: Sep 2025)' });
   assert.equal(ev('Spargelzeit ab 1. Mrz').from, '2027-03-01');
+  // The next occurrence is always in a later year, even while the month is still running.
+  assert.equal(ev('Am 14.09.', { postedAt: '2026-09-01', today: '2026-09-20' }).text, 'Sep 2027, probably yearly (last: 14 Sep 2026)');
 });
 
-test('eventDate: an explicit year in the past stays as it is', () => {
-  assert.deepEqual(ev('Damals am 14.09.2019', { today: '2026-10-10' }),
-    { from: '2019-09-14', to: '2019-09-14', monthOnly: false, yearly: false, text: '14 Sep 2019' });
-  assert.equal(ev('Opening September 2019', { today: '2026-10-10' }).yearly, false);
+test('eventDate: an explicit year in the past (but no history) rolls forward the same way', () => {
+  assert.deepEqual(ev('Recap vom 14.09.2026', { postedAt: '2026-09-20', today: '2026-10-10' }),
+    yearlyMonth(2027, '09', '14 Sep 2026'));
+  assert.deepEqual(ev('Opening September 2026', { postedAt: '2026-09-02', today: '2026-10-10' }),
+    yearlyMonth(2027, '09', 'Sep 2026'));
+  // A future explicit date stays exact.
+  assert.equal(ev('Saisonstart 15. Mär 2027').text, '15 Mar 2027');
+});
+
+test('eventDate: without a year the occurrence closest to the post date is meant', () => {
+  const dec = { postedAt: '2026-12-10', today: '2026-12-15' };
+  assert.deepEqual(ev('Neujahrsmarkt 14.01.', dec),
+    { from: '2027-01-14', to: '2027-01-14', monthOnly: false, yearly: false, text: '14 Jan 2027' });
+  assert.deepEqual(ev('Wir sehen uns im Januar', dec),
+    { from: '2027-01-01', to: '2027-01-31', monthOnly: true, yearly: false, text: 'Jan 2027' });
+  // A recap posted after the event: over, so probably yearly.
+  assert.deepEqual(ev('Danke für den 14. September!', { postedAt: '2026-09-20', today: '2026-10-10' }),
+    yearlyMonth(2027, '09', '14 Sep 2026'));
+  // Posted in January about last December's market.
+  assert.deepEqual(ev('Rückblick 24.12.', { postedAt: '2026-01-05', today: '2026-01-06' }),
+    yearlyMonth(2026, '12', '24 Dec 2025'));
+});
+
+test('eventDate: history (explicit date long before the post) is skipped', () => {
+  for (const caption of ['Seit 14.09.2015 für euch da', 'Gegründet im Mai 1998', 'Open since August 2019', 'Born on 14.09.1985']) {
+    assert.equal(ev(caption, { postedAt: '2026-08-01', today: '2026-08-15' }), null, caption);
+  }
+  // Without a post date the cutoff is a year before today.
+  assert.equal(ev('Seit 14.09.2015', { postedAt: '', today: '2026-08-15' }), null);
+  assert.equal(ev('Fest am 14.09.2025', { postedAt: '', today: '2026-08-15' }).text, 'Sep 2026, probably yearly (last: 14 Sep 2025)');
+  assert.equal(ev('Fest am 14.07.2025', { postedAt: '', today: '2026-08-15' }), null);
+  // Up to 30 days before the post still counts, and a later date in the caption is found.
+  assert.equal(ev('Am 03.07.2026 war es voll', { postedAt: '2026-08-01' }).text, 'Jul 2027, probably yearly (last: 3 Jul 2026)');
+  assert.equal(ev('Am 01.07.2026 war es voll', { postedAt: '2026-08-01' }), null);
+  assert.equal(ev('Seit 14.09.2015 dabei, Jubiläum am 20.09.').from, '2026-09-20');
+});
+
+test('eventDate: two days joined by und / and / & are a span', () => {
+  assert.deepEqual(ev('Flohmarkt am 1. und 2. Oktober'),
+    { from: '2026-10-01', to: '2026-10-02', monthOnly: false, yearly: false, text: '1–2 Oct 2026' });
+  assert.equal(ev('Open Oct 3 and 4').text, '3–4 Oct 2026');
+  assert.equal(ev('Markt 5. & 6.9.').text, '5–6 Sep 2026');
 });
 
 test('eventDate: today itself is not in the past', () => {
@@ -132,7 +180,32 @@ const NEGATIVE = [
   'You may 14 times try',
   'IP 192.168.1.1 und Version 2.0.2',
   '',
+  // Opening hours, prices, distances and counts after a month word
+  'Ab März 10-18 Uhr geöffnet',
+  'Ab Mai 11-22 Uhr Biergarten',
+  'April bis Oktober 10-18 Uhr',
+  'Öffnungszeiten Mai - Sept 9-17 Uhr',
+  'Sommer: Jun-Aug 10-20h',
+  'June 10am-2pm',
+  'März 10 Uhr',
+  'Juni 12 Euro Eintritt',
+  'Mai 14 Euro',
+  'Sep 10 km run',
+  'Oct 10 years anniversary',
+  'Seit März 3 neue Sorten',
+  'We march 4 miles',
+  'They march in march',
+  'mar 3 wins',
+  'Ich mag den Mai 2 mal',
+  'with Jan 2 friends',
 ];
+
+test('eventDate: hours after "in June" / "Im April" never become a day', () => {
+  for (const caption of ['Every Sunday in June 10am-2pm', 'Im April 5 Tage Rom']) {
+    const r = ev(caption);
+    assert.ok(r === null || r.monthOnly, `${caption} → ${r?.text}`);
+  }
+});
 
 for (const caption of NEGATIVE) {
   test(`eventDate does not match "${caption}"`, () => {
