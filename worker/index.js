@@ -58,8 +58,8 @@ async function overLimit(bindings, key) {
   return hits > MEMORY_LIMIT;
 }
 
-function tooMany() {
-  return json({ ok: false, reason: 'rate-limit', message: 'Too many requests. Wait a minute and try again.' }, 429);
+function tooMany(extraHeaders = {}) {
+  return json({ ok: false, reason: 'rate-limit', message: 'Too many requests. Wait a minute and try again.' }, 429, extraHeaders);
 }
 
 function clientAddress(request) {
@@ -67,8 +67,9 @@ function clientAddress(request) {
 }
 
 async function handleInstagram(url, request, bindings, deps) {
-  if (await overLimit(bindings, `ig:${clientAddress(request)}`)) return tooMany();
-  const difficulty = Number(bindings.WORK_DIFFICULTY) || 20;
+  const difficulty = Number(bindings.WORK_DIFFICULTY) || 18;
+  const difficultyHeader = { 'X-Work-Difficulty': String(difficulty) };
+  if (await overLimit(bindings, `ig:${clientAddress(request)}`)) return tooMany(difficultyHeader);
   const nowMinute = ticketMinute();
   const code = url.searchParams.get('code') || '';
   const valid = await verifyTicket({
@@ -80,14 +81,14 @@ async function handleInstagram(url, request, bindings, deps) {
   });
   if (!valid) {
     return json({ ok: false, reason: 'ticket', message: 'Work ticket missing or expired.' }, 403, {
-      'X-Work-Difficulty': String(difficulty),
+      ...difficultyHeader,
       'X-Server-Minute': String(nowMinute),
     });
   }
   const post = await fetchPost(code, deps.fetch);
-  if (!post.ok) return json(post);
+  if (!post.ok) return json(post, 200, difficultyHeader);
   const thumb = await imageAsDataUrl(post.imageUrl, deps.fetch);
-  return json({ ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username, thumb });
+  return json({ ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username, thumb }, 200, difficultyHeader);
 }
 
 /**

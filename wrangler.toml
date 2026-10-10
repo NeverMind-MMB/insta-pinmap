@@ -8,7 +8,7 @@ directory = "./web"
 binding = "ASSETS"
 
 [vars]
-WORK_DIFFICULTY = "20"
+WORK_DIFFICULTY = "18"
 
 # Per-address limit for /api/ig. If `wrangler deploy` rejects this block on the
 # free plan, delete it — worker/index.js then uses its in-memory fallback.

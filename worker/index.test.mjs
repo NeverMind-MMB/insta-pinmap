@@ -155,3 +155,21 @@ test('everything outside /api/ goes to the static files', async () => {
   const res = await handleRequest(new Request('https://pinmap.example/index.html'), BINDINGS);
   assert.equal(await res.text(), 'asset');
 });
+
+test('/api/ig with a valid ticket: 200 carries X-Work-Difficulty', async () => {
+  const { solveTicket, ticketMinute } = await import('../web/js/ticket.js');
+  const minute = ticketMinute();
+  const nonce = solveTicket('abcde', minute, 18);
+  const path = `/api/ig?code=abcde&m=${minute}&n=${nonce}`;
+  const fetch = fakeFetch({});
+  const res = await handleRequest(apiRequest(path), { ...BINDINGS, WORK_DIFFICULTY: '18' }, { fetch });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('X-Work-Difficulty'), '18');
+  assert.ok(fetch.calls.length > 0, 'ticket accepted, Instagram was asked');
+  const noVar = await handleRequest(apiRequest(path), { ASSETS: BINDINGS.ASSETS }, { fetch });
+  assert.equal(noVar.status, 200);
+  assert.equal(noVar.headers.get('X-Work-Difficulty'), '18');
+  const missing = await handleRequest(apiRequest('/api/ig?code=abcde'), { ASSETS: BINDINGS.ASSETS }, { fetch });
+  assert.equal(missing.status, 403);
+  assert.equal(missing.headers.get('X-Work-Difficulty'), '18');
+});

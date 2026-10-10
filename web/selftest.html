@@ -410,7 +410,7 @@ function logicChecks() {
 
   check('Work ticket timing on this device', async () => {
     const { ticketMinute } = await import('./js/ticket.js');
-    const bits = Number(new URLSearchParams(location.search).get('bits')) || 20;
+    const bits = Number(new URLSearchParams(location.search).get('bits')) || 18;
     const runs = [];
     // Measured in the same module worker the app uses, so the page stays responsive
     // (a main-thread loop would stall the other checks' timers and fail "Map tiles").
