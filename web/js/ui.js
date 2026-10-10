@@ -757,7 +757,14 @@ async function applyImport(entries, sourceName, env) {
   if (failed.length) parts.push(`${failed.length} left without coordinates`);
   toast(parts.join(', ') + '.', failed.length ? 'error' : 'success', 6000);
 
-  if (created) env.map?.fitTo(store.db.pins);
+  if (created) {
+    // Show the new pins: a search text or tag chip left over would hide them.
+    filter.search = '';
+    filter.tags.clear();
+    $('search').value = '';
+    env.redraw?.();
+    env.map?.fitTo(store.db.pins);
+  }
 }
 
 /* ================================================================== *

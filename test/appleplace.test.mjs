@@ -4,6 +4,7 @@ import {
   parseApplePlaceHtml, parseShortcutResults, parseShortcutPages, parseShortcutPaste, shortcutInput, SHORTCUT_RUN_URL,
   applyShortcutResults, savePendingGuide, loadPendingGuide, clearPendingGuide, PENDING_GUIDE_KEY,
 } from '../web/js/appleplace.js';
+import { pruneTagFilter } from '../web/js/store.js';
 import { appleIdEntries } from '../web/js/importers.js';
 
 /** The head of a real Apple Maps place page (trimmed), as served after the auid redirect. */
@@ -227,11 +228,15 @@ test('parseShortcutPages: a later page for an id already filled does not overwri
   assert.equal(m.get('555').name, 'Claimed');
 });
 
-test('parseShortcutPages: <html without a doctype and lowercase doctype also start pages', () => {
-  const a = applePage('111', { name: 'A' }).replace('<!DOCTYPE html>\n', '');
-  const b = applePage('222', { name: 'B' }).replace('<!DOCTYPE html>', '<!doctype html>');
-  const m = parseShortcutPages(`${a}\n${b}`, ['111', '222']);
-  assert.deepEqual([...m.keys()], ['111', '222']);
+test('parseShortcutPages: a paste without any doctype is split at <html; lowercase doctype works', () => {
+  const strip = (id, name) => applePage(id, { name }).replace(/<!DOCTYPE html>\s*/, '');
+  const m1 = parseShortcutPages(`${strip('111', 'A')}
+${strip('222', 'B')}`, ['111', '222']);
+  assert.deepEqual([...m1.keys()], ['111', '222']);
+  const low = (id, name) => applePage(id, { name }).replace('<!DOCTYPE html>', '<!doctype html>');
+  const m2 = parseShortcutPages(`${low('111', 'A')}
+${low('222', 'B')}`, ['111', '222']);
+  assert.deepEqual([...m2.keys()], ['111', '222']);
 });
 
 test('parseShortcutPages: 2 MB paste of 45 pages parses in under 500 ms', () => {
@@ -256,4 +261,30 @@ test('parseShortcutPaste: HTML path when <html is present (any case), else the @
   assert.equal(html2.size, 1);
   const line = 'https://maps.apple.com/place?auid=111@@Beta@@1@@2@@Somewhere';
   assert.equal(parseShortcutPaste(line, ids).get('111').name, 'Beta');
+});
+
+test('parseShortcutPages: a literal "<html" inside a page does not split it', () => {
+  const page = appleHead({ name: 'Probe' }).replace('</head><body>',
+    '</head><body><script>var s="<html lang=x>";</script><div data-ref="111">');
+  const m = parseShortcutPages(`${page}\n${applePage('222', { name: 'Next' })}`, ['111', '222']);
+  assert.equal(m.get('111').name, 'Probe');
+  assert.equal(m.get('222').name, 'Next');
+});
+
+test('parseShortcutPages: a page belongs to its own (first named) id, not the first in guide order', () => {
+  const page = applePage('222', { name: 'Own' }).replace('</body>', '<i data-ref="111"></i></body>');
+  const m = parseShortcutPages(page, ['111', '222']);
+  assert.deepEqual([...m.keys()], ['222']);
+  assert.equal(m.get('222').name, 'Own');
+});
+
+test('parseShortcutPaste: falls back to the @@ format when "<html" is in a field but no page matches', () => {
+  const line = 'https://maps.apple.com/place?auid=111@@<html>Cafe@@1@@2@@Somewhere';
+  assert.equal(parseShortcutPaste(line, ['111']).get('111').lon, 2);
+});
+
+test('pruneTagFilter: drops tags no pin has anymore', () => {
+  const f = new Set(['a', 'gone']);
+  pruneTagFilter(f, ['a', 'b']);
+  assert.deepEqual([...f], ['a']);
 });

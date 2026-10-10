@@ -413,3 +413,10 @@ if (typeof globalThis.addEventListener === 'function' && globalThis.document) {
   });
   globalThis.addEventListener('pagehide', flush);
 }
+
+/** Drops filter tags no pin has anymore, so a filter can never be stuck without an "All" way out. */
+export function pruneTagFilter(filterTags, existingNames) {
+  const have = new Set(existingNames);
+  for (const t of [...filterTags]) if (!have.has(t)) filterTags.delete(t);
+  return filterTags;
+}

@@ -2,7 +2,7 @@
  * app.js — wiring. Keeps map, list, filter and dialogs in sync.
  */
 
-import { store, DEFAULT_SETTINGS } from './store.js';
+import { store, DEFAULT_SETTINGS, pruneTagFilter } from './store.js';
 import { MainMap, TILES } from './map.js';
 import { startAdd, wireConfirm, guideImportEntries, guideOf } from './addflow.js';
 import {
@@ -35,6 +35,7 @@ const env = {
  * ================================================================== */
 
 function redraw() {
+  pruneTagFilter(filter.tags, store.allTags().map((t) => t.name));
   const pins = filteredPins();
   map?.draw(pins);
   drawList(pins, (id) => showDetail(id, env));

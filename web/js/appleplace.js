@@ -125,26 +125,30 @@ export function parseShortcutResults(text) {
   return found;
 }
 
-const PAGE_START = /<!doctype html|<html[\s>]/gi;
+const DOCTYPE_START = /<!doctype html/gi;
+const HTML_START = /<html[\s>]/gi;
 const PAGE_HEAD_CHARS = 64 * 1024;
 
-/** Pasted text → the raw pages in it, split at each `<!DOCTYPE html` / `<html`; text before the first is dropped. */
+/**
+ * Pasted text → the raw pages in it; text before the first is dropped.
+ * Pages start at `<!DOCTYPE html`; only a paste without any doctype is split at
+ * `<html` (a page may contain "<html" inside a script or JSON string).
+ */
 function splitPages(text) {
-  const starts = [];
-  let lastDoctype = -1000;
-  for (const m of text.matchAll(PAGE_START)) {
-    const isDoctype = m[0][1] === '!';
-    // the <html> tag right after a doctype belongs to the same page
-    if (!isDoctype && m.index - lastDoctype < 100) continue;
-    if (isDoctype) lastDoctype = m.index;
-    starts.push(m.index);
-  }
+  let starts = [...text.matchAll(DOCTYPE_START)].map((m) => m.index);
+  if (!starts.length) starts = [...text.matchAll(HTML_START)].map((m) => m.index);
   return starts.map((at, i) => text.slice(at, starts[i + 1] ?? text.length));
+}
+
+/** The first of `wanted` that `page` names with `pattern` (document order), or ''. */
+function firstNamedId(page, pattern, wanted) {
+  for (const m of page.matchAll(pattern)) if (wanted.has(m[1])) return m[1];
+  return '';
 }
 
 /**
  * Reads what the short Shortcut copied: the raw Apple Maps pages, one after the
- * other. A page belongs to the first of `appleIds` it names as data-ref="<id>"
+ * other. A page belongs to the guide ID it names first as data-ref="<id>"
  * (else claimId=<id>); pages of other places or without usable coordinates are
  * ignored, and an ID already filled keeps its first page.
  * @returns {Map<string, {name, lat, lon, address}>}
@@ -153,21 +157,23 @@ export function parseShortcutPages(text, appleIds) {
   const found = new Map();
   const wanted = new Set(appleIds);
   for (const page of splitPages(String(text ?? ''))) {
-    const named = new Set();
-    for (const m of page.matchAll(/data-ref="(\d{1,20})"/g)) if (wanted.has(m[1])) named.add(m[1]);
-    if (!named.size) for (const m of page.matchAll(/claimId=(\d{1,20})/g)) if (wanted.has(m[1])) named.add(m[1]);
-    const id = appleIds.find((x) => named.has(x) && !found.has(x));
-    if (!id) continue;
+    const id = firstNamedId(page, /data-ref="(\d{1,20})"/g, wanted) ||
+      firstNamedId(page, /claimId=(\d{1,20})/g, wanted);
+    if (!id || found.has(id)) continue;
     const place = parseApplePlaceHtml(page.slice(0, PAGE_HEAD_CHARS));
     if (place) found.set(id, place);
   }
   return found;
 }
 
-/** What "Paste results" reads: raw pages when the text contains `<html`, else the "@@" / tab lines. */
+/** What "Paste results" reads: raw pages when the text contains `<html`, else (or when no page matches) the "@@" / tab lines. */
 export function parseShortcutPaste(text, appleIds) {
   const s = String(text ?? '');
-  return /<html/i.test(s) ? parseShortcutPages(s, appleIds) : parseShortcutResults(s);
+  if (/<html/i.test(s)) {
+    const pages = parseShortcutPages(s, appleIds);
+    if (pages.size) return pages;
+  }
+  return parseShortcutResults(s);
 }
 
 /**
