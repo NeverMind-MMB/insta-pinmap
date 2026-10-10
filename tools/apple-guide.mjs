@@ -73,13 +73,17 @@ export async function guideToGeoJSON(link, { fetch: fetchFn = globalThis.fetch, 
   };
 }
 
-/** "<guide title>.geojson", without characters a file system refuses. */
+/** Names Windows keeps for devices, whatever the extension. */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/** "<guide title>.geojson", without characters or names a file system refuses. */
 export function outputName(title) {
   const base = String(title || '')
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s.]+|[\s.]+$/g, '');
-  return `${base || 'apple-guide'}.geojson`;
+  if (!base) return 'apple-guide.geojson';
+  return `${WINDOWS_RESERVED.test(base) ? '_' : ''}${base}.geojson`;
 }
 
 async function main(args) {

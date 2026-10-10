@@ -96,3 +96,12 @@ test('apple-guide: output name from the guide title, safe for every file system'
   assert.equal(outputName('  a/b:c*?"<>|d  '), 'a b c d.geojson');
   assert.equal(outputName('...'), 'apple-guide.geojson');
 });
+
+test('apple-guide: Windows reserved names get a "_" prefix', () => {
+  for (const name of ['CON', 'prn', 'Aux', 'nul', 'COM1', 'com9', 'LPT1', 'lpt9']) {
+    assert.equal(outputName(name), `_${name}.geojson`, name);
+  }
+  assert.equal(outputName('CONSOLE'), 'CONSOLE.geojson');
+  assert.equal(outputName('COM10'), 'COM10.geojson');
+  assert.equal(outputName('Con Games'), 'Con Games.geojson');
+});

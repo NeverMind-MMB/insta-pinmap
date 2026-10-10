@@ -78,22 +78,41 @@ Build it once in the Shortcuts app (action names as in the English Shortcuts app
 3. Add **Split Text** → by **New Lines**.
 4. Add **Repeat with Each** (items = Split Text).
 5. Inside the loop: **Get Contents of URL** (URL = Repeat Item).
-6. Inside the loop: **Match Text** with the pattern `og:title" content="([^"]*)"`
-   in Contents of URL → **Get Group at Index** 1 → **Set Variable** `Name`.
-7. The same three actions for `latitude" content="([^"]*)"` → `Lat`,
-   `longitude" content="([^"]*)"` → `Lon`, and
+6. Inside the loop: **Match Text** `property="og:title" content="([^"]*)"` in
+   Contents of URL → **Get Item from List** (First Item) → **Get Group at Index** 1.
+   Tap that action's output and rename it `Name` (don't use Set Variable: a
+   variable would keep the previous place's value when a page has no match).
+7. The same three actions for `place:location:latitude" content="([^"]*)"` → `Lat`,
+   `place:location:longitude" content="([^"]*)"` → `Lon`, and
    `<title>[^<]* in ([^<]*) - Apple Maps` → `Address`
    (each **Match Text** again in Contents of URL).
 8. Inside the loop: **Text** = `Repeat Item@@Name@@Lat@@Lon@@Address`
-   (insert the variables) → **Add to Variable** `Results`.
+   (insert the renamed outputs of steps 6–7) → **Add to Variable** `Results`.
 9. After the loop: **Combine Text** (Results, with **New Lines**) →
    **Copy to Clipboard** → **Show Notification** "Done. Go back to Insta Pinmap
    and tap Paste results."
 
+On the first run, tap **Always Allow** when the Shortcut asks to connect to
+maps.apple.com, and **Allow Paste** (to stop being asked: Settings → Apps →
+Shortcuts → Paste from Other Apps → Allow).
+
+**Check it once:** in the app's import dialog tap **Look up with iPhone
+Shortcut**, then cancel the Shortcut, go to Notes, paste the list and add the
+line `https://maps.apple.com/place?auid=1` (a place that doesn't exist) at the
+end. Copy all lines and run the Shortcut from the Shortcuts app. It must finish
+without an error, and its result (paste it into Notes) must have a filled line
+for every real place and an empty line `https://maps.apple.com/place?auid=1@@@@@@@@`
+for the made-up one. Back in the app, **Paste results** must report
+"Found N of N places".
+
 Then, in the app's import dialog, tap **Look up with iPhone Shortcut**, allow
 Shortcuts to run, go back to the app, tap **Paste results** and **Import selected**.
+If Shortcuts doesn't open, tap **Open Shortcuts** below the buttons.
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
 (for 24 hours).
+
+If the app finds 0 places, add **Set Name** `page.txt` right after Get Contents
+of URL and use its result in the Match Text steps.
 
 The Shortcut fetches the pages from your phone's own connection.
 

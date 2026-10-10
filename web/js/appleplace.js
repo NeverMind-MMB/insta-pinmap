@@ -101,10 +101,14 @@ export function appleIdOf(text) {
  * Reads what the Shortcut copied: one place per line,
  *   <auid or place address>@@<name>@@<lat>@@<lon>@@<address>
  * (tabs instead of "@@" work too). Lines without usable coordinates are skipped.
+ * A line with exactly the name and coordinates of an earlier, other ID is
+ * skipped too: that is a Shortcut repeating the previous place's values for a
+ * place it couldn't read.
  * @returns {Map<string, {name, lat, lon, address}>}
  */
 export function parseShortcutResults(text) {
   const found = new Map();
+  const firstIdOf = new Map(); // "name|lat|lon" → the ID that brought it first
   for (const line of String(text ?? '').split(/\r?\n/)) {
     const fields = (line.includes('@@') ? line.split('@@') : line.split('\t')).map((f) => f.trim());
     if (fields.length < 4) continue;
@@ -112,11 +116,11 @@ export function parseShortcutResults(text) {
     const lat = coordinate(fields[2]);
     const lon = coordinate(fields[3]);
     if (!id || !validLatLon(lat, lon)) continue;
-    found.set(id, {
-      name: decodeEntities(fields[1]).trim() || 'Apple Maps place',
-      lat, lon,
-      address: decodeEntities(fields.slice(4).join(' ')).trim(),
-    });
+    const name = decodeEntities(fields[1]).trim() || 'Apple Maps place';
+    const signature = `${name}|${lat}|${lon}`;
+    if ((firstIdOf.get(signature) ?? id) !== id) continue;
+    firstIdOf.set(signature, id);
+    found.set(id, { name, lat, lon, address: decodeEntities(fields.slice(4).join(' ')).trim() });
   }
   return found;
 }

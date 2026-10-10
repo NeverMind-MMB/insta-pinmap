@@ -186,3 +186,15 @@ test('pending guide: broken data and failing storage never throw', () => {
   assert.doesNotThrow(() => savePendingGuide(GUIDE, { storage: null, now: 1 }));
   assert.equal(loadPendingGuide({ storage: null, now: 1 }), null);
 });
+
+test('parseShortcutResults: a later id with exactly the name and coordinates of an earlier one is a stale value and dropped', () => {
+  const text = [
+    '1@@Clutch23@@48.8196266@@9.2741936@@Fellbach, Germany',
+    '2@@Clutch23@@48.8196266@@9.2741936@@Fellbach, Germany',   // the Shortcut kept the previous place's values
+    '3@@Clutch23@@48,8196266@@9,2741936@@',                     // same values, other spelling
+    '4@@Clutch23@@48.8196267@@9.2741936@@Fellbach, Germany',   // a different spot with the same name is fine
+    '1@@Clutch23@@48.8196266@@9.2741936@@Fellbach, Germany',   // the same id twice is not a stale value
+  ].join('\n');
+  const r = parseShortcutResults(text);
+  assert.deepEqual([...r.keys()], ['1', '4']);
+});

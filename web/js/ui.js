@@ -639,6 +639,9 @@ function wireAppleLookup(guide, entries, onResults) {
   box.hidden = !guide;
   $('import-apple-copy').hidden = true;
   $('import-apple-manual').hidden = true;
+  $('import-apple-open-row').hidden = true;
+  // A real link as a second way in, should iOS block opening Shortcuts from script.
+  $('import-apple-open').href = SHORTCUT_RUN_URL;
   $('import-apple-results').value = '';
   if (!guide) return;
 
@@ -658,6 +661,7 @@ function wireAppleLookup(guide, entries, onResults) {
       $('import-apple-list').select();
       return;
     }
+    $('import-apple-open-row').hidden = false;
     openExternal(SHORTCUT_RUN_URL);
   };
   $('import-apple-run').onclick = () => openExternal(SHORTCUT_RUN_URL);
