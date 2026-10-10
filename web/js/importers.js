@@ -555,7 +555,7 @@ export function readLink(link) {
   const s = String(link || '').trim();
   if (/guides\.apple\.com/i.test(s) || /[?&]ug=/.test(s)) {
     const { title, entries, appleIds } = readAppleGuide(s);
-    return { name: title || 'Apple Guide', entries, appleIds };
+    return { name: title || 'Apple Guide', entries, appleIds, link: s };
   }
   const apple = readApplePlace(s);
   if (apple) return { name: apple.name, entries: [apple], appleIds: [] };

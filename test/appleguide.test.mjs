@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { guideToGeoJSON, outputName } from '../tools/apple-guide.mjs';
 import { readFile } from '../web/js/importers.js';
 
@@ -16,11 +17,20 @@ function placePage(name, lat, lon, city) {
 <meta property="og:title" content="${name}"></head><body></body></html>`;
 }
 
-/** Fake maps.apple.com: answers every auid with a place page, except the ids in `failing`. */
-function fakeApple({ failing = [] } = {}) {
+/**
+ * Fake Apple: answers every auid with a place page, except the ids in `failing`.
+ * The guide link gets `guidePage` (a 404 when there is none).
+ */
+function fakeApple({ failing = [], guidePage = null } = {}) {
   const calls = [];
   const fn = async (url, init) => {
     calls.push({ url, init });
+    if (url === APPLE_UG) {
+      if (guidePage === null) return new Response('not here', { status: 404 });
+      const res = new Response(guidePage, { status: 200 });
+      Object.defineProperty(res, 'url', { value: 'https://maps.apple.com/guides?user=abc' });
+      return res;
+    }
     const id = new URL(url).searchParams.get('auid');
     if (failing.includes(id)) throw new TypeError('fetch failed');
     const i = IDS.indexOf(id);
@@ -52,9 +62,46 @@ test('apple-guide: inline places plus 7 looked-up places give 10 features, one r
     geometry: { type: 'Point', coordinates: [9, 48] },
     properties: { name: 'Place 0', address: 'Fellbach, Germany', source: 'apple-guide' },
   });
-  assert.deepEqual(fetch.calls.map((c) => c.url), IDS.map((id) => `https://maps.apple.com/place?auid=${id}`), 'in guide order');
-  assert.match(fetch.calls[0].init.headers['User-Agent'], /^Mozilla\/5\.0/);
-  assert.deepEqual(pauses, Array(6).fill(1000), '1 s between requests, none after the last');
+  assert.deepEqual(fetch.calls.map((c) => c.url),
+    [APPLE_UG, ...IDS.map((id) => `https://maps.apple.com/place?auid=${id}`)], 'the guide page first, then the places in guide order');
+  assert.match(fetch.calls[1].init.headers['User-Agent'], /^Mozilla\/5\.0/);
+  assert.deepEqual(pauses, Array(7).fill(1000), '1 s between requests, none after the last');
+});
+
+const GUIDE_PAGE = readFileSync(new URL('./fixtures/guide-page.html', import.meta.url), 'utf8');
+
+test('apple-guide: one fetch of the guide page gives all 10 places, no place requests', async () => {
+  const fetch = fakeApple({ guidePage: GUIDE_PAGE });
+  const pauses = [];
+  const seen = [];
+  const r = await guideToGeoJSON(APPLE_UG, { fetch, sleep: async (ms) => pauses.push(ms), onPlace: (id, p, n) => seen.push([id, p?.name, n]) });
+  assert.deepEqual(fetch.calls.map((c) => c.url), [APPLE_UG]);
+  assert.match(fetch.calls[0].init.headers['User-Agent'], /iPhone/);
+  assert.deepEqual(pauses, []);
+  assert.equal(r.total, 7);
+  assert.equal(r.found, 7);
+  assert.deepEqual(r.unresolved, []);
+  assert.equal(r.geojson.features.length, 10);
+  assert.deepEqual(r.geojson.features[3], {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [9.2741936, 48.8196266] },
+    properties: { name: 'Clutch23', address: 'Pestalozzistraße 102, 70736 Fellbach, Germany', source: 'apple-guide' },
+  });
+  assert.deepEqual(seen.map((s) => s[1]), ['Clutch23', 'Bar42', 'G4METIME', 'eCamp', 'Xperion', 'LVL World of Gaming - Berlin', 'Axezone Axtwerfen Frankfurt']);
+});
+
+test('apple-guide: ids the guide page lacks are fetched one by one', async () => {
+  const page = GUIDE_PAGE
+    .replace(/<a class="mw-place-link"[^>]*name=eCamp[^>]*>[\s\S]*?<\/a>/, '')
+    .replace(/\{"ref":"4149090964667769162","title"/, '{"ref":"4149090964667769162","x"');
+  const fetch = fakeApple({ guidePage: page });
+  const pauses = [];
+  const r = await guideToGeoJSON(APPLE_UG, { fetch, sleep: async (ms) => pauses.push(ms) });
+  assert.deepEqual(fetch.calls.map((c) => c.url), [APPLE_UG, 'https://maps.apple.com/place?auid=4149090964667769162']);
+  assert.deepEqual(pauses, [1000]);
+  assert.equal(r.found, 7);
+  assert.equal(r.geojson.features.length, 10);
+  assert.equal(r.geojson.features[6].properties.name, 'Place 3', 'eCamp from its own page, still in guide order');
 });
 
 test('apple-guide: a failing id is listed as unresolved, the rest still comes out', async () => {

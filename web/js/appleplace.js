@@ -3,16 +3,21 @@
  *
  * Apple Guides name the places Apple Maps knows only by an ID. maps.apple.com
  * refuses Cloudflare's servers, but answers phones and home computers. So the
- * lookup runs either in an iPhone Shortcut ("Insta Pinmap Apple") or in the
- * computer script tools/apple-guide.mjs; this module holds what both sides share.
+ * lookup runs either in an iPhone Shortcut (SHORTCUT_NAME) or in the computer
+ * script tools/apple-guide.mjs; this module holds what both sides share.
  *
  * Pure and browser-safe: no Node imports, no DOM. Storage is passed in.
+ *
+ * The Shortcut fetches the whole guide page once (see parseGuidePage); older
+ * Shortcuts fetched one place page per Apple ID.
  *
  * The place page https://maps.apple.com/place?auid=<id> has in its <head>:
  *   <meta property="og:title" content="<name>">
  *   <meta property="place:location:latitude|longitude" content="…">
  *   <title><name> in <city>, <country> - Apple Maps</title>
  */
+
+import { distanceM } from './dedupe.js';
 
 const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 
@@ -79,15 +84,25 @@ export function parseApplePlaceHtml(html) {
  * The iPhone Shortcut
  * ================================================================== */
 
-export const SHORTCUT_NAME = 'Insta Pinmap Apple';
+/** The Shortcut's name in the Shortcuts app; the README tells the user to use exactly this. */
+export const SHORTCUT_NAME = 'Fetch Apple Guide';
 export const SHORTCUT_RUN_URL = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}&input=clipboard`;
 
 const PLACE_URL_ID = /^https:\/\/maps\.apple\.com\/place\?auid=(\d{1,20})$/;
 const BARE_ID = /^\d{1,20}$/;
 
-/** What the Shortcut gets: one place address per line, in guide order. */
+/** One place address per line, in guide order (what the older per-place Shortcuts took). */
 export function shortcutInput(appleIds) {
   return appleIds.map((id) => `https://maps.apple.com/place?auid=${id}`).join('\n');
+}
+
+/**
+ * What "Look up with iPhone Shortcut" copies: the guide link itself (the
+ * Shortcut fetches the whole guide page once). Only a guide saved without its
+ * link falls back to the list of place addresses.
+ */
+export function shortcutClipboard(guide) {
+  return guide.link || shortcutInput(guide.appleIds || []);
 }
 
 /** Apple place ID of an auid place address or a bare ID; '' for anything else. */
@@ -166,14 +181,167 @@ export function parseShortcutPages(text, appleIds) {
   return found;
 }
 
-/** What "Paste results" reads: raw pages when the text contains `<html`, else (or when no page matches) the "@@" / tab lines. */
-export function parseShortcutPaste(text, appleIds) {
+/* ------------------------------------------------------------------ *
+ * The whole guide page
+ *
+ * The guide link (guides.apple.com/?ug=…) redirects to
+ * maps.apple.com/guides?user=…, a page that names every place of the guide,
+ * custom pins and Apple Maps places alike, in two forms:
+ *   1. the list: <a href="…/place?address=…&amp;coordinate=<lat>%2C<lon>&amp;name=…&amp;place-id=…"
+ *      data-ref="<Apple ID>"> … <div class="mw-collection-place-name …">name</div>
+ *      (custom pins: data-ref="ll.<lat>,<lon>", no place-id)
+ *   2. the map's JSON: {"ref":"<Apple ID>","title":"…","center":[<lat>,<lon>], …}
+ * ------------------------------------------------------------------ */
+
+const GUIDE_LINK_TAG = /<a\b[^>]*?\shref="([^"]*\/place\?[^"]*)"[^>]*>/gi;
+const GUIDE_LINK_COUNT = /href="[^"]*\/place\?[^"]*coordinate=/gi;
+const PLACE_NAME_DIV = /\bclass="[^"]*\bmw-collection-place-name\b[^"]*"[^>]*>([^<]*)</i;
+const JSON_SCALAR = String.raw`(?:"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?|true|false|null)`;
+const JSON_SKIP = String.raw`(?:"\w+":${JSON_SCALAR},)*?`;
+const JSON_NUMBER = String.raw`(-?\d+(?:\.\d+)?)`;
+const ANNOTATION = new RegExp(
+  String.raw`\{"ref":"([^"\\]{1,80})",${JSON_SKIP}"title":("(?:[^"\\]|\\.)*"),${JSON_SKIP}` +
+  String.raw`"center":\[\s*${JSON_NUMBER}\s*,\s*${JSON_NUMBER}\s*\]`, 'g');
+/** How far past a list link its name may be (the closing </a> usually comes first). */
+const LINK_BODY_CHARS = 4000;
+
+/** Apple appends "?" to the names of places a guide author added as an address or pin. */
+const withoutQuestionMark = (s) => s.replace(/\?+$/, '').trim();
+const sameName = (a, b) =>
+  withoutQuestionMark(String(a ?? '')).toLowerCase() === withoutQuestionMark(String(b ?? '')).toLowerCase();
+const sameSpot = (a, b) => Math.abs(a.lat - b.lat) < 1e-5 && Math.abs(a.lon - b.lon) < 1e-5;
+
+function placeOf(id, name, address, lat, lon) {
+  const n = id ? name.trim() : withoutQuestionMark(name);
+  return { id, name: n || address.split(',')[0].trim() || 'Apple Maps place', address, lat, lon };
+}
+
+/** Form 2: the map annotations with an Apple ID (numeric ref) or a custom pin (any other ref). */
+function guideAnnotations(s) {
+  const out = [];
+  for (const m of s.matchAll(ANNOTATION)) {
+    let title;
+    try { title = String(JSON.parse(m[2])); } catch { continue; }
+    const lat = Number(m[3]);
+    const lon = Number(m[4]);
+    if (!validLatLon(lat, lon)) continue;
+    out.push(placeOf(BARE_ID.test(m[1]) ? m[1] : null, title, '', lat, lon));
+  }
+  return out;
+}
+
+/** Form 1: the list links. Without a numeric data-ref, the ID comes from an annotation at the same spot. */
+function guideLinks(s, annotations) {
+  const out = [];
+  for (const m of s.matchAll(GUIDE_LINK_TAG)) {
+    let params;
+    try {
+      params = new URL(decodeEntities(m[1]), 'https://maps.apple.com').searchParams;
+    } catch {
+      continue;
+    }
+    const [latText, lonText, ...rest] = (params.get('coordinate') || '').split(',');
+    const lat = coordinate(latText);
+    const lon = coordinate(lonText);
+    if (rest.length || !validLatLon(lat, lon)) continue;
+    const ref = (m[0].match(/\bdata-ref="([^"]*)"/i) || [])[1] || '';
+    const spot = { lat, lon };
+    const id = BARE_ID.test(ref) ? ref
+      : (annotations.find((a) => a.id && sameSpot(a, spot)) || {}).id || null;
+    const after = s.slice(m.index + m[0].length, m.index + m[0].length + LINK_BODY_CHARS);
+    const end = after.search(/<\/a\s*>/i);
+    const body = end === -1 ? after : after.slice(0, end);
+    const shown = decodeEntities((body.match(PLACE_NAME_DIV) || [])[1] || '');
+    out.push(placeOf(id, params.get('name') || shown, (params.get('address') || '').trim(), lat, lon));
+  }
+  return out;
+}
+
+/**
+ * True when the paste looks like a guide page rather than place pages or "@@"
+ * lines: it has the guide's place list, or it is no place page (those carry
+ * place:location meta tags) and names maps.apple.com/guides or ≥ 2 place links.
+ */
+export function isGuidePage(text) {
   const s = String(text ?? '');
+  if (s.includes('mw-collection-place-name')) return true;
+  if (s.includes('place:location:latitude')) return false;
+  return s.includes('maps.apple.com/guides') || (s.match(GUIDE_LINK_COUNT) || []).length >= 2;
+}
+
+/**
+ * Reads every place of an Apple Maps guide page: the list links first (page
+ * order), then places only the map annotations name. Places without valid
+ * coordinates are skipped; a place named twice (same ID, or same name at the
+ * same spot) is kept once.
+ * @returns {Array<{id: string|null, name: string, address: string, lat: number, lon: number}>}
+ */
+export function parseGuidePage(html) {
+  const s = String(html ?? '');
+  const annotations = guideAnnotations(s);
+  const places = [];
+  const known = (p) => places.some((q) => (p.id && q.id === p.id) || (sameName(q.name, p.name) && sameSpot(q, p)));
+  for (const p of [...guideLinks(s, annotations), ...annotations]) {
+    if (!known(p)) places.push(p);
+  }
+  return places;
+}
+
+/**
+ * What "Paste results" reads, in this order: a guide page, raw place pages
+ * (the text contains `<html`), the "@@" / tab lines.
+ * @returns {{results: Map<string, {name, lat, lon, address}>, places: Array | null}}
+ *   results: the guide's Apple IDs found; places: every place of a guide page, else null
+ */
+export function readShortcutPaste(text, appleIds) {
+  const s = String(text ?? '');
+  if (isGuidePage(s)) {
+    const places = parseGuidePage(s);
+    if (places.length) {
+      const wanted = new Set(appleIds);
+      const results = new Map();
+      for (const { id, name, lat, lon, address } of places) {
+        if (id && wanted.has(id) && !results.has(id)) results.set(id, { name, lat, lon, address });
+      }
+      return { results, places };
+    }
+  }
   if (/<html/i.test(s)) {
     const pages = parseShortcutPages(s, appleIds);
-    if (pages.size) return pages;
+    if (pages.size) return { results: pages, places: null };
   }
-  return parseShortcutResults(s);
+  return { results: parseShortcutResults(s), places: null };
+}
+
+/** The guide's Apple IDs found in a paste (see readShortcutPaste). */
+export function parseShortcutPaste(text, appleIds) {
+  return readShortcutPaste(text, appleIds).results;
+}
+
+/** Same place: the same Apple ID, or the same name within this many meters. */
+const SAME_PLACE_M = 30;
+
+/**
+ * Appends the places of a guide page that the import rows lack (no row with
+ * their Apple ID, none with their name within 30 m) as checked rows. A page
+ * that has nothing in common with the rows belongs to another guide: then
+ * nothing is added.
+ * @returns {Array} the added rows
+ */
+export function appendGuidePlaces(entries, places) {
+  const inList = (p) => entries.some((e) =>
+    (p.id && appleIdOf(e.url) === p.id) ||
+    (Number.isFinite(e.lat) && Number.isFinite(e.lon) && sameName(e.name, p.name) &&
+      distanceM(e.lat, e.lon, p.lat, p.lon) <= SAME_PLACE_M));
+  const missing = places.filter((p) => !inList(p));
+  if (missing.length === places.length) return [];
+  const added = missing.map((p) => ({
+    name: p.name, address: p.address, lat: p.lat, lon: p.lon,
+    url: p.id ? `https://maps.apple.com/place?auid=${p.id}` : '',
+    source: 'apple-guide', note: '', warning: '', checked: true,
+  }));
+  entries.push(...added);
+  return added;
 }
 
 /**
@@ -207,11 +375,11 @@ function browserStorage() {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 }
 
-/** @param {{title, entries, appleIds}} guide */
+/** @param {{title, link?, entries, appleIds}} guide  link: the guide link the user gave */
 export function savePendingGuide(guide, { storage = browserStorage(), now = Date.now() } = {}) {
   try {
     storage?.setItem(PENDING_GUIDE_KEY, JSON.stringify({
-      title: guide.title, entries: guide.entries, appleIds: guide.appleIds, savedAt: now,
+      title: guide.title, link: guide.link || '', entries: guide.entries, appleIds: guide.appleIds, savedAt: now,
     }));
   } catch { /* full or blocked: the open dialog still has everything */ }
 }
@@ -239,5 +407,8 @@ export function loadPendingGuide({ storage = browserStorage(), now = Date.now() 
     clearPendingGuide({ storage });
     return null;
   }
-  return { title: String(g.title ?? ''), entries: g.entries, appleIds: g.appleIds, savedAt: g.savedAt };
+  return {
+    title: String(g.title ?? ''), link: typeof g.link === 'string' ? g.link : '',
+    entries: g.entries, appleIds: g.appleIds, savedAt: g.savedAt,
+  };
 }

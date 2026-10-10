@@ -128,7 +128,7 @@ export function guideImportEntries(guide) {
 /** What the import dialog needs to look up a guide's Apple Maps places; null without any. */
 export function guideOf(parsed) {
   return parsed.appleIds?.length
-    ? { title: parsed.name, entries: parsed.entries, appleIds: parsed.appleIds }
+    ? { title: parsed.name, link: parsed.link || '', entries: parsed.entries, appleIds: parsed.appleIds }
     : null;
 }
 

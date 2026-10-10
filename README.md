@@ -71,41 +71,39 @@ to look them up.
 
 ### Option A — iPhone Shortcut
 
-Build it once in the Shortcuts app (action names as in the English Shortcuts app):
+Build it once in the Shortcuts app (action names as in the English Shortcuts app).
+Shortcuts app → **+** → name the shortcut exactly **Fetch Apple Guide**, then add
+four actions:
 
-1. Shortcuts app → **+** → name the shortcut exactly **Insta Pinmap Apple**.
-2. **Get Clipboard**.
-3. **Split Text** (Clipboard) by **New Lines**.
-4. **Repeat with Each** (items = Split Text).
-5. Inside the loop: **Get Contents of URL** (URL = Repeat Item).
-6. Inside the loop: **Set Name** of Contents of URL to `page.txt` (this makes
-   the Shortcut hand over the raw page source instead of the rendered text).
-7. Inside the loop: **Add to Variable** `Results` (the renamed item).
-8. After the loop: **Combine Text** (Results, with **New Lines**).
-9. **Copy to Clipboard** (the combined text).
-10. Optional: **Show Notification** "Done. Go back to Insta Pinmap and tap Paste results."
+```
+1  Get Clipboard
+2  Get Contents of URL [Clipboard]
+3  Set Name of [Contents of URL] to [page.txt]
+4  Copy [Renamed Item] to Clipboard
+```
 
-The app reads the place name, coordinates and address out of the pasted pages
-itself, so the Shortcut needs no text matching. (The older Shortcut that copies
-`<place link>@@<name>@@<lat>@@<lon>@@<address>` lines is still accepted.)
+Step 3 makes the Shortcut hand over the raw page source instead of the rendered
+text. The guide page names every place of the guide, so one fetch is enough; the
+app reads names, addresses and coordinates out of it itself.
 
 On the first run, tap **Always Allow** when the Shortcut asks to connect to
-maps.apple.com, and **Allow Paste** (to stop being asked: Settings → Apps →
-Shortcuts → Paste from Other Apps → Allow).
+guides.apple.com and maps.apple.com, and **Allow Paste** (to stop being asked:
+Settings → Apps → Shortcuts → Paste from Other Apps → Allow).
 
-**Check it once:** copy the single line
-`https://maps.apple.com/place?auid=4053793356543820372`, run the Shortcut from
-the Shortcuts app, paste into Notes: you should see page source starting with
-`<!DOCTYPE html>`. Then, in the app's import dialog for a guide that contains
-that place, **Paste results** finds it.
+Then:
 
-Then, in the app's import dialog, tap **Look up with iPhone Shortcut**, allow
-Shortcuts to run, go back to the app, tap **Paste results** and **Import selected**.
-If Shortcuts doesn't open, tap **Open Shortcuts** below the buttons.
+1. Paste the guide link in the app (input field or **Settings → Import**); the
+   import dialog opens.
+2. Tap **Look up with iPhone Shortcut**: the app copies the guide link and starts
+   the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts** below the buttons.
+3. Go back to the app and tap **Paste results**, then **Import selected**.
+
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
-(for 24 hours).
+(for 24 hours). The Shortcut fetches the page from your phone's own connection.
 
-The Shortcut fetches the pages from your phone's own connection.
+The longer Shortcuts from earlier versions, which fetch one place page per Apple
+Maps place or copy `<place link>@@<name>@@<lat>@@<lon>@@<address>` lines, still
+work with **Paste results**.
 
 ### Option B — computer
 
@@ -115,10 +113,11 @@ With Node.js installed, in this project's folder:
 node tools/apple-guide.mjs "<guide link>"
 ```
 
-It looks up the places one per second and writes `<guide title>.geojson` with all
-places of the guide (or give a file name as a second argument). Load that file in
-the app: **Settings → Import → Choose files**. To get it onto the phone, send it
-via AirDrop, iCloud Drive or mail.
+This stays the way without an iPhone. It fetches the guide page once (and looks
+up any place the page lacks, one per second) and writes `<guide title>.geojson`
+with all places of the guide (or give a file name as a second argument). Load
+that file in the app: **Settings → Import → Choose files**. To get it onto the
+phone, send it via AirDrop, iCloud Drive or mail.
 
 ## Updates
 

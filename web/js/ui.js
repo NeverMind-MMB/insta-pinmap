@@ -8,7 +8,7 @@ import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
-  shortcutInput, SHORTCUT_RUN_URL, parseShortcutPaste, applyShortcutResults, appleIdOf,
+  shortcutClipboard, SHORTCUT_RUN_URL, readShortcutPaste, applyShortcutResults, appendGuidePlaces, appleIdOf,
   savePendingGuide, clearPendingGuide,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
@@ -517,7 +517,7 @@ function linkButton(text, href) {
 
 /**
  * @param {Array} entries  import rows; `checked: false` starts a row unchecked
- * @param {{title, entries, appleIds} | null} guide  an Apple Guide with Apple Maps
+ * @param {{title, link, entries, appleIds} | null} guide  an Apple Guide with Apple Maps
  *   places still to look up: shows the Shortcut notice and keeps the guide for 24 h
  */
 export function showImport(entries, sourceName, env, guide = null) {
@@ -594,7 +594,10 @@ export function showImport(entries, sourceName, env, guide = null) {
   drawInfo();
   drawRows();
   wireAppleLookup(guide, entries, (results) => {
-    entries.forEach((e, i) => { if (results.has(appleIdOf(e.url))) checked[i] = true; });
+    entries.forEach((e, i) => {
+      if (i >= checked.length) checked.push(e.checked !== false); // a place only the guide page had
+      else if (results.has(appleIdOf(e.url))) checked[i] = true;
+    });
     drawInfo();
     drawRows();
   });
@@ -630,7 +633,8 @@ function openExternal(url) {
 
 /**
  * The notice above the import list for a guide's Apple Maps places: hands the
- * places to the iPhone Shortcut and takes its results back. Clipboard access
+ * guide link to the iPhone Shortcut and takes its results back (the whole guide
+ * page; place pages or "@@" lines of older Shortcuts work too). Clipboard access
  * happens right in the tap handlers (iOS allows it only there); where it is
  * refused, a text box takes its place.
  */
@@ -649,7 +653,7 @@ function wireAppleLookup(guide, entries, onResults) {
   $('import-apple-text').textContent =
     `${total} ${total === 1 ? 'place is an Apple Maps place' : 'places are Apple Maps places'}. ` +
     "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
-  const input = shortcutInput(guide.appleIds);
+  const input = shortcutClipboard(guide);
 
   $('import-apple-shortcut').onclick = async () => {
     try {
@@ -667,11 +671,14 @@ function wireAppleLookup(guide, entries, onResults) {
   $('import-apple-run').onclick = () => openExternal(SHORTCUT_RUN_URL);
 
   const useResults = (text) => {
-    const results = parseShortcutPaste(text, guide.appleIds);
+    const { results, places } = readShortcutPaste(text, guide.appleIds);
     const found = applyShortcutResults(entries, results);
+    // A guide page names every place: add those the list doesn't have yet.
+    const added = places ? appendGuidePlaces(entries, places).length : 0;
     onResults(results);
-    toast(`Found ${found} of ${total} ${total === 1 ? 'place' : 'places'}.`, found ? 'success' : 'info', 5000);
-    return found;
+    toast(`Found ${found} of ${total} ${total === 1 ? 'place' : 'places'}` +
+      (added ? ` and added ${added} more.` : '.'), found || added ? 'success' : 'info', 5000);
+    return found + added;
   };
   $('import-apple-paste').onclick = async () => {
     let text;

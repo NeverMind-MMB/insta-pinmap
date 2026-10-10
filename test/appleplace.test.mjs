@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   parseApplePlaceHtml, parseShortcutResults, parseShortcutPages, parseShortcutPaste, shortcutInput, SHORTCUT_RUN_URL,
   applyShortcutResults, savePendingGuide, loadPendingGuide, clearPendingGuide, PENDING_GUIDE_KEY,
+  parseGuidePage, isGuidePage, readShortcutPaste, appendGuidePlaces, shortcutClipboard, SHORTCUT_NAME,
 } from '../web/js/appleplace.js';
 import { pruneTagFilter } from '../web/js/store.js';
 import { appleIdEntries } from '../web/js/importers.js';
@@ -112,7 +114,7 @@ test('parseShortcutResults: a missing name falls back to "Apple Maps place"', ()
 test('shortcutInput: one place URL per line in guide order; the run URL takes the clipboard', () => {
   assert.equal(shortcutInput(['3', '1', '2']),
     'https://maps.apple.com/place?auid=3\nhttps://maps.apple.com/place?auid=1\nhttps://maps.apple.com/place?auid=2');
-  assert.equal(SHORTCUT_RUN_URL, 'shortcuts://run-shortcut?name=Insta%20Pinmap%20Apple&input=clipboard');
+  assert.equal(SHORTCUT_RUN_URL, 'shortcuts://run-shortcut?name=Fetch%20Apple%20Guide&input=clipboard');
 });
 
 test('applyShortcutResults: fills matching Apple rows, checks them and clears their warning', () => {
@@ -158,9 +160,9 @@ test('pending guide: saved under its key, read back within 24 h, gone after that
   savePendingGuide(GUIDE, { storage: s, now });
   assert.equal(PENDING_GUIDE_KEY, 'insta-pinmap.pending-guide');
   const stored = JSON.parse(s.map.get(PENDING_GUIDE_KEY));
-  assert.deepEqual(stored, { ...GUIDE, savedAt: now });
+  assert.deepEqual(stored, { ...GUIDE, link: '', savedAt: now });
 
-  assert.deepEqual(loadPendingGuide({ storage: s, now: now + 23 * 3600e3 }), { ...GUIDE, savedAt: now });
+  assert.deepEqual(loadPendingGuide({ storage: s, now: now + 23 * 3600e3 }), { ...GUIDE, link: '', savedAt: now });
   assert.equal(loadPendingGuide({ storage: s, now: now + 24 * 3600e3 + 1 }), null, 'older than 24 h');
   assert.equal(s.map.has(PENDING_GUIDE_KEY), false, 'an expired one is removed');
 
@@ -287,4 +289,134 @@ test('pruneTagFilter: drops tags no pin has anymore', () => {
   const f = new Set(['a', 'gone']);
   pruneTagFilter(f, ['a', 'b']);
   assert.deepEqual([...f], ['a']);
+});
+
+/* ---------- The whole guide page (one fetch of the guide link) ---------- */
+
+const GUIDE_PAGE = readFileSync(new URL('./fixtures/guide-page.html', import.meta.url), 'utf8');
+const GUIDE_IDS = [
+  '4053793356543820372', '14921016072022586346', '9816041141257892933', '4149090964667769162',
+  '5722912085441730191', '3509017914921167370', '14862164460984384322',
+];
+const GUIDE_LINK = 'https://guides.apple.com/?ug=Cg1FcGljIEdhbWVyaW5n';
+
+test('parseGuidePage: every place of the trimmed real guide page, in page order, no duplicates', () => {
+  const places = parseGuidePage(GUIDE_PAGE);
+  assert.equal(places.length, 10, 'list links and map annotations name the same 10 places');
+  assert.deepEqual(places.map((p) => p.name), [
+    'Hive Gaming', 'Clutch23', '404', 'Red Bull Gaming Garden', 'Bar42', 'G4METIME', 'eCamp', 'Xperion',
+    'LVL World of Gaming - Berlin', 'Axezone Axtwerfen Frankfurt',
+  ]);
+  assert.deepEqual(places.filter((p) => p.id).map((p) => p.id), GUIDE_IDS);
+  assert.equal(places.filter((p) => p.id === null).length, 3, 'custom pins have no Apple ID');
+  assert.deepEqual(places[1], {
+    id: '4053793356543820372', name: 'Clutch23', address: 'Pestalozzistraße 102, 70736 Fellbach, Germany',
+    lat: 48.8196266, lon: 9.2741936,
+  });
+  assert.deepEqual(places[0], {
+    id: null, name: 'Hive Gaming', address: 'Holzschuherstraße 36, 90439 Nuremberg, Germany', lat: 49.4458656, lon: 11.0497961,
+  });
+  assert.equal(places[8].address, 'Schützenstraße 73, 10117 Berlin, Germany');
+  assert.equal(new Set(places.map((p) => `${p.lat},${p.lon}`)).size, 10);
+});
+
+test('parseGuidePage: entities and URL-encoding are decoded; a repeated link is dropped', () => {
+  const link = '<a class="mw-place-link" href="https://maps.apple.com/place?address=M%C3%BCnchen%2C%20Germany&amp;coordinate=48.1%2C11.5&amp;name=Caf%C3%A9%20%26%20Bar&amp;place-id=I1" data-ref="777">' +
+    '<div class="mw-collection-place-name">Caf&#233; &amp; Bar</div></a>';
+  const places = parseGuidePage(`<html><body>${link}${link}</body></html>`);
+  assert.deepEqual(places, [{ id: '777', name: 'Café & Bar', address: 'München, Germany', lat: 48.1, lon: 11.5 }]);
+});
+
+test('parseGuidePage: an Apple link without data-ref takes its id from the map annotations; annotation-only places are added', () => {
+  const page = GUIDE_PAGE
+    .replace(' data-ref="4053793356543820372"', '')
+    .replace(/<a class="mw-place-link"[^>]*name=Xperion[^>]*>[\s\S]*?<\/a>/, '');
+  const places = parseGuidePage(page);
+  assert.equal(places.length, 10);
+  assert.equal(places[1].id, '4053793356543820372');
+  const xperion = places.find((p) => p.name === 'Xperion');
+  assert.deepEqual(xperion, { id: '5722912085441730191', name: 'Xperion', address: '', lat: 50.9488973, lon: 6.9508416 });
+  assert.equal(places.at(-1), xperion, 'annotation-only places come after the list');
+});
+
+test('parseGuidePage: invalid coordinates are skipped; junk gives an empty list', () => {
+  const bad = '<a href="https://maps.apple.com/place?coordinate=95%2C11&amp;name=X" data-ref="1"></a>' +
+    '<a href="https://maps.apple.com/place?coordinate=abc&amp;name=Y" data-ref="2"></a>' +
+    '{"ref":"3","title":"Z","center":[1,200]}';
+  assert.deepEqual(parseGuidePage(bad), []);
+  assert.deepEqual(parseGuidePage(''), []);
+  assert.deepEqual(parseGuidePage(undefined), []);
+});
+
+test('parseShortcutPaste: a guide page fills the Apple IDs; pages and @@ lines still work', () => {
+  assert.equal(isGuidePage(GUIDE_PAGE), true);
+  assert.equal(isGuidePage(applePage('111')), false);
+  assert.equal(isGuidePage('111@@A@@1@@2@@x'), false);
+  const placeWithGuideLink = applePage('111', { name: 'Alpha' })
+    .replace('</body>', '<a href="https://maps.apple.com/guides?user=x">Guides</a></body>');
+  assert.equal(isGuidePage(placeWithGuideLink), false, 'a place page that links to a guide stays a place page');
+  assert.equal(parseShortcutPaste(placeWithGuideLink, ['111']).get('111').name, 'Alpha');
+  assert.equal(isGuidePage('<html><link rel="canonical" href="https://maps.apple.com/guides"></html>'), true);
+  const r = parseShortcutPaste(GUIDE_PAGE, GUIDE_IDS);
+  assert.deepEqual([...r.keys()], GUIDE_IDS);
+  assert.deepEqual(r.get('14921016072022586346'),
+    { name: 'Bar42', lat: 51.3418078, lon: 12.3797079, address: 'Ritterstraße 42, 04109 Leipzig, Germany' });
+  const { results, places } = readShortcutPaste(GUIDE_PAGE, GUIDE_IDS);
+  assert.equal(results.size, 7);
+  assert.equal(places.length, 10);
+  const page = readShortcutPaste(applePage('111', { name: 'Alpha' }), ['111']);
+  assert.equal(page.places, null);
+  assert.equal(page.results.get('111').name, 'Alpha');
+  assert.equal(readShortcutPaste('111@@Beta@@1@@2@@x', ['111']).results.get('111').name, 'Beta');
+});
+
+test('appendGuidePlaces: adds only places the list lacks, checked; repeated pastes add nothing more', () => {
+  const inline = [
+    { name: 'Hive Gaming', address: 'Nürnberg', lat: 49.445865599534336, lon: 11.0497961, url: '', source: 'apple-guide', note: '', warning: '' },
+    { name: '404', address: 'Dresden', lat: 51.094296213630244, lon: 13.720068679376785, url: '', source: 'apple-guide', note: '', warning: '' },
+  ];
+  const entries = [...inline, ...appleIdEntries(GUIDE_IDS.slice(0, 6), new Map())];
+  const { results, places } = readShortcutPaste(GUIDE_PAGE, GUIDE_IDS.slice(0, 6));
+  assert.equal(applyShortcutResults(entries, results), 6);
+  const added = appendGuidePlaces(entries, places);
+  assert.deepEqual(added.map((e) => e.name), ['Red Bull Gaming Garden', 'Axezone Axtwerfen Frankfurt']);
+  assert.equal(entries.length, 10);
+  assert.deepEqual(entries.at(-1), {
+    name: 'Axezone Axtwerfen Frankfurt', address: 'Friesstraße 3, 60388 Frankfurt, Germany', lat: 50.1368616, lon: 8.7415972,
+    url: 'https://maps.apple.com/place?auid=14862164460984384322', source: 'apple-guide', note: '', warning: '', checked: true,
+  });
+  assert.equal(entries.at(-2).url, '', 'a custom pin has no Apple link');
+  assert.deepEqual(appendGuidePlaces(entries, places), [], 'nothing twice');
+  assert.equal(entries.length, 10);
+});
+
+test('appendGuidePlaces: a page of another guide (nothing in common) adds nothing', () => {
+  const entries = [{ name: 'Elsewhere', address: '', lat: 1, lon: 1, url: '', source: 'apple-guide', note: '', warning: '' }];
+  assert.deepEqual(appendGuidePlaces(entries, parseGuidePage(GUIDE_PAGE)), []);
+  assert.equal(entries.length, 1);
+});
+
+test('shortcutClipboard: the guide link itself; the ID list only for a guide saved without its link', () => {
+  assert.equal(shortcutClipboard({ link: GUIDE_LINK, appleIds: ['1'] }), GUIDE_LINK);
+  assert.equal(shortcutClipboard({ appleIds: ['1', '2'] }), shortcutInput(['1', '2']));
+  assert.equal(SHORTCUT_NAME, 'Fetch Apple Guide');
+  assert.equal(SHORTCUT_RUN_URL, 'shortcuts://run-shortcut?name=Fetch%20Apple%20Guide&input=clipboard');
+});
+
+test('pending guide: keeps the original guide link', () => {
+  const s = memoryStorage();
+  const now = Date.UTC(2026, 9, 11, 12, 0, 0);
+  savePendingGuide({ ...GUIDE, link: GUIDE_LINK }, { storage: s, now });
+  assert.equal(loadPendingGuide({ storage: s, now }).link, GUIDE_LINK);
+  savePendingGuide(GUIDE, { storage: s, now });
+  assert.equal(loadPendingGuide({ storage: s, now }).link, '');
+});
+
+test('parseGuidePage: a full-size page (290 KB) parses fast', () => {
+  const big = GUIDE_PAGE.replace('</body>', `<script>${'x'.repeat(280 * 1024)}</script></body>`);
+  const t0 = performance.now();
+  const places = parseGuidePage(big);
+  const ms = performance.now() - t0;
+  assert.equal(places.length, 10);
+  assert.ok(ms < 200, `took ${ms} ms`);
 });

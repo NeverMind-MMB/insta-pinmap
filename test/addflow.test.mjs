@@ -59,5 +59,6 @@ test('Apple Guide link: inline places plus unchecked Apple Maps places go to the
   assert.equal(guide.entries.length, 3);
   assert.deepEqual(guide.appleIds.slice(0, 1), ['4053793356543820372']);
   assert.equal(guide.appleIds.length, 7);
+  assert.equal(guide.link, APPLE_UG, 'the original link goes to the Shortcut');
   assert.deepEqual(toasts, []);
 });
