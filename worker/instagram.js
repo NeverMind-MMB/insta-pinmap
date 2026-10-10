@@ -52,7 +52,15 @@ export function parseDescription(text) {
   return { username, caption: s.slice(open + 3, close).trim() };
 }
 
-export function parsePostPage(html) {
+/** Everything up to the first </head>: the meta tags live there, and less text costs less CPU time. */
+export function headOnly(html) {
+  const s = String(html || '');
+  const end = s.search(/<\/head\s*>/i);
+  return end === -1 ? s : s.slice(0, end);
+}
+
+export function parsePostPage(fullHtml) {
+  const html = headOnly(fullHtml);
   const description = metaContent(html, 'description') ?? metaContent(html, 'og:description');
   const imageUrl = metaContent(html, 'og:image') || '';
   if (!description && !imageUrl) return null;

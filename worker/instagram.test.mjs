@@ -89,3 +89,11 @@ test('imageAsDataUrl: blocks http, foreign hosts, and look-alike domains without
   // Look-alike domain
   assert.equal(await imageAsDataUrl('https://cdninstagram.com.evil.example/a.jpg', throwingFetch), '');
 });
+
+test('parsePostPage reads only the head', async () => {
+  const { headOnly } = await import('./instagram.js');
+  const body = '<body>' + 'x'.repeat(1000) + '<meta property="og:image" content="https://scontent.cdninstagram.com/late.jpg"></body>';
+  assert.equal(headOnly('<HTML><Head><title>t</title></HEAD >' + body), '<HTML><Head><title>t</title>');
+  assert.equal(parsePostPage('<html><head></head>' + body), null, 'meta tags after </head> are ignored');
+  assert.equal(parsePostPage(PAGE + body).imageUrl, 'https://scontent.cdninstagram.com/v/abc.jpg?stp=x&_nc_cat=104');
+});

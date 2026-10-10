@@ -10,12 +10,15 @@
 import { fetchPost, imageAsDataUrl } from './instagram.js';
 import { verifyTicket } from './ticket.js';
 import { ticketMinute } from '../web/js/ticket.js';
-import versionInfo from '../web/version.json';
+import versionInfo from '../web/version.json' with { type: 'json' };
 
-const RESOLVE_ALLOW = [
-  'maps.app.goo.gl', 'goo.gl', 'g.co', 'maps.google.com', 'www.google.com', 'google.com',
+/** Short-link hosts the Worker follows. Any other host ends the walk. */
+const SHORT_LINK_HOSTS = [
+  'maps.app.goo.gl', 'goo.gl', 'g.co',
   'maps.apple', 'maps.apple.com', 'guides.apple.com', 'share.apple.com',
 ];
+const MAX_HOPS = 5;
+const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const MEMORY_LIMIT = 20; // per address and minute, used when the rate-limit binding is missing
 const memoryHits = new Map();
 
@@ -38,24 +41,34 @@ function fromOtherSite(request) {
   return site !== null && site !== 'same-origin';
 }
 
-async function overLimit(env, address) {
-  if (env.IG_LIMIT) {
-    const { success } = await env.IG_LIMIT.limit({ key: address });
+function isShortLinkHost(hostname) {
+  const host = hostname.toLowerCase();
+  return SHORT_LINK_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+}
+
+async function overLimit(bindings, key) {
+  if (bindings.IG_LIMIT) {
+    const { success } = await bindings.IG_LIMIT.limit({ key });
     return !success;
   }
-  const key = `${address}:${ticketMinute()}`;
-  const hits = (memoryHits.get(key) || 0) + 1;
-  memoryHits.set(key, hits);
+  const memoryKey = `${key}:${ticketMinute()}`;
+  const hits = (memoryHits.get(memoryKey) || 0) + 1;
+  memoryHits.set(memoryKey, hits);
   if (memoryHits.size > 5000) memoryHits.clear();
   return hits > MEMORY_LIMIT;
 }
 
-async function handleInstagram(url, request, env) {
-  const address = request.headers.get('CF-Connecting-IP') || 'local';
-  if (await overLimit(env, address)) {
-    return json({ ok: false, reason: 'rate-limit', message: 'Too many requests. Wait a minute and try again.' }, 429);
-  }
-  const difficulty = Number(env.WORK_DIFFICULTY) || 20;
+function tooMany() {
+  return json({ ok: false, reason: 'rate-limit', message: 'Too many requests. Wait a minute and try again.' }, 429);
+}
+
+function clientAddress(request) {
+  return request.headers.get('CF-Connecting-IP') || 'local';
+}
+
+async function handleInstagram(url, request, bindings, deps) {
+  if (await overLimit(bindings, `ig:${clientAddress(request)}`)) return tooMany();
+  const difficulty = Number(bindings.WORK_DIFFICULTY) || 20;
   const nowMinute = ticketMinute();
   const code = url.searchParams.get('code') || '';
   const valid = await verifyTicket({
@@ -71,40 +84,76 @@ async function handleInstagram(url, request, env) {
       'X-Server-Minute': String(nowMinute),
     });
   }
-  const post = await fetchPost(code);
+  const post = await fetchPost(code, deps.fetch);
   if (!post.ok) return json(post);
-  const thumb = await imageAsDataUrl(post.imageUrl);
+  const thumb = await imageAsDataUrl(post.imageUrl, deps.fetch);
   return json({ ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username, thumb });
 }
 
-async function handleResolve(url) {
-  let target;
+/**
+ * Follows a short map link one hop at a time (never automatically) and checks
+ * every hop: as soon as a redirect leaves the short-link hosts, that address is
+ * the answer and is not fetched.
+ */
+async function handleResolve(url, request, bindings, deps) {
+  if (await overLimit(bindings, `resolve:${clientAddress(request)}`)) return tooMany();
+  let start;
   try {
-    target = new URL(url.searchParams.get('url') || '');
+    start = new URL(url.searchParams.get('url') || '');
   } catch {
     return json({ ok: false, message: 'Invalid address.' });
   }
-  const host = target.hostname.toLowerCase();
-  if (target.protocol !== 'https:' && target.protocol !== 'http:') return json({ ok: false, message: 'Invalid address.' });
-  if (!RESOLVE_ALLOW.some((h) => host === h || host.endsWith('.' + h))) {
-    return json({ ok: false, message: `I don't resolve this address: ${host}` });
+  if (start.protocol !== 'https:' && start.protocol !== 'http:') return json({ ok: false, message: 'Invalid address.' });
+  if (!isShortLinkHost(start.hostname)) {
+    return json({ ok: false, message: 'Only short Google Maps and Apple Maps links can be resolved.' });
   }
-  try {
-    const res = await fetch(target.href, { redirect: 'follow' });
-    return json({ ok: true, url: res.url });
-  } catch (e) {
-    return json({ ok: false, message: `Couldn't resolve: ${e.message}` });
+
+  const failed = () => json({ ok: false, message: "Couldn't resolve this short link." });
+  let current = start;
+  for (let hop = 0; hop < MAX_HOPS; hop++) {
+    let res;
+    try {
+      res = await deps.fetch(current.href, {
+        redirect: 'manual',
+        headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.8,de;q=0.6' },
+      });
+    } catch {
+      return failed();
+    }
+    const location = res.headers.get('Location');
+    res.body?.cancel().catch(() => {});
+    if (res.status < 300 || res.status > 399 || !location) {
+      // The walk ended on a short-link host (e.g. an Apple Maps place page).
+      return current.href !== start.href
+        ? json({ ok: true, url: current.href })
+        : json({ ok: false, message: "This short link doesn't lead anywhere." });
+    }
+    let next;
+    try {
+      next = new URL(location, current);
+    } catch {
+      return failed();
+    }
+    if (next.protocol !== 'https:' && next.protocol !== 'http:') return failed();
+    if (!isShortLinkHost(next.hostname)) return json({ ok: true, url: next.href });
+    current = next;
   }
+  return failed();
+}
+
+/** All routes. Tests replace `deps.fetch`; the default calls the global fetch. */
+export async function handleRequest(request, bindings, deps = { fetch: (...args) => fetch(...args) }) {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith('/api/')) return bindings.ASSETS.fetch(request);
+  if (request.method !== 'GET') return json({ ok: false, message: 'Method not allowed.' }, 405);
+  if (fromOtherSite(request)) return json({ ok: false, reason: 'forbidden', message: 'Not available.' }, 403);
+  if (url.pathname === '/api/ig') return handleInstagram(url, request, bindings, deps);
+  if (url.pathname === '/api/resolve') return handleResolve(url, request, bindings, deps);
+  return json({ ok: false, message: 'Not found.' }, 404);
 }
 
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    if (request.method !== 'GET') return json({ ok: false, message: 'Method not allowed.' }, 405);
-    if (fromOtherSite(request)) return json({ ok: false, reason: 'forbidden', message: 'Not available.' }, 403);
-    if (url.pathname === '/api/ig') return handleInstagram(url, request, env);
-    if (url.pathname === '/api/resolve') return handleResolve(url);
-    return json({ ok: false, message: 'Not found.' }, 404);
+  fetch(request, bindings) {
+    return handleRequest(request, bindings);
   },
 };
