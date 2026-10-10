@@ -7,6 +7,7 @@ import {
 import { placeCandidates, flagCountries, tagToWords, tagSuggestions, scoreMatches } from '../web/js/extract.js';
 import {
   readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows,
+  readLink, appleIdEntries, isAppleIdLink,
 } from '../web/js/importers.js';
 
 function equal(a, b, was = '') {
@@ -192,6 +193,42 @@ test('Parse Apple Guide (your example link)', () => {
   near(entries[2].lat, 48.169766, 1e-5, 'München');
   ok(/Holzschuherstraße 36/.test(entries[0].address), 'address');
   return '3 places with name, address and coordinates';
+});
+
+const APPLE_UG_IDS = [
+  '4053793356543820372', '14921016072022586346', '9816041141257892933', '4149090964667769162',
+  '5722912085441730191', '3509017914921167370', '14862164460984384322',
+];
+
+test('Apple Guide: known Apple Maps places come as IDs', () => {
+  const { entries, appleIds } = readAppleGuide(APPLE_UG);
+  equal(entries.length, 3, 'inline places');
+  equal(appleIds, APPLE_UG_IDS, 'Apple place IDs in guide order');
+  const link = readLink(APPLE_UG);
+  equal(link.name, 'Epic Gamering');
+  equal(link.entries.length, 3);
+  equal(link.appleIds, APPLE_UG_IDS, 'readLink passes the IDs through');
+  equal(readLink('https://maps.apple.com/place?coordinate=40.7,-73.9&name=Met').appleIds, [], 'no IDs for a place link');
+  equal(readLink('https://www.google.com/maps/place/Y/@52.52,13.405,15z').appleIds, [], 'no IDs for a Google link');
+  return '3 inline + 7 IDs';
+});
+
+test('Apple Guide: looked-up places become import entries, unknown ones stay unchecked', () => {
+  const found = new Map([['111', { id: '111', ok: true, name: 'Clutch23', address: 'Fellbach, Germany', lat: 48.8196266, lon: 9.2741936 }]]);
+  const e = appleIdEntries(['111', '222'], found);
+  equal(e.length, 2);
+  equal(e[0], {
+    name: 'Clutch23', address: 'Fellbach, Germany', lat: 48.8196266, lon: 9.2741936,
+    url: 'https://maps.apple.com/place?auid=111', source: 'apple-guide', note: '', warning: '',
+  });
+  equal(e[1].lat, null); equal(e[1].lon, null);
+  equal(e[1].name, 'Apple Maps place');
+  equal(e[1].warning, "Couldn't look this place up.");
+  equal(e[1].checked, false, 'unchecked by default');
+  ok(isAppleIdLink(e[1].url), 'auid link recognized');
+  ok(!isAppleIdLink('https://maps.apple.com/place?coordinate=1,2'), 'other Apple link');
+  ok(!isAppleIdLink(''), 'empty');
+  return '1 found, 1 unchecked';
 });
 
 test('Apple place links', () => {

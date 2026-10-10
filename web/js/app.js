@@ -4,7 +4,7 @@
 
 import { store, DEFAULT_SETTINGS } from './store.js';
 import { MainMap, TILES } from './map.js';
-import { startAdd, wireConfirm } from './addflow.js';
+import { startAdd, wireConfirm, guideImportEntries } from './addflow.js';
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
@@ -303,20 +303,32 @@ function wireSettings() {
   });
 
   // --- Import from a link ---
-  const readImportLink = () => {
+  let readingLink = false;
+  const readImportLink = async () => {
     const link = $('settings-import-link').value.trim();
-    if (!link) return;
+    if (!link || readingLink) return;
+    let parsed;
     try {
-      const { name, entries } = readLink(link);
-      if (!entries.length) {
-        $('settings-import-status').textContent = 'This link contains no place.';
-        return;
-      }
-      $('settings-import-link').value = '';
-      dlg.close();
-      showImport(entries, name, env);
+      parsed = readLink(link);
     } catch (err) {
       $('settings-import-status').textContent = err.message;
+      return;
+    }
+    if (!parsed.entries.length && !parsed.appleIds.length) {
+      $('settings-import-status').textContent = 'This link contains no place.';
+      return;
+    }
+    readingLink = true;
+    $('settings-import-link-go').disabled = true;
+    try {
+      const entries = await guideImportEntries(parsed, env);
+      $('settings-import-link').value = '';
+      $('settings-import-status').textContent = '';
+      dlg.close();
+      showImport(entries, parsed.name, env);
+    } finally {
+      readingLink = false;
+      $('settings-import-link-go').disabled = false;
     }
   };
   $('settings-import-link-go').addEventListener('click', readImportLink);

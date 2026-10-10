@@ -1,5 +1,5 @@
 /**
- * api.js — the two calls that go to the Insta Pinmap Worker.
+ * api.js — the calls that go to the Insta Pinmap Worker.
  * Each /api/ig call carries a work ticket (see ticket.js).
  */
 
@@ -78,4 +78,48 @@ export async function resolveShortLink(url) {
   } catch {
     return { ok: false, message: 'No internet. Try again later.' };
   }
+}
+
+const APPLE_BATCH = 10; // the Worker takes at most 10 IDs per call
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Looks up Apple Maps places by ID through the Worker, 10 per call, one call after the other.
+ * onProgress(done, total, info) after each call; info.waitSeconds while waiting for the rate limit.
+ * After a 429 it waits for the next minute once; a second 429 or a network error leaves the
+ * remaining IDs unresolved. Never throws.
+ * @returns {Promise<Map<string, {id, ok, name, address, lat, lon}>>} only the places found
+ */
+export async function resolveApplePlaces(ids, onProgress = () => {}, { sleep = wait } = {}) {
+  const found = new Map();
+  let waited = false;
+  let done = 0;
+  for (let i = 0; i < ids.length;) {
+    const batch = ids.slice(i, i + APPLE_BATCH);
+    let res;
+    let body;
+    try {
+      res = await fetch(`/api/apple-places?ids=${batch.join(',')}`);
+      noteVersion(res);
+      if (res.status === 429) {
+        if (waited) break;
+        waited = true;
+        const ms = 60000 - (Date.now() % 60000) + 1000;
+        onProgress(done, ids.length, { waitSeconds: Math.ceil(ms / 1000) });
+        await sleep(ms);
+        continue;
+      }
+      body = await res.json();
+    } catch {
+      break;
+    }
+    for (const p of body?.places || []) {
+      if (p?.ok && batch.includes(p.id) && Number.isFinite(p.lat) && Number.isFinite(p.lon)) found.set(p.id, p);
+    }
+    i += batch.length;
+    done = i;
+    onProgress(done, ids.length, {});
+  }
+  return found;
 }

@@ -16,3 +16,10 @@ WORK_DIFFICULTY = "18"
 name = "IG_LIMIT"
 namespace_id = "1001"
 simple = { limit = 20, period = 60 }
+
+# Per-address limit for /api/apple-places (each call looks up to 10 places on
+# maps.apple.com). Same rule as above: without the block an in-memory limit applies.
+[[ratelimits]]
+name = "APPLE_LIMIT"
+namespace_id = "1002"
+simple = { limit = 10, period = 60 }

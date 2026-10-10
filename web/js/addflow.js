@@ -15,9 +15,9 @@ import {
   findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji } from './extract.js';
-import { readLink } from './importers.js';
+import { readLink, appleIdEntries } from './importers.js';
 import { searchPlaces } from './geocode.js';
-import { fetchPost, resolveShortLink } from './api.js';
+import { fetchPost, resolveShortLink, resolveApplePlaces } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -112,6 +112,31 @@ async function addFromInstagram(link, env) {
  * Apple and Google links
  * ================================================================== */
 
+/**
+ * Import list of a parsed link (readLink): its inline entries plus, for an Apple
+ * Guide, the Apple Maps places it names only by ID, looked up through the Worker.
+ * Shows a progress toast while looking up. Never throws.
+ */
+export async function guideImportEntries(parsed, env) {
+  const ids = parsed.appleIds || [];
+  if (!ids.length) return parsed.entries;
+  const total = ids.length;
+  const progress = (done, _total, info = {}) => {
+    const text = info.waitSeconds
+      ? `Too many lookups this minute, going on in ${info.waitSeconds} s … (${done}/${total})`
+      : `Looking up ${total} Apple Maps ${total === 1 ? 'place' : 'places'} … (${done}/${total})`;
+    env.toast(text, 'info', 0);
+  };
+  progress(0, total);
+  let found;
+  try {
+    found = await resolveApplePlaces(ids, progress);
+  } finally {
+    env.hideToast?.();
+  }
+  return [...parsed.entries, ...appleIdEntries(ids, found)];
+}
+
 /** `resolved`: the link is already the answer of /api/resolve. */
 async function addFromMapLink(link, env, resolved = false) {
   let parsed;
@@ -123,8 +148,10 @@ async function addFromMapLink(link, env, resolved = false) {
   }
 
   // An Apple Guide brings several places at once, so it goes through the import.
-  if (parsed.entries.length > 1) {
-    env.showImport?.(parsed.entries, parsed.name);
+  // With Apple place IDs it always does, so the user sees what was found.
+  if (parsed.entries.length > 1 || parsed.appleIds?.length) {
+    const entries = await guideImportEntries(parsed, env);
+    env.showImport?.(entries, parsed.name);
     env.inputDone?.();
     return;
   }

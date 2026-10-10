@@ -307,16 +307,20 @@ function logicChecks() {
   });
 
   check('Parse Apple Guide (your example link)', () => {
-    const { title, entries } = readAppleGuide(APPLE_UG);
+    const { title, entries, appleIds } = readAppleGuide(APPLE_UG);
     equal(title, 'Epic Gamering');
-    equal(entries.length, 3, 'number of places');
+    equal(entries.length, 3, 'number of inline places');
+    equal(appleIds, [
+      '4053793356543820372', '14921016072022586346', '9816041141257892933', '4149090964667769162',
+      '5722912085441730191', '3509017914921167370', '14862164460984384322',
+    ], 'Apple place IDs');
     equal(entries.map((e) => e.name), ['Hive Gaming', '404', 'Red Bull Gaming Garden']);
     near(entries[0].lat, 49.445866, 1e-5, 'Nürnberg latitude');
     near(entries[0].lon, 11.049796, 1e-5, 'Nürnberg longitude');
     near(entries[1].lat, 51.094296, 1e-5, 'Dresden');
     near(entries[2].lat, 48.169766, 1e-5, 'München');
     ok(/Holzschuherstraße 36/.test(entries[0].address), 'address');
-    return '3 places with name, address and coordinates';
+    return '3 inline places with name, address and coordinates + 7 Apple place IDs';
   });
 
   check('Apple place links', () => {

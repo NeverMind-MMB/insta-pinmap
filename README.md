@@ -19,6 +19,12 @@ Also: list with search, tag filter, notes, "want to go / been there", and import
 from Apple Guides, Apple and Google Maps links, Google Takeout, My Maps
 (KML/KMZ), GPX and GeoJSON.
 
+| Import from | Where the places come from |
+|---|---|
+| Apple Guides | Names and coordinates come from the link; known Apple Maps places are looked up through the app's helper. |
+| Apple and Google Maps links | The link itself; short links are expanded by the app's helper. |
+| Google Takeout, Google list CSV, My Maps, GPX, GeoJSON | The file itself. |
+
 ## Install
 
 Open the app's address in the browser once, then:
@@ -65,6 +71,8 @@ version exists. **Settings → App → Check for updates → Install.**
   together with a small computed "work ticket" that keeps scripts from misusing it.
 - Short map links (maps.app.goo.gl, maps.apple) are expanded by the same helper;
   it sees the short link, where it points to, and your IP address.
+- Apple Guides name the places Apple Maps knows only by an ID. The same helper asks
+  Apple Maps for their name and coordinates; it sees those IDs and your IP address.
 - Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
 - Map images come from OpenStreetMap.

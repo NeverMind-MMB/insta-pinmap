@@ -1,8 +1,9 @@
 /**
  * importers.js — read places from other sources.
  *
- * Everything runs in the browser. Only two things need the server:
- * resolving short links and searching by name when coordinates are missing.
+ * Everything runs in the browser. Only three things need help from outside:
+ * resolving short links, looking up Apple Maps places of a guide (the app's
+ * helper) and searching by name when coordinates are missing.
  *
  * Every function returns entries of the form:
  *   { name, address, lat, lon, url, source, note, warning }
@@ -18,12 +19,19 @@ import { kml, gpx } from '../vendor/togeojson.js';
  *
  * The ug parameter is a protobuf. Layout (determined by taking it apart):
  *   f1 = name of the guide
- *   f2 = repeated, one entry per place
- *        f3 = address
- *        f4 = { f1 = latitude (double), f2 = longitude (double) }
- *        f5 = name of the place
- *   Further f2 entries without f3/f4 are internal references and are skipped.
+ *   f2 = repeated, one entry per place, in one of two forms:
+ *        custom pins and addresses carry everything inline:
+ *          f3 = address
+ *          f4 = { f1 = latitude (double), f2 = longitude (double) }
+ *          f5 = name of the place
+ *        places Apple Maps knows carry only their Apple place ID:
+ *          f1 = 9902 (varint), f2 = Apple place ID (uint64 varint)
+ *        Those are real places too; their name and coordinates are looked up
+ *        through the app's helper (/api/apple-places, see appleIdEntries).
  * ================================================================== */
+
+/** f1 value that marks an f2 entry as an Apple place ID reference. */
+const APPLE_ID_KIND = 9902n;
 
 function base64UrlToBytes(s) {
   let t = String(s).replace(/-/g, '+').replace(/_/g, '/');
@@ -96,7 +104,9 @@ function appleName(s) {
 
 /**
  * Reads an Apple Guides link.
- * @returns {{title: string, entries: Array}}
+ * @returns {{title: string, entries: Array, appleIds: string[]}}
+ *   entries: places with inline coordinates; appleIds: Apple place IDs (decimal
+ *   strings, guide order, unique) of the places that still have to be looked up.
  */
 export function readAppleGuide(urlOrUg) {
   let ug = urlOrUg;
@@ -111,6 +121,7 @@ export function readAppleGuide(urlOrUg) {
   const fields = protobufFields(base64UrlToBytes(ug));
   let title = '';
   const entries = [];
+  const appleIds = [];
 
   for (const f of fields) {
     if (f.number === 1 && f.type === 2 && !title) {
@@ -124,9 +135,13 @@ export function readAppleGuide(urlOrUg) {
     let name = '';
     let lat = null;
     let lon = null;
+    let kind = null;
+    let placeId = null;
 
     for (const s of sub) {
-      if (s.number === 3 && s.type === 2) address = protobufText(s.value) || address;
+      if (s.number === 1 && s.type === 0) kind = s.value;
+      else if (s.number === 2 && s.type === 0) placeId = s.value;
+      else if (s.number === 3 && s.type === 2) address = protobufText(s.value) || address;
       else if (s.number === 5 && s.type === 2) name = protobufText(s.value) || name;
       else if (s.number === 4 && s.type === 2) {
         for (const c of protobufFields(s.value)) {
@@ -137,7 +152,14 @@ export function readAppleGuide(urlOrUg) {
       }
     }
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;   // reference entry
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      // A place Apple Maps knows: only its ID is in the link.
+      if (kind === APPLE_ID_KIND && placeId !== null) {
+        const id = placeId.toString();
+        if (!appleIds.includes(id)) appleIds.push(id);
+      }
+      continue;
+    }
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
 
     entries.push({
@@ -151,7 +173,40 @@ export function readAppleGuide(urlOrUg) {
     });
   }
 
-  return { title: appleName(title), entries };
+  return { title: appleName(title), entries, appleIds };
+}
+
+/** Apple Maps link of a place ID, also the marker for "came from a guide's ID entry". */
+export function appleIdLink(id) {
+  return `https://maps.apple.com/place?auid=${id}`;
+}
+
+export function isAppleIdLink(url) {
+  return /^https:\/\/maps\.apple\.com\/place\?auid=\d+$/.test(String(url || ''));
+}
+
+/**
+ * Import entries for a guide's Apple place IDs, in ID order.
+ * @param {string[]} ids
+ * @param {Map<string, {name, address, lat, lon}>} found  places the helper looked up
+ * IDs that could not be looked up stay in the list without coordinates and unchecked,
+ * so the user sees them; the import never searches them by name.
+ */
+export function appleIdEntries(ids, found) {
+  return ids.map((id) => {
+    const p = found.get(id);
+    if (p && Number.isFinite(p.lat) && Number.isFinite(p.lon)) {
+      return {
+        name: p.name, address: p.address || '', lat: p.lat, lon: p.lon,
+        url: appleIdLink(id), source: 'apple-guide', note: '', warning: '',
+      };
+    }
+    return {
+      name: 'Apple Maps place', address: '', lat: null, lon: null,
+      url: appleIdLink(id), source: 'apple-guide', note: '', warning: "Couldn't look this place up.",
+      checked: false,
+    };
+  });
 }
 
 /* ================================================================== *
@@ -497,11 +552,11 @@ export async function readFile(file) {
 export function readLink(link) {
   const s = String(link || '').trim();
   if (/guides\.apple\.com/i.test(s) || /[?&]ug=/.test(s)) {
-    const { title, entries } = readAppleGuide(s);
-    return { name: title || 'Apple Guide', entries };
+    const { title, entries, appleIds } = readAppleGuide(s);
+    return { name: title || 'Apple Guide', entries, appleIds };
   }
   const apple = readApplePlace(s);
-  if (apple) return { name: apple.name, entries: [apple] };
+  if (apple) return { name: apple.name, entries: [apple], appleIds: [] };
 
   if (/google\.[a-z.]+\/maps|maps\.google\./i.test(s) || isGoogleShortLink(s)) {
     const k = googleCoordinates(s);
@@ -519,6 +574,7 @@ export function readLink(link) {
           ? (k.precise ? '' : 'Coordinate comes from the map center.')
           : (isGoogleShortLink(s) ? 'Short link; it will be resolved on import.' : 'No coordinates in the link.'),
       }],
+      appleIds: [],
     };
   }
   throw new Error('I don\'t recognize this link. Expected an Apple Guides, Apple Maps or Google Maps link.');

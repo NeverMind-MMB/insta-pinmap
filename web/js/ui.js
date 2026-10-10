@@ -6,7 +6,7 @@ import { store, normTag } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
-import { googleCoordinates } from './importers.js';
+import { googleCoordinates, isAppleIdLink } from './importers.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -492,11 +492,15 @@ export function showImport(entries, sourceName, env) {
   const list = $('import-list');
   $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
 
-  const withCoords = entries.filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon));
-  const withoutCoords = entries.length - withCoords.length;
+  const noCoords = (e) => !Number.isFinite(e.lat) || !Number.isFinite(e.lon);
+  const notFound = entries.filter((e) => noCoords(e) && isAppleIdLink(e.url)).length;
+  const toLookUp = entries.filter(noCoords).length - notFound;
+  const notes = [];
+  if (toLookUp) notes.push(`${toLookUp} of them have no coordinates; these will be looked up on import`);
+  if (notFound) notes.push(`${notFound} Apple Maps ${notFound === 1 ? 'place' : 'places'} couldn't be looked up and ${notFound === 1 ? 'is' : 'are'} unchecked`);
   $('import-info').textContent =
     `${entries.length} ${entries.length === 1 ? 'place' : 'places'} found` +
-    (withoutCoords ? ` — ${withoutCoords} of them have no coordinates; these will be looked up on import.` : '.');
+    (notes.length ? ` — ${notes.join('; ')}.` : '.');
 
   list.innerHTML = '';
   entries.forEach((e, i) => {
@@ -505,7 +509,7 @@ export function showImport(entries, sourceName, env) {
 
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = true;
+    cb.checked = e.checked !== false;
     cb.id = `imp-${i}`;
     cb.dataset.index = String(i);
 
@@ -574,8 +578,9 @@ async function applyImport(entries, sourceName, env) {
       }
     }
 
-    // Search by name
-    if (!Number.isFinite(lat)) {
+    // Search by name — not for Apple Maps places the guide names only by ID
+    // ("Apple Maps place" would find something random).
+    if (!Number.isFinite(lat) && !isAppleIdLink(e.url)) {
       const q = [e.name, e.address].filter(Boolean).join(', ');
       const j = await searchPlaces(q, { limit: 1 });
       const t = (j.results || [])[0];

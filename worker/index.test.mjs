@@ -173,3 +173,144 @@ test('/api/ig with a valid ticket: 200 carries X-Work-Difficulty', async () => {
   assert.equal(missing.status, 403);
   assert.equal(missing.headers.get('X-Work-Difficulty'), '18');
 });
+
+/* ---------- /api/apple-places ---------- */
+
+/** The head of a real Apple Maps place page (trimmed), as served after the auid redirect. */
+function appleHead({ name = 'Clutch23', lat = '48.8196266', lon = '9.2741936', title = 'Clutch23 in Fellbach, Germany - Apple Maps' } = {}) {
+  return `<!DOCTYPE html>
+<html lang="en-US" dir="ltr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>${title}</title>
+<meta name="referrer" content="origin">
+<link rel="canonical" href="https://maps.apple.com/place?place-id=I3841F79471A20254">
+<meta property="place:location:latitude" content="${lat}">
+<meta property="place:location:longitude" content="${lon}">
+<meta property="og:title" content="${name}">
+<meta property="og:image" content="https://snapshot.apple-mapkit.com/api/v1/snapshot?center=${lat},${lon}&amp;spn=0.009">
+<meta name="description" content=" View details about ${name} on Apple Maps.">
+</head><body><div id="app"><meta property="og:title" content="Body Title"></div></body></html>`;
+}
+
+/** Fake fetch for Apple: `pages` maps an auid to { html, finalUrl, status } or an Error to throw. */
+function fakeApple(pages) {
+  const calls = [];
+  const fn = async (url, init) => {
+    calls.push({ url, init });
+    const id = new URL(url).searchParams.get('auid');
+    const page = pages[id];
+    if (page instanceof Error) throw page;
+    if (!page) return new Response('not found', { status: 404 });
+    const res = new Response(page.html ?? '', { status: page.status ?? 200, headers: { 'Content-Type': 'text/html' } });
+    Object.defineProperty(res, 'url', { value: page.finalUrl ?? `https://maps.apple.com/place?place-id=I${id}` });
+    return res;
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('apple-places: reads name, coordinates and address from the place page head', async () => {
+  const fetch = fakeApple({ '4053793356543820372': { html: appleHead() } });
+  const res = await handleRequest(apiRequest('/api/apple-places?ids=4053793356543820372'), BINDINGS, { fetch });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('X-Robots-Tag'), 'noindex, nofollow');
+  assert.match(res.headers.get('X-App-Version'), /^\d+\.\d+\.\d+$/);
+  assert.equal(res.headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual(await res.json(), {
+    ok: true,
+    places: [{ id: '4053793356543820372', ok: true, name: 'Clutch23', address: 'Fellbach, Germany', lat: 48.8196266, lon: 9.2741936 }],
+  });
+  assert.equal(fetch.calls.length, 1);
+  assert.equal(fetch.calls[0].url, 'https://maps.apple.com/place?auid=4053793356543820372');
+  assert.match(fetch.calls[0].init.headers['User-Agent'], /^Mozilla\/5\.0/);
+});
+
+test('apple-places: decodes entities; a name containing " in " keeps the address', async () => {
+  const fetch = fakeApple({
+    '1': { html: appleHead({ name: 'Caf&#233; &amp; Bar in Town', title: 'Caf&#233; &amp; Bar in Town in M&#252;nchen, Germany - Apple Maps' }) },
+  });
+  const body = await (await handleRequest(apiRequest('/api/apple-places?ids=1'), BINDINGS, { fetch })).json();
+  assert.equal(body.places[0].name, 'Café & Bar in Town');
+  assert.equal(body.places[0].address, 'München, Germany');
+});
+
+test('apple-places: several ids in order, one failing id does not fail the batch', async () => {
+  const fetch = fakeApple({
+    '1': { html: appleHead({ name: 'One' }) },
+    '2': new Error('network down'),
+    '3': { html: appleHead({ name: 'Three', title: 'Three in Berlin, Germany - Apple Maps' }) },
+    '4': { html: '<html><head><title>Apple Maps</title></head></html>' },
+    '5': { html: appleHead({ name: 'Five' }), finalUrl: 'https://evil.example/place' },
+    '6': { html: appleHead({ name: 'Six', lat: 'abc' }) },
+    '7': { html: appleHead({ name: 'Seven' }), status: 500 },
+  });
+  const res = await handleRequest(apiRequest('/api/apple-places?ids=1,2,3,4,5,6,7'), BINDINGS, { fetch });
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.places.map((p) => [p.id, p.ok]), [
+    ['1', true], ['2', false], ['3', true], ['4', false], ['5', false], ['6', false], ['7', false],
+  ]);
+  assert.equal(body.places[2].name, 'Three');
+  assert.equal(body.places[2].address, 'Berlin, Germany');
+  assert.deepEqual(body.places[1], { id: '2', ok: false });
+  assert.deepEqual(body.places[4], { id: '5', ok: false }, 'redirect to a foreign host is not trusted');
+  assert.deepEqual(fetch.calls.map((c) => c.url.split('=')[1]), ['1', '2', '3', '4', '5', '6', '7'], 'sequential, in order');
+});
+
+test('apple-places: the meta tags are read from the head only', async () => {
+  const html = '<html><head><title>X - Apple Maps</title></head><body><meta property="og:title" content="Body">' +
+    '<meta property="place:location:latitude" content="1"><meta property="place:location:longitude" content="2"></body></html>';
+  const fetch = fakeApple({ '9': { html } });
+  const body = await (await handleRequest(apiRequest('/api/apple-places?ids=9'), BINDINGS, { fetch })).json();
+  assert.deepEqual(body.places, [{ id: '9', ok: false }]);
+});
+
+test('apple-places: refuses bad ids without fetching', async () => {
+  const fetch = fakeApple({});
+  const eleven = Array.from({ length: 11 }, (_, i) => String(i + 1)).join(',');
+  for (const ids of ['', eleven, 'abc', '12,x3', '123456789012345678901', '1,,2', '-1', '1.5', '1%20']) {
+    const res = await handleRequest(apiRequest(`/api/apple-places?ids=${ids}`), BINDINGS, { fetch });
+    assert.equal(res.status, 400, ids);
+    const body = await res.json();
+    assert.equal(body.ok, false, ids);
+    assert.equal(typeof body.message, 'string');
+  }
+  const missing = await handleRequest(apiRequest('/api/apple-places'), BINDINGS, { fetch });
+  assert.equal(missing.status, 400);
+  assert.equal(fetch.calls.length, 0);
+  const ten = Array.from({ length: 10 }, (_, i) => String(i + 1)).join(',');
+  const okRes = await handleRequest(apiRequest(`/api/apple-places?ids=${ten}`), BINDINGS, { fetch });
+  assert.equal(okRes.status, 200);
+  assert.equal(fetch.calls.length, 10);
+});
+
+test('apple-places: 10 requests per address and minute, counted apart from the other routes', async () => {
+  const fetch = fakeApple({ '1': { html: appleHead() } });
+  const headers = { 'CF-Connecting-IP': '10.8.8.8' };
+  for (let i = 0; i < 20; i++) await handleRequest(apiRequest('/api/ig?code=abcde', headers), BINDINGS, { fetch });
+  const statuses = [];
+  for (let i = 0; i < 11; i++) {
+    const res = await handleRequest(apiRequest('/api/apple-places?ids=1', headers), BINDINGS, { fetch });
+    statuses.push(res.status);
+    if (res.status === 429) assert.equal((await res.json()).reason, 'rate-limit');
+  }
+  assert.deepEqual(statuses, [...Array(10).fill(200), 429]);
+  assert.equal(fetch.calls.length, 10, 'no Apple request once over the limit');
+});
+
+test('apple-places: uses the APPLE_LIMIT binding with the apple: key when present', async () => {
+  const keys = [];
+  const APPLE_LIMIT = { limit: async ({ key }) => { keys.push(key); return { success: false }; } };
+  const fetch = fakeApple({});
+  const res = await handleRequest(apiRequest('/api/apple-places?ids=1', { 'CF-Connecting-IP': '10.7.7.7' }), { ...BINDINGS, APPLE_LIMIT }, { fetch });
+  assert.equal(res.status, 429);
+  assert.deepEqual(keys, ['apple:10.7.7.7']);
+  assert.equal(fetch.calls.length, 0);
+});
+
+test('apple-places: refused from other sites', async () => {
+  const fetch = fakeApple({});
+  const res = await handleRequest(apiRequest('/api/apple-places?ids=1', { 'Sec-Fetch-Site': 'cross-site' }), BINDINGS, { fetch });
+  assert.equal(res.status, 403);
+  assert.equal(fetch.calls.length, 0);
+});
