@@ -550,7 +550,7 @@ const DASH = String.raw`\s*(?:[-–—]|bis|to|until|till|und|and|&)\s*`;
 const RANGE_DASH = String.raw`\s*(?:[-–—]|bis(?:\s+zum)?|to|until|till|through)\s*`;
 const PAIR_WORD = /(?:^|[^\p{L}])(?:und|and)(?!\p{L})|&/iu;
 /** A number followed by one of these is a time, price, distance or count, not a day. */
-const NOT_A_DAY = String.raw`(?!\s*(?:uhr|h|am|pm|a\.m\.|p\.m\.|€|eur|euro|\$|dollars?|km|k|m|mi|miles?|min|mal|x|%|°|grad|tage?|days?|years?|jahre?|stunden|hours?|weeks?|wochen|stars|sterne|leute|personen|people|gänge|gäste|guests)(?!\p{L}))`;
+const NOT_A_DAY = String.raw`(?!\s*(?:uhr|h|am|pm|a\.m\.|p\.m\.|€|eur|euro|\$|dollars?|km|k(?!-)|m|mi|miles?|min|mal|x|%|°|grad|tage?|days?|years?|jahre?|stunden|hours?|weeks?|wochen|stars|sterne|leute|personen|people|gänge|gäste|guests)(?!\p{L}))`;
 const YEAR = String.raw`(?:,?\s+(\d{4})(?!\d))?`;
 /** Before a day number: no letter, digit, dash or number/price sign ("9.000", "€14.09", "v2.0"). */
 const LEAD_NUM = String.raw`(^|[^\p{L}\p{N}.,:/€$£_\-–—])`;
@@ -579,18 +579,21 @@ function janIsName(m, monthWord, plainDay) {
 const DATE_PATTERNS = [
   // 30.09.–02.10.(2026) · 14.09.–16.09.2026 · 15.12.2026–06.01.2027 (the year at the end counts)
   { re: String.raw`${LEAD_NUM}${DAY}\.(\d{1,2})\.(?:\d{4}|\d{2})?${RANGE_DASH}${DAY}\.(\d{1,2})\.(\d{4}|\d{2})?(?!\d|\.\d)`,
+    span: true,
     read: (m) => ({ d1: m[2], m1: m[3], d2: m[4], m2: m[5], year: m[6] }) },
   // 14.09.2026 · 14.9.26 · 14.09. · 14.–16.09. · 14.-16.9.2026
   { re: String.raw`${LEAD_NUM}${DAY}\.(?:${DASH}${DAY}\.)?(\d{1,2})\.(\d{4}|\d{2})?(?!\d|\.\d)`,
     read: (m) => ({ d1: m[2], d2: m[3], m1: m[4], year: m[5], pair: PAIR_WORD.test(m[0]) }) },
   // vom 15. März bis 31. Oktober (2026) · 15 March – 31 October
   { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})\s*(?:of\s+)?${MONTH}(?:,?\s+\d{4})?${RANGE_DASH}${DAY}(?:\.|${ORD})\s*(?:of\s+)?${MONTH}${YEAR}`,
+    span: true,
     read: (m) => ({ d1: m[2], m1: m[3], d2: m[4], m2: m[5], year: m[6], lowerOk: true }) },
   // 14. September (2026) · 14.–16. September · 14. bis 16. September · 14 Sep · 14-16 Sep 2026 · 14th of September
   { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})(?:${DASH}${DAY}(?:\.|${ORD}))?${NOT_A_DAY}\s*(?:of\s+)?${MONTH}${YEAR}`,
     read: (m) => ({ d1: m[2], d2: m[3], m1: m[4], year: m[5], pair: PAIR_WORD.test(m[0]), lowerOk: true }) },
   // Oct 12 – Nov 3 · from March 15 to October 31(, 2026)
   { re: String.raw`${LEAD_WORD}${EN_MONTH}\s*${DAY}${ORD}(?:,?\s+\d{4})?${RANGE_DASH}${EN_MONTH}\s*${DAY}${ORD}${NOT_A_DAY}${YEAR}${END}`,
+    span: true,
     read: (m) => ({ m1: m[2], d1: m[3], m2: m[4], d2: m[5], year: m[6] }) },
   // September 14(, 2026) · Sept 14-16 · Sep 14th — not "Sep 10 km", "June 10am-2pm", "Sept 9-17 Uhr"
   { re: String.raw`${LEAD_WORD}${EN_MONTH}\s*${DAY}(${ORD})(?:${DASH}${DAY}${ORD})?${NOT_A_DAY}(?!${DASH}\d)${YEAR}${END}`,
@@ -602,7 +605,10 @@ const DATE_PATTERNS = [
   // September 2026
   { re: String.raw`${LEAD_WORD}${MONTH}\s+(\d{4})(?!\d)`,
     read: (m) => ({ m1: m[2], year: m[3] }) },
-].map((p) => ({ ...p, re: new RegExp(p.re, 'giu') }));
+]
+  .map((p) => ({ ...p, re: new RegExp(p.re, 'giu') }))
+  // Spans across months first: a rejected one blocks its parts ("from march 15 to october 31" is no "31 Oct").
+  .sort((a, b) => Number(Boolean(b.span)) - Number(Boolean(a.span)));
 
 /** Links, @handles, hashtags and phone numbers never hold the event date. */
 const DATE_NOISE = /(?:https?:\/\/|www\.)\S+|@[\p{L}\p{N}_.]+|#[\p{L}\p{N}_]+|(?:\+\d{1,3}|\(?0\d{2,5}\)?)(?:[\s/()-]*\d){5,}/gu;
@@ -619,7 +625,6 @@ function isRealDay(iso) {
 }
 
 const dayMs = (iso) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
-const dayDistance = (a, b) => Math.abs(dayMs(a) - dayMs(b));
 
 function addDays(iso, days) {
   const d = new Date(dayMs(iso) + days * 86400000);
@@ -645,12 +650,6 @@ function monthOf(value, lowerOk) {
   const word = value.toLowerCase();
   if (!lowerOk && LOWERCASE_WORDS.has(word) && value[0] === word[0]) return 0;
   return MONTH_WORDS[word] || 0;
-}
-
-/** Days between an anchor day and a span (0 when the anchor lies inside it). */
-function spanDistance(s, anchor) {
-  if (s.from <= anchor && anchor <= s.to) return 0;
-  return Math.min(dayDistance(s.from, anchor), dayDistance(s.to, anchor));
 }
 
 /** Readable span: "14 Sep 2026", "14–16 Sep 2026", "Sep 2026", "15 Mar – 31 Oct 2026", "15 Dec 2026 – 6 Jan 2027". */
@@ -700,12 +699,13 @@ function resolveDate({ d1, m1, d2, m2, year, pair, lowerOk, nameLike }, postedAt
     const cutoff = posted ? addDays(posted, -30) : addDays(today, -365);
     if (r.to < cutoff) return null;
   } else {
-    // The occurrence closest to the post date (or today): a December post about "14.01." means next January.
+    // Posts usually come before the event: the next occurrence from the post date (or today) on.
+    // Up to 30 days back still counts, so a recap stays in the event's year.
     const anchor = posted || today;
-    const anchorYear = Number(anchor.slice(0, 4));
-    for (const yy of [anchorYear - 1, anchorYear, anchorYear + 1]) {
+    const grace = addDays(anchor, -30);
+    for (let yy = Number(anchor.slice(0, 4)) - 1; !r && yy <= Number(anchor.slice(0, 4)) + 2; yy++) {
       const s = span(yy);
-      if (s && (!r || spanDistance(s, anchor) < spanDistance(r, anchor))) r = s;
+      if (s && s.to >= grace) r = s;
     }
     if (!r) return null;
   }
@@ -713,6 +713,15 @@ function resolveDate({ d1, m1, d2, m2, year, pair, lowerOk, nameLike }, postedAt
   const text = spanText(r.parts, monthOnly);
   // Still running or to come (a season that is on right now counts too).
   if (r.to >= today) return { from: r.from, to: r.to, monthOnly, yearly: false, text };
+
+  // Already over, but a later occurrence is on right now ("vom 15. März bis 31. Oktober"
+  // from an old post): suggest that one with its days.
+  for (let yy = r.parts.y1 + 1; yy <= Number(today.slice(0, 4)); yy++) {
+    const s = span(yy);
+    if (s && s.from <= today && today <= s.to) {
+      return { from: s.from, to: s.to, monthOnly, yearly: true, text: `${spanText(s.parts, monthOnly)} (probably yearly)` };
+    }
+  }
 
   // Already over: most likely something that comes back every year. Recurring events
   // rarely keep their exact days, so only the start month of the next occurrence is suggested.
@@ -744,13 +753,16 @@ export function eventDate(caption, { postedAt = '', today = '' } = {}) {
   const now = isRealDay(today) ? today : localToday();
 
   let best = null;
-  for (const { re, read } of DATE_PATTERNS) {
+  const blocked = []; // [start, end) of rejected spans across months
+  for (const { re, read, span } of DATE_PATTERNS) {
     re.lastIndex = 0;
     let m;
     while ((m = re.exec(text)) !== null) {
       const start = m.index + m[1].length;
       if (best && start > best.start) break;
-      const result = resolveDate(read(m), postedAt, now);
+      const end = m.index + m[0].length;
+      const result = blocked.some(([a, b]) => start >= a && start < b) ? null : resolveDate(read(m), postedAt, now);
+      if (!result && span) blocked.push([start, end]);
       if (result) {
         const length = m[0].length - m[1].length;
         if (!best || start < best.start || length > best.length) best = { start, length, result };

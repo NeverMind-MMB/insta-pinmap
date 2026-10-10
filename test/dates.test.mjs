@@ -32,7 +32,7 @@ const POSITIVE = [
   ['Join us Sep 14th', '2026-09-14', '2026-09-14', '14 Sep 2026'],
   ['Party on the 14th of September', '2026-09-14', '2026-09-14', '14 Sep 2026'],
   ['Christmas market until December 24th', '2026-12-24', '2026-12-24', '24 Dec 2026'],
-  ['Opens May 2', '2026-05-02', '2026-05-02', null], // in the past → yearly (checked below)
+  ['Opens May 2', '2027-05-02', '2027-05-02', '2 May 2027'], // next occurrence after the post
 ];
 
 for (const [caption, from, to, text] of POSITIVE) {
@@ -85,12 +85,12 @@ test('eventDate: past day without a year → month of the next occurrence, proba
     yearlyMonth(2027, '09', '14 Sep 2025'));
   assert.deepEqual(ev('14.–16. September', { postedAt: '2025-08-01', today: '2026-10-10' }),
     { from: '2027-09-01', to: '2027-09-30', monthOnly: true, yearly: true, text: 'Sep 2027, probably yearly (last: 14–16 Sep 2025)' });
-  assert.deepEqual(ev('Opens May 2'), yearlyMonth(2027, '05', '2 May 2026'));
+  assert.deepEqual(ev('Opens May 2', { postedAt: '2026-04-20', today: '2026-08-15' }), yearlyMonth(2027, '05', '2 May 2026'));
 });
 
 test('eventDate: a past range or month rolls forward to the next year’s month', () => {
   assert.deepEqual(ev('Fest 1.-3.8.', { today: '2026-08-15' }), yearlyMonth(2027, '08', '1–3 Aug 2026'));
-  assert.deepEqual(ev('Immer im März', { today: '2026-08-15' }), yearlyMonth(2027, '03', 'Mar 2026'));
+  assert.deepEqual(ev('Immer im März', { postedAt: '2026-03-10', today: '2026-08-15' }), yearlyMonth(2027, '03', 'Mar 2026'));
   assert.deepEqual(ev('Wir waren im September da', { postedAt: '2025-08-01', today: '2026-10-10' }),
     { from: '2027-09-01', to: '2027-09-30', monthOnly: true, yearly: true, text: 'Sep 2027, probably yearly (last: Sep 2025)' });
   assert.equal(ev('Spargelzeit ab 1. Mrz').from, '2027-03-01');
@@ -297,4 +297,40 @@ test('eventDate: a running season is not yearly; an ended one gives its start mo
   assert.deepEqual(ev('vom 15. März bis 31. Oktober', { postedAt: '2025-05-01', today: '2026-11-05' }),
     { from: '2027-03-01', to: '2027-03-31', monthOnly: true, yearly: true,
       text: 'Mar 2027, probably yearly (last: 15 Mar – 31 Oct 2025)' });
+});
+
+/* ---------------- Fix round 3 ---------------- */
+
+test('eventDate: without a year the next occurrence from the post date on is meant (30 days grace)', () => {
+  const cases = [
+    ['Wir sehen uns im Dezember', '2026-06-10', '2026-08-15', { from: '2026-12-01', to: '2026-12-31', monthOnly: true, yearly: false, text: 'Dec 2026' }],
+    ['Wieder offen im Januar', '2026-07-10', '2026-08-15', { from: '2027-01-01', to: '2027-01-31', monthOnly: true, yearly: false, text: 'Jan 2027' }],
+    ['Eröffnung Ende März', '2026-09-05', '2026-09-10', { from: '2027-03-01', to: '2027-03-31', monthOnly: true, yearly: false, text: 'Mar 2027' }],
+    ['Weihnachtsmarkt 27.11.–23.12.', '2026-06-01', '2026-08-15', { from: '2026-11-27', to: '2026-12-23', monthOnly: false, yearly: false, text: '27 Nov – 23 Dec 2026' }],
+    ['Neujahrsmarkt 14.01.', '2026-12-10', '2026-12-15', { from: '2027-01-14', to: '2027-01-14', monthOnly: false, yearly: false, text: '14 Jan 2027' }],
+    ['Danke für den 14. September!', '2026-09-20', '2026-10-10', { from: '2027-09-01', to: '2027-09-30', monthOnly: true, yearly: true, text: 'Sep 2027, probably yearly (last: 14 Sep 2026)' }],
+    ['14. September', '2025-08-01', '2026-10-10', { from: '2027-09-01', to: '2027-09-30', monthOnly: true, yearly: true, text: 'Sep 2027, probably yearly (last: 14 Sep 2025)' }],
+    ['vom 15. März bis 31. Oktober', '2026-10-20', '2026-10-25', { from: '2026-03-15', to: '2026-10-31', monthOnly: false, yearly: false, text: '15 Mar – 31 Oct 2026' }],
+  ];
+  for (const [caption, postedAt, today, expected] of cases) {
+    assert.deepEqual(ev(caption, { postedAt, today }), expected, `${caption} (${postedAt} / ${today})`);
+  }
+});
+
+test('eventDate: an old post whose season is on again today suggests the running season', () => {
+  assert.deepEqual(ev('vom 15. März bis 31. Oktober', { postedAt: '2025-05-01', today: '2026-05-01' }),
+    { from: '2026-03-15', to: '2026-10-31', monthOnly: false, yearly: true, text: '15 Mar – 31 Oct 2026 (probably yearly)' });
+  // Outside the season it is the month level again.
+  assert.equal(ev('vom 15. März bis 31. Oktober', { postedAt: '2025-05-01', today: '2026-11-05' }).text,
+    'Mar 2027, probably yearly (last: 15 Mar – 31 Oct 2025)');
+});
+
+test('eventDate: "K-" after a day is no unit', () => {
+  assert.equal(ev('Nov 7 K-Pop Night').text, '7 Nov 2026');
+  assert.equal(ev('Sep 10 k run'), null);
+});
+
+test('eventDate: a rejected span across months gives no part of it', () => {
+  assert.equal(ev('from march 15 to october 31'), null);
+  assert.equal(ev('from march 15 to october 31, then again on 20.09.').text, '20 Sep 2026');
 });
