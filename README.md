@@ -106,8 +106,7 @@ their **own** free Cloudflare account. It takes about 15 minutes.
 Good to know:
 - Cloudflare's free plan allows 100,000 requests a day; one added post or short link is one request.
 - `WORK_DIFFICULTY` in `wrangler.toml` sets how much work a phone does per post
-  (about 1–2 seconds at 20 on a computer; phones can be slower). Lower it if adding
-  a post feels slow on your phone.
+  (about 1 second at 18 on a phone; raise it only if your phone is fast).
 - To update your copy later: download the new version and run the deploy again.
 
 ## Disclaimer
