@@ -14,7 +14,7 @@ import {
   shortcode, normalizeLink, embedLink, isInstagramLink,
   findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
-import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji } from './extract.js';
+import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, eventDate } from './extract.js';
 import { readLink, appleIdEntries } from './importers.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink, resolveApplePlaces } from './api.js';
@@ -87,6 +87,7 @@ async function addFromInstagram(link, env) {
   }
 
   const caption = ig.ok ? ig.caption || '' : '';
+  const postedAt = ig.ok ? ig.postedAt || '' : '';
   const { candidates, countries, hintedCountries } = placeCandidates(caption, {
     username: ig.username, location: ig.location,
   });
@@ -95,10 +96,11 @@ async function addFromInstagram(link, env) {
     source: 'instagram',
     post: {
       url: canonical, shortcode: code,
-      caption, username: ig.username || '', thumb: ig.thumb || '',
+      caption, username: ig.username || '', thumb: ig.thumb || '', postedAt,
     },
     igError: ig.ok ? null : ig,
     titleSuggestion: candidates[0]?.text || '',
+    whenSuggestion: eventDate(caption, { postedAt })?.text || '',
     candidates,
     countries,
     hintedCountries,
@@ -236,6 +238,8 @@ export async function openConfirm(cfg) {
   // --- Reset fields ---
   $('confirm-title').value = cfg.titleSuggestion || '';
   $('confirm-note').value = cfg.note || '';
+  $('confirm-when').value = cfg.whenSuggestion || '';
+  $('confirm-when-hint').hidden = !cfg.whenSuggestion;
   $('confirm-search').value = '';
   setStatus('wishlist');
   drawTags();
@@ -464,6 +468,7 @@ async function save(env) {
 
   const title = $('confirm-title').value.trim() || place.name || 'Untitled';
   const note = $('confirm-note').value.trim();
+  const when = $('confirm-when').value.trim().slice(0, 100);
   const post = state.post || null;
 
   const neighbors = nearbyPins(store.db, place.lat, place.lon, store.settings.radiusM);
@@ -476,6 +481,7 @@ async function save(env) {
       if (post) {
         store.attachPost(target.id, post);
         if (state.tags.length) store.updatePin(target.id, { tags: [...new Set([...(target.tags || []), ...state.tags])] });
+        if (when && !target.when) store.updatePin(target.id, { when });
         env.toast(`Post attached to "${target.title}" — ${postsAtPin(store.pin(target.id).posts.length)} now.`, 'success');
       } else {
         env.toast(`"${target.title}" is already here.`, 'info');
@@ -494,6 +500,7 @@ async function save(env) {
     title,
     address: place.address || '',
     note,
+    when,
     status: state.status,
     tags: state.tags,
     post,
@@ -559,6 +566,11 @@ function askNearby(neighbors, place, title) {
 
 export function wireConfirm(env) {
   $('confirm-save').addEventListener('click', () => save(env));
+
+  // The "from the post" hint goes once the suggestion is cleared.
+  $('confirm-when').addEventListener('input', () => {
+    if (!$('confirm-when').value.trim()) $('confirm-when-hint').hidden = true;
+  });
 
   // Once you touch the title yourself, no match overwrites it any more.
   $('confirm-title').addEventListener('input', () => {

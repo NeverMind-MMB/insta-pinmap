@@ -111,13 +111,13 @@ export const store = {
 
   pin(id) { return this.db.pins.find((p) => p.id === id) || null; },
 
-  addPin({ lat, lon, title, address = '', note = '', status = 'wishlist', tags = [], post = null, source = 'manual' }) {
+  addPin({ lat, lon, title, address = '', note = '', when = '', status = 'wishlist', tags = [], post = null, source = 'manual' }) {
     const now = new Date().toISOString();
     const pin = {
       id: newId('p'),
       lat: round7(lat), lon: round7(lon),
       title: String(title || 'Untitled').trim(),
-      address, note, status,
+      address, note, when: cleanWhen(when), status,
       tags: [...new Set(tags.map(normTag).filter(Boolean))],
       source,
       createdAt: now, updatedAt: now,
@@ -149,6 +149,7 @@ export const store = {
       const pin = db.pins.find((p) => p.id === id);
       if (!pin) return null;
       Object.assign(pin, fields);
+      if ('when' in fields) pin.when = cleanWhen(fields.when);
       if (fields.tags) {
         pin.tags = [...new Set(fields.tags.map(normTag).filter(Boolean))];
         rememberTags(db, pin.tags);
@@ -317,8 +318,19 @@ function makePost(p) {
     caption: String(p.caption || '').slice(0, 4000),
     username: p.username || '',
     thumb: p.thumb || '',
+    postedAt: cleanDay(p.postedAt),
     addedAt: new Date().toISOString(),
   };
+}
+
+/** What the user wrote under "When": a trimmed string of at most 100 characters. */
+function cleanWhen(value) {
+  return typeof value === 'string' ? value.trim().slice(0, 100) : '';
+}
+
+/** A post date is kept only as 'YYYY-MM-DD'. */
+function cleanDay(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
 }
 
 function rememberTags(db, tags) {
@@ -366,6 +378,7 @@ export function normalizeDb(raw) {
       title: String(p.title || p.name || 'Untitled'),
       address: String(p.address || ''),
       note: String(p.note || ''),
+      when: cleanWhen(p.when),
       status: p.status === 'visited' ? 'visited' : 'wishlist',
       tags: [...new Set((Array.isArray(p.tags) ? p.tags : []).map(normTag).filter(Boolean))],
       source: p.source || p.quelle || 'manual',
@@ -377,6 +390,7 @@ export function normalizeDb(raw) {
         caption: String(x.caption || ''),
         username: x.username || '',
         thumb: x.thumb || '',
+        postedAt: cleanDay(x.postedAt),
         addedAt: x.addedAt || new Date().toISOString(),
       })),
       keptApartFrom: Array.isArray(p.keptApartFrom) ? p.keptApartFrom

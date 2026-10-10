@@ -7,6 +7,7 @@ import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
+import { formatDay } from './extract.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,7 +72,7 @@ export function filteredPins() {
   if (q) {
     pins = pins.filter((p) => {
       const haystack = [
-        p.title, p.address, p.note,
+        p.title, p.address, p.note, p.when,
         ...(p.tags || []),
         ...(p.posts || []).map((x) => `${x.caption} ${x.username}`),
       ].join(' ').toLowerCase();
@@ -190,6 +191,7 @@ export function drawList(pins, onClick) {
     meta.textContent = [
       pin.address || `${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}`,
       count > 1 ? `${count} posts` : null,
+      pin.when ? `📅 ${pin.when}` : null,
     ].filter(Boolean).join(' · ');
 
     const right = document.createElement('span');
@@ -247,6 +249,18 @@ export function showDetail(pinId, env) {
     i.type = 'text';
     i.id = 'detail-title';
     i.value = pin.title;
+    return i;
+  }));
+
+  // --- When ---
+  body.appendChild(field('When', () => {
+    const i = document.createElement('input');
+    i.type = 'text';
+    i.id = 'detail-when';
+    i.maxLength = 100;
+    i.autocomplete = 'off';
+    i.placeholder = 'e.g. 14–16 Sep 2026';
+    i.value = pin.when || '';
     return i;
   }));
 
@@ -397,13 +411,21 @@ export function showDetail(pinId, env) {
       del.className = 'btn btn--small btn--danger';
       del.textContent = 'Remove post';
       del.addEventListener('click', () => {
-        // The dialog is drawn again below: keep title, note, status and tag edits first.
+        // The dialog is drawn again below: keep title, when, note, status and tag edits first.
         if (snapshot() !== initial) store.updatePin(pin.id, formValues());
         store.removePost(pin.id, post.url);
         env.redraw();
         showDetail(pin.id, env);
       });
-      foot.append(a, del);
+      foot.append(a);
+      const posted = formatDay(post.postedAt);
+      if (posted) {
+        const date = document.createElement('span');
+        date.className = 'detail__coords';
+        date.textContent = `Posted ${posted}`;
+        foot.append(date);
+      }
+      foot.append(del);
       li.appendChild(foot);
       ul.appendChild(li);
     }
@@ -415,6 +437,7 @@ export function showDetail(pinId, env) {
     const active = statusGroup.querySelector('[aria-checked="true"]');
     return {
       title: $('detail-title').value.trim() || pin.title,
+      when: $('detail-when').value.trim().slice(0, 100),
       note: $('detail-note').value.trim(),
       status: active?.dataset.status || pin.status,
       tags,
@@ -448,6 +471,7 @@ export function showDetail(pinId, env) {
 
   const snapshot = () => JSON.stringify({
     title: $('detail-title').value.trim(),
+    when: $('detail-when').value.trim(),
     note: $('detail-note').value.trim(),
     status: statusGroup.querySelector('[aria-checked="true"]')?.dataset.status,
     tags,

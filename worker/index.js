@@ -92,7 +92,10 @@ async function handleInstagram(url, request, bindings, deps) {
   const post = await fetchPost(code, deps.fetch);
   if (!post.ok) return json(post, 200, difficultyHeader);
   const thumb = await imageAsDataUrl(post.imageUrl, deps.fetch);
-  return json({ ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username, thumb }, 200, difficultyHeader);
+  return json({
+    ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username,
+    postedAt: post.postedAt || '', thumb,
+  }, 200, difficultyHeader);
 }
 
 /**

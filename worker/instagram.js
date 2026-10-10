@@ -38,6 +38,37 @@ export function metaContent(html, key) {
   return null;
 }
 
+/** Month words in the date part of the description, English and German. */
+const MONTHS = {
+  january: 1, jan: 1, januar: 1, jänner: 1, february: 2, feb: 2, februar: 2,
+  march: 3, mar: 3, märz: 3, maerz: 3, april: 4, apr: 4, may: 5, mai: 5,
+  june: 6, jun: 6, juni: 6, july: 7, jul: 7, juli: 7, august: 8, aug: 8,
+  september: 9, sep: 9, sept: 9, october: 10, oct: 10, oktober: 10, okt: 10,
+  november: 11, nov: 11, december: 12, dec: 12, dezember: 12, dez: 12,
+};
+
+/** 'YYYY-MM-DD' if day, month word and year form a real date, otherwise ''. */
+function isoDay(year, monthWord, day) {
+  const m = MONTHS[String(monthWord).toLowerCase()];
+  const y = Number(year);
+  const d = Number(day);
+  if (!m || d < 1 || d > new Date(Date.UTC(y, m, 0)).getUTCDate()) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
+ * Date the post was published, from the part between username and caption:
+ * "on January 4, 2019", "am 4. Januar 2019" or "am January 4, 2019".
+ */
+export function postedDate(part) {
+  const s = String(part || '');
+  const en = s.match(/(?:^|\s)(\p{L}+)\.?\s+(\d{1,2}),?\s+(\d{4})(?!\d)/u);
+  if (en) return isoDay(en[3], en[1], en[2]);
+  const de = s.match(/(?:^|\s)(\d{1,2})\.?\s+(\p{L}+)\.?\s+(\d{4})(?!\d)/u);
+  if (de) return isoDay(de[3], de[2], de[1]);
+  return '';
+}
+
 /**
  * '<likes>, <comments> - <username> <date word> <date>: "<caption>"'
  * The date word depends on the language ("on", "am", …).
@@ -47,9 +78,10 @@ export function parseDescription(text) {
   const dash = s.indexOf(' - ');
   const open = s.indexOf(': "');
   const close = s.lastIndexOf('"');
-  if (dash === -1 || open === -1 || close <= open + 2) return { username: '', caption: s };
+  if (dash === -1 || open === -1 || close <= open + 2) return { username: '', caption: s, postedAt: '' };
   const username = (s.slice(dash + 3).match(/^[A-Za-z0-9._]+/) || [''])[0];
-  return { username, caption: s.slice(open + 3, close).trim() };
+  const postedAt = open > dash ? postedDate(s.slice(dash + 3 + username.length, open)) : '';
+  return { username, caption: s.slice(open + 3, close).trim(), postedAt };
 }
 
 /** Everything up to the first </head>: the meta tags live there, and less text costs less CPU time. */
@@ -64,8 +96,8 @@ export function parsePostPage(fullHtml) {
   const description = metaContent(html, 'description') ?? metaContent(html, 'og:description');
   const imageUrl = metaContent(html, 'og:image') || '';
   if (!description && !imageUrl) return null;
-  const { username, caption } = parseDescription(description || '');
-  return { username, caption, imageUrl };
+  const { username, caption, postedAt } = parseDescription(description || '');
+  return { username, caption, postedAt, imageUrl };
 }
 
 export async function fetchPost(code, fetchFn = fetch) {
@@ -87,7 +119,10 @@ export async function fetchPost(code, fetchFn = fetch) {
     if (res.status !== 200) { reason = `http-${res.status}`; continue; }
     const page = parsePostPage(await res.text());
     if (page && (page.caption || page.imageUrl)) {
-      return { ok: true, shortcode: code, caption: page.caption, username: page.username, imageUrl: page.imageUrl };
+      return {
+        ok: true, shortcode: code, caption: page.caption, username: page.username,
+        postedAt: page.postedAt, imageUrl: page.imageUrl,
+      };
     }
     reason = 'not-found';
   }

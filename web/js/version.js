@@ -1,5 +1,5 @@
 /** version.js — must match web/version.json (a Node test checks this). */
-export const APP_VERSION = '2.0.2';
+export const APP_VERSION = '2.0.3';
 
 export function compareVersions(a, b) {
   const pa = String(a).split('.').map(Number);

@@ -111,3 +111,36 @@ test('normalizeDb drops hostile tag colours and non-http post links', () => {
   assert.equal(db.tags.find((t) => t.name === 'b').color, '#b8543f');
   assert.deepEqual(db.pins[0].posts.map((x) => x.url), ['https://www.instagram.com/p/AAA111/']);
 });
+
+test('normalizeDb keeps a valid "when" and post date, drops invalid ones', () => {
+  const post = (postedAt) => ({ url: 'https://www.instagram.com/p/AAA111/', postedAt });
+  const db = normalizeDb({ pins: [
+    pin('a', '2026-01-01T00:00:00.000Z', { when: '14–16 Sep 2026', posts: [post('2019-01-04')] }),
+    pin('b', '2026-01-01T00:00:00.000Z', { when: { evil: 1 }, posts: [post('4 Jan 2019')] }),
+    pin('c', '2026-01-01T00:00:00.000Z', { when: 42, posts: [post(20190104)] }),
+    pin('d', '2026-01-01T00:00:00.000Z', { when: 'x'.repeat(150) }),
+    pin('e', '2026-01-01T00:00:00.000Z'),
+  ] });
+  const [a, b, c, d, e] = db.pins;
+  assert.equal(a.when, '14–16 Sep 2026');
+  assert.equal(a.posts[0].postedAt, '2019-01-04');
+  assert.equal(b.when, '');
+  assert.equal(b.posts[0].postedAt, '');
+  assert.equal(c.when, '');
+  assert.equal(c.posts[0].postedAt, '');
+  assert.equal(d.when.length, 100);
+  assert.equal(e.when, '');
+});
+
+test('addPin stores a trimmed "when" and the post date', () => {
+  store.db = normalizeDb({});
+  const p = store.addPin({ lat: 1, lon: 2, title: 'T', when: '  Sep 2026  ',
+    post: { url: 'https://www.instagram.com/p/BBB222/', postedAt: '2019-01-04' } });
+  assert.equal(p.when, 'Sep 2026');
+  assert.equal(p.posts[0].postedAt, '2019-01-04');
+  const q = store.addPin({ lat: 1, lon: 3, title: 'U', post: { url: 'https://www.instagram.com/p/CCC333/', postedAt: 'yesterday' } });
+  assert.equal(q.when, '');
+  assert.equal(q.posts[0].postedAt, '');
+  clearTimeout(store._saveTimer);
+  store._saveTimer = null;
+});

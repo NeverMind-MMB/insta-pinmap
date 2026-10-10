@@ -28,8 +28,8 @@ test('parseDescription keeps quotes and line breaks inside the caption', () => {
 });
 
 test('parseDescription: empty caption and unknown format', () => {
-  assert.deepEqual(parseDescription('5 likes, 0 comments - some.user on May 1, 2026: ""'), { username: 'some.user', caption: '' });
-  assert.deepEqual(parseDescription('Something else entirely'), { username: '', caption: 'Something else entirely' });
+  assert.deepEqual(parseDescription('5 likes, 0 comments - some.user on May 1, 2026: ""'), { username: 'some.user', caption: '', postedAt: '2026-05-01' });
+  assert.deepEqual(parseDescription('Something else entirely'), { username: '', caption: 'Something else entirely', postedAt: '' });
 });
 
 test('parsePostPage returns the decoded image URL', () => {
@@ -96,4 +96,27 @@ test('parsePostPage reads only the head', async () => {
   assert.equal(headOnly('<HTML><Head><title>t</title></HEAD >' + body), '<HTML><Head><title>t</title>');
   assert.equal(parsePostPage('<html><head></head>' + body), null, 'meta tags after </head> are ignored');
   assert.equal(parsePostPage(PAGE + body).imageUrl, 'https://scontent.cdninstagram.com/v/abc.jpg?stp=x&_nc_cat=104');
+});
+
+test('parseDescription reads the post date: English, German and mixed', () => {
+  const at = (d) => parseDescription(d).postedAt;
+  assert.equal(at('60M likes, 4M comments - world_record_egg on January 4, 2019: "Let’s go"'), '2019-01-04');
+  assert.equal(at('60M likes, 4M comments - world_record_egg am 4. Januar 2019: "Los"'), '2019-01-04');
+  assert.equal(at('60M likes, 4M comments - world_record_egg am January 4, 2019: "Los"'), '2019-01-04');
+  assert.equal(at('5 likes, 0 comments - a.b am 15. März 2026: "x"'), '2026-03-15');
+  assert.equal(at('5 likes, 0 comments - a.b on Sept 30, 2025: "x"'), '2025-09-30');
+});
+
+test('parseDescription: missing or impossible post date gives an empty string', () => {
+  assert.equal(parseDescription('5 likes, 0 comments - some.user: "no date here"').postedAt, '');
+  assert.equal(parseDescription('5 likes, 0 comments - some.user on February 30, 2026: "x"').postedAt, '');
+  assert.equal(parseDescription('5 likes, 0 comments - some.user on Smarch 3, 2026: "x"').postedAt, '');
+  assert.equal(parseDescription('Something else entirely').postedAt, '');
+  assert.equal(parseDescription('').postedAt, '');
+});
+
+test('parsePostPage and fetchPost pass the post date on', async () => {
+  assert.equal(parsePostPage(PAGE).postedAt, '2019-01-04');
+  const r = await fetchPost('BsOGulcndj-', fakeFetch([{ body: PAGE }]));
+  assert.equal(r.postedAt, '2019-01-04');
 });

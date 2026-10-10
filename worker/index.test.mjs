@@ -174,6 +174,20 @@ test('/api/ig with a valid ticket: 200 carries X-Work-Difficulty', async () => {
   assert.equal(missing.headers.get('X-Work-Difficulty'), '18');
 });
 
+test('/api/ig answer carries the post date', async () => {
+  const { solveTicket, ticketMinute } = await import('../web/js/ticket.js');
+  const minute = ticketMinute();
+  const nonce = solveTicket('BsOGulcndj-', minute, 8);
+  const page = '<head><meta name="description" content="9 likes, 1 comments - egg on January 4, 2019: &quot;hi&quot;"></head>';
+  const fetch = async (url) => (String(url).startsWith('https://www.instagram.com/p/')
+    ? new Response(page, { status: 200 }) : new Response('', { status: 404 }));
+  const res = await handleRequest(apiRequest(`/api/ig?code=BsOGulcndj-&m=${minute}&n=${nonce}`), { ...BINDINGS, WORK_DIFFICULTY: '8' }, { fetch });
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.postedAt, '2019-01-04');
+  assert.equal(body.caption, 'hi');
+});
+
 /* ---------- /api/apple-places ---------- */
 
 /** The head of a real Apple Maps place page (trimmed), as served after the auid redirect. */

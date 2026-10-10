@@ -502,3 +502,155 @@ export function scoreMatches(matches, ctx = {}) {
     })
     .sort((a, b) => b.points - a.points);
 }
+
+/* ------------------------------------------------------------------ *
+ * Dates: when the event in a caption takes place
+ * ------------------------------------------------------------------ */
+
+/** Month words, English and German, full names and common abbreviations (data). */
+const MONTH_WORDS = {
+  january: 1, jan: 1, januar: 1, jänner: 1,
+  february: 2, feb: 2, febr: 2, februar: 2,
+  march: 3, mar: 3, märz: 3, maerz: 3, mär: 3, mrz: 3,
+  april: 4, apr: 4,
+  may: 5, mai: 5,
+  june: 6, jun: 6, juni: 6,
+  july: 7, jul: 7, juli: 7,
+  august: 8, aug: 8,
+  september: 9, sep: 9, sept: 9,
+  october: 10, oct: 10, oktober: 10, okt: 10,
+  november: 11, nov: 11,
+  december: 12, dec: 12, dezember: 12, dez: 12,
+};
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+const MONTH = String.raw`(${Object.keys(MONTH_WORDS).sort((a, b) => b.length - a.length).join('|')})\.?(?!\p{L})`;
+const DAY = String.raw`(\d{1,2})`;
+const ORD = String.raw`(?:st|nd|rd|th)?`;
+const DASH = String.raw`\s*(?:[-–—]|bis|to|until|till)\s*`;
+const YEAR = String.raw`(?:,?\s+(\d{4})(?!\d))?`;
+/** Before a day number: no letter, digit, dash or number/price sign ("9.000", "€14.09", "v2.0"). */
+const LEAD_NUM = String.raw`(^|[^\p{L}\p{N}.,:/€$£_\-–—])`;
+const LEAD_WORD = String.raw`(^|[^\p{L}\p{N}_])`;
+const MONTH_PREFIX = String.raw`(?:im|in|this|next|diesen|nächsten|kommenden|anfang|mitte|ende|early|mid|late|end of|beginning of|start of)`;
+
+/** Each pattern reads { d1, d2, month | monthWord, year } from its match; group 1 is the lead character. */
+const DATE_PATTERNS = [
+  // 14.09.2026 · 14.9.26 · 14.09. · 14.–16.09. · 14.-16.9.2026
+  { re: String.raw`${LEAD_NUM}${DAY}\.(?:${DASH}${DAY}\.)?(\d{1,2})\.(\d{4}|\d{2})?(?!\d|\.\d)`,
+    read: (m) => ({ d1: m[2], d2: m[3], month: m[4], year: m[5] }) },
+  // 14. September (2026) · 14.–16. September · 14. bis 16. September · 14 Sep · 14-16 Sep 2026 · 14th of September
+  { re: String.raw`${LEAD_NUM}${DAY}(?:\.|${ORD})(?:${DASH}${DAY}(?:\.|${ORD}))?\s*(?:of\s+)?${MONTH}${YEAR}`,
+    read: (m) => ({ d1: m[2], d2: m[3], monthWord: m[4], year: m[5] }) },
+  // September 14(, 2026) · Sept 14-16 · Sep 14th
+  { re: String.raw`${LEAD_WORD}${MONTH}\s*${DAY}${ORD}(?:${DASH}${DAY}${ORD})?${YEAR}(?![\d:]|[.,]\d)`,
+    read: (m) => ({ monthWord: m[2], d1: m[3], d2: m[4], year: m[5] }) },
+  // im / in / this / Ende / Anfang September (2026) — not when a day follows
+  { re: String.raw`${LEAD_WORD}${MONTH_PREFIX}[\s-]+${MONTH}(?:\s+(\d{4})(?!\d)|(?!\s*\d))`,
+    read: (m) => ({ monthWord: m[2], year: m[3] }) },
+  // September 2026
+  { re: String.raw`${LEAD_WORD}${MONTH}\s+(\d{4})(?!\d)`,
+    read: (m) => ({ monthWord: m[2], year: m[3] }) },
+].map((p) => ({ ...p, re: new RegExp(p.re, 'giu') }));
+
+/** Links, @handles, hashtags and phone numbers never hold the event date. */
+const DATE_NOISE = /(?:https?:\/\/|www\.)\S+|@[\p{L}\p{N}_.]+|#[\p{L}\p{N}_]+|(?:\+\d{1,3}|\(?0\d{2,5}\)?)(?:[\s/()-]*\d){5,}/gu;
+
+const pad2 = (n) => String(n).padStart(2, '0');
+const daysIn = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const isoOf = (y, m, d) => `${y}-${pad2(m)}-${pad2(d)}`;
+
+function isRealDay(iso) {
+  const m = ISO_DAY.exec(String(iso || ''));
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return mo >= 1 && mo <= 12 && d >= 1 && d <= daysIn(y, mo);
+}
+
+function localToday() {
+  const d = new Date();
+  return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+/** '2019-01-04' → '4 Jan 2019' (the same in every locale); '' for anything else. */
+export function formatDay(iso) {
+  if (!isRealDay(iso)) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${SHORT_MONTHS[m - 1]} ${y}`;
+}
+
+/** Applies the year rules to what a pattern read; null if it is no real date. */
+function resolveDate({ d1, d2, month, monthWord, year }, postedAt, today) {
+  if (monthWord != null) {
+    if (monthWord.toLowerCase() === 'may' && monthWord[0] !== 'M') return null; // "you may 14 …"
+    month = MONTH_WORDS[monthWord.toLowerCase()];
+  }
+  month = Number(month);
+  if (!(month >= 1 && month <= 12)) return null;
+
+  const monthOnly = d1 == null;
+  const first = monthOnly ? 1 : Number(d1);
+  const lastDay = monthOnly || d2 == null ? null : Number(d2);
+  if (first < 1 || (lastDay != null && lastDay < first)) return null;
+
+  const explicit = year != null;
+  let y = explicit
+    ? (year.length === 2 ? 2000 + Number(year) : Number(year))
+    : Number((isRealDay(postedAt) ? postedAt : today).slice(0, 4));
+  if (y < 1900 || y > 2199) return null;
+
+  const span = (yy) => {
+    const last = monthOnly ? daysIn(yy, month) : lastDay ?? first;
+    return last > daysIn(yy, month) ? null : { from: isoOf(yy, month, first), to: isoOf(yy, month, last), last };
+  };
+  let r = span(y);
+  if (!r) return null;
+
+  let yearly = false;
+  if (!explicit && r.to < today) {
+    // No year and already over: most likely something that comes back every year.
+    yearly = true;
+    const start = y;
+    do { y++; r = span(y); } while ((!r || r.to < today) && y < start + 8);
+    if (!r) return null;
+  }
+
+  const mon = SHORT_MONTHS[month - 1];
+  const text = monthOnly ? `${mon} ${y}`
+    : r.last === first ? `${first} ${mon} ${y}`
+      : `${first}–${r.last} ${mon} ${y}`;
+  return { from: r.from, to: r.to, monthOnly, yearly, text: yearly ? `${text} (probably yearly)` : text };
+}
+
+/**
+ * The date an event in the caption takes place, if the caption names one.
+ * The first date in the text wins.
+ * @param {string} caption
+ * @param {object} [ctx]  { postedAt: 'YYYY-MM-DD' | '', today: 'YYYY-MM-DD' (default: today) }
+ * @returns {null | {from: string, to: string, monthOnly: boolean, yearly: boolean, text: string}}
+ */
+export function eventDate(caption, { postedAt = '', today = '' } = {}) {
+  const text = String(caption || '').replace(DATE_NOISE, (s) => ' '.repeat(s.length));
+  if (!/\d|\p{L}/u.test(text)) return null;
+  const now = isRealDay(today) ? today : localToday();
+
+  let best = null;
+  for (const { re, read } of DATE_PATTERNS) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const start = m.index + m[1].length;
+      if (best && start > best.start) break;
+      const result = resolveDate(read(m), postedAt, now);
+      if (result) {
+        const length = m[0].length - m[1].length;
+        if (!best || start < best.start || length > best.length) best = { start, length, result };
+        break;
+      }
+      re.lastIndex = m.index + 1;
+    }
+  }
+  return best ? best.result : null;
+}

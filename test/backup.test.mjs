@@ -55,3 +55,18 @@ test('Hostile colour and javascript: link never reach the viewer markup', () => 
   assert.match(viewerData, /#8a8f98/);
   assert.doesNotMatch(rest.replace(viewerData, ''), /onerror|javascript:/);
 });
+
+test('Backup viewer popup shows the escaped "when" line', () => {
+  const withWhen = { version: 1, tags: [],
+    pins: [{ id: 'p', lat: 1, lon: 2, title: 't', tags: [], when: '<b>14–16 Sep</b> & more', posts: [] }] };
+  const h = buildBackupHtml(withWhen, { leafletJs: '', leafletCss: '', colorOf: () => '#b8543f' });
+  assert.doesNotMatch(h, /<b>14/);
+  // Run the viewer script against a stand-in Leaflet and collect the popup markup.
+  const script = h.slice(h.lastIndexOf('<script>') + 8, h.lastIndexOf('</script>'));
+  const popups = [];
+  const chain = { addTo: () => chain, setView: () => chain, fitBounds: () => chain, bindPopup: (x) => { popups.push(x); return chain; } };
+  const L = { map: () => chain, tileLayer: () => chain, divIcon: () => ({}), marker: () => chain };
+  new Function('L', script)(L);
+  assert.equal(popups.length, 1);
+  assert.match(popups[0], /📅 &lt;b&gt;14–16 Sep&lt;\/b&gt; &amp; more/);
+});
