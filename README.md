@@ -73,22 +73,26 @@ to look them up.
 
 Build it once in the Shortcuts app (action names as in the English Shortcuts app).
 Shortcuts app → **+** → name the shortcut exactly **Fetch Apple Guide**, then add
-four actions:
+five actions:
 
 ```
 1  Get Clipboard
 2  Get Contents of URL [Clipboard]
 3  Set Name of [Contents of URL] to [page.txt]
-4  Copy [Renamed Item] to Clipboard
+4  Get Text from [Renamed Item]
+5  Copy [Text] to Clipboard
 ```
 
 Step 3 makes the Shortcut hand over the raw page source instead of the rendered
-text. The guide page names every place of the guide, so one fetch is enough; the
+text; step 4 puts it on the clipboard as plain text, not as a file. The guide page names every place of the guide, so one fetch is enough; the
 app reads names, addresses and coordinates out of it itself.
 
 On the first run, tap **Always Allow** when the Shortcut asks to connect to
 guides.apple.com and maps.apple.com, and **Allow Paste** (to stop being asked:
 Settings → Apps → Shortcuts → Paste from Other Apps → Allow).
+
+**Check it once:** copy your guide link, run the Shortcut, paste into Notes — you
+should see page source that contains `mw-collection-place-name`.
 
 Then:
 
@@ -101,9 +105,11 @@ Then:
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
 (for 24 hours). The Shortcut fetches the page from your phone's own connection.
 
-The longer Shortcuts from earlier versions, which fetch one place page per Apple
-Maps place or copy `<place link>@@<name>@@<lat>@@<lon>@@<address>` lines, still
-work with **Paste results**.
+**Paste results** still reads the output of the longer Shortcuts from earlier
+versions (one place page per Apple Maps place, or
+`<place link>@@<name>@@<lat>@@<lon>@@<address>` lines). The **Look up with iPhone
+Shortcut** button, however, needs the Shortcut named exactly **Fetch Apple Guide**:
+rebuild it as the five actions above.
 
 ### Option B — computer
 

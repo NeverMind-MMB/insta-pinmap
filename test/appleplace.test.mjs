@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   parseApplePlaceHtml, parseShortcutResults, parseShortcutPages, parseShortcutPaste, shortcutInput, SHORTCUT_RUN_URL,
   applyShortcutResults, savePendingGuide, loadPendingGuide, clearPendingGuide, PENDING_GUIDE_KEY,
-  parseGuidePage, isGuidePage, readShortcutPaste, appendGuidePlaces, shortcutClipboard, SHORTCUT_NAME,
+  parseGuidePage, isGuidePage, readShortcutPaste, appendGuidePlaces, shortcutClipboard, SHORTCUT_NAME, SHORTCUT_NEEDS_LINK,
 } from '../web/js/appleplace.js';
 import { pruneTagFilter } from '../web/js/store.js';
 import { appleIdEntries } from '../web/js/importers.js';
@@ -396,9 +396,11 @@ test('appendGuidePlaces: a page of another guide (nothing in common) adds nothin
   assert.equal(entries.length, 1);
 });
 
-test('shortcutClipboard: the guide link itself; the ID list only for a guide saved without its link', () => {
+test('shortcutClipboard: the guide link itself; nothing for a guide saved without its link', () => {
   assert.equal(shortcutClipboard({ link: GUIDE_LINK, appleIds: ['1'] }), GUIDE_LINK);
-  assert.equal(shortcutClipboard({ appleIds: ['1', '2'] }), shortcutInput(['1', '2']));
+  assert.equal(shortcutClipboard({ appleIds: ['1', '2'] }), '');
+  assert.equal(shortcutClipboard({ link: '', appleIds: ['1'] }), '');
+  assert.equal(SHORTCUT_NEEDS_LINK, 'Paste the guide link again to use the Shortcut.');
   assert.equal(SHORTCUT_NAME, 'Fetch Apple Guide');
   assert.equal(SHORTCUT_RUN_URL, 'shortcuts://run-shortcut?name=Fetch%20Apple%20Guide&input=clipboard');
 });

@@ -8,7 +8,7 @@ import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
-  shortcutClipboard, SHORTCUT_RUN_URL, readShortcutPaste, applyShortcutResults, appendGuidePlaces, appleIdOf,
+  shortcutClipboard, SHORTCUT_NEEDS_LINK, SHORTCUT_RUN_URL, readShortcutPaste, applyShortcutResults, appendGuidePlaces, appleIdOf,
   savePendingGuide, clearPendingGuide,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
@@ -656,6 +656,11 @@ function wireAppleLookup(guide, entries, onResults) {
   const input = shortcutClipboard(guide);
 
   $('import-apple-shortcut').onclick = async () => {
+    // A guide kept from 2.0.4 has no link; the Shortcut needs it.
+    if (!input) {
+      toast(SHORTCUT_NEEDS_LINK, 'info', 6000);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(input);
     } catch {

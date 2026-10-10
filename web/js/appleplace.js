@@ -7,6 +7,7 @@
  * script tools/apple-guide.mjs; this module holds what both sides share.
  *
  * Pure and browser-safe: no Node imports, no DOM. Storage is passed in.
+ * Depends only on ./dedupe.js (distanceM, for matching guide-page places to rows).
  *
  * The Shortcut fetches the whole guide page once (see parseGuidePage); older
  * Shortcuts fetched one place page per Apple ID.
@@ -98,12 +99,14 @@ export function shortcutInput(appleIds) {
 
 /**
  * What "Look up with iPhone Shortcut" copies: the guide link itself (the
- * Shortcut fetches the whole guide page once). Only a guide saved without its
- * link falls back to the list of place addresses.
+ * Shortcut fetches the whole guide page once). '' for a guide saved without
+ * its link (by 2.0.4): then the user has to paste the guide link again.
  */
 export function shortcutClipboard(guide) {
-  return guide.link || shortcutInput(guide.appleIds || []);
+  return guide.link || '';
 }
+
+export const SHORTCUT_NEEDS_LINK = 'Paste the guide link again to use the Shortcut.';
 
 /** Apple place ID of an auid place address or a bare ID; '' for anything else. */
 export function appleIdOf(text) {
