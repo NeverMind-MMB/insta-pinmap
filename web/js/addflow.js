@@ -502,8 +502,7 @@ function askNearby(neighbors, place, title) {
       btn.type = 'button';
       btn.className = 'candidate';
       btn.innerHTML = '<span class="candidate__name"></span><span class="candidate__address"></span>';
-      btn.querySelector('.candidate__flag').textContent = flagEmoji(t.countryCode);
-    btn.querySelector('.candidate__name').textContent = `Attach to "${pin.title}"`;
+      btn.querySelector('.candidate__name').textContent = `Attach to "${pin.title}"`;
       btn.querySelector('.candidate__address').textContent = `${distanceText(distance)} away`;
       btn.addEventListener('click', () => { chosen = pin; dlg.close('attach'); });
       li.appendChild(btn);
