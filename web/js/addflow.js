@@ -106,7 +106,8 @@ async function addFromInstagram(link, env) {
  * Apple and Google links
  * ================================================================== */
 
-async function addFromMapLink(link, env) {
+/** `resolved`: the link is already the answer of /api/resolve. */
+async function addFromMapLink(link, env, resolved = false) {
   let parsed;
   try {
     parsed = readLink(link);
@@ -128,11 +129,15 @@ async function addFromMapLink(link, env) {
   }
 
   // Short link? Resolve it first.
-  if (!Number.isFinite(e0.lat) && /goo\.gl|maps\.apple\/|g\.co/i.test(e0.url || link)) {
+  // Resolved at most once: an answer that is again a short link is not sent back.
+  if (!resolved && !Number.isFinite(e0.lat) && /goo\.gl|maps\.apple\/|g\.co/i.test(e0.url || link)) {
+    const sent = e0.url || link;
     env.toast('Resolving the short link …', 'info', 8000);
-    const j = await resolveShortLink(e0.url || link);
+    const j = await resolveShortLink(sent);
     env.hideToast?.();
-    if (j.ok && j.url) return addFromMapLink(j.url, env);
+    if (j.ok && j.url && j.url !== sent) return addFromMapLink(j.url, env, true);
+    env.toast(j.message || "Couldn't resolve this short link.", 'error', 6000);
+    return;
   }
 
   return openConfirm({

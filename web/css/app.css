@@ -602,6 +602,9 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
 }
 .reminder > span { flex: 1 1 12rem; }
 
+/* The hidden attribute must win over display rules such as .reminder's flex. */
+[hidden] { display: none !important; }
+
 #btn-settings { position: relative; }
 #btn-settings.has-update::after {
   content: ''; position: absolute; top: 6px; right: 6px;

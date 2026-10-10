@@ -62,6 +62,9 @@ version exists. **Settings → App → Check for updates → Install.**
 - Pins, notes and tags never leave your phone.
 - Reading a post sends only the post's code to the app's helper on Cloudflare,
   together with a small computed "work ticket" that keeps scripts from misusing it.
+- Short map links (maps.app.goo.gl, maps.apple) are expanded by the same helper;
+  it sees only the short link.
+- Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
 - Map images come from OpenStreetMap.
 - Search engines are asked not to list the app (robots.txt and noindex).
@@ -100,9 +103,10 @@ their **own** free Cloudflare account. It takes about 15 minutes.
 7. Open that address on your phone and install the app (see "Install").
 
 Good to know:
-- Cloudflare's free plan allows 100,000 requests a day; one added post is one request.
+- Cloudflare's free plan allows 100,000 requests a day; one added post or short link is one request.
 - `WORK_DIFFICULTY` in `wrangler.toml` sets how much work a phone does per post
-  (about 1 second at 20). Lower it if adding a post feels slow on your phone.
+  (about 1–2 seconds at 20 on a computer; phones can be slower). Lower it if adding
+  a post feels slow on your phone.
 - To update your copy later: download the new version and run the deploy again.
 
 ## Disclaimer

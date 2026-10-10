@@ -96,8 +96,7 @@ async function start() {
     $('backup-reminder').hidden = false;
   }
   $('backup-reminder-save').addEventListener('click', async () => {
-    await exportBackup();
-    $('backup-reminder').hidden = true;
+    if (await exportBackup()) $('backup-reminder').hidden = true;
   });
   $('backup-reminder-later').addEventListener('click', () => { $('backup-reminder').hidden = true; });
 
@@ -123,6 +122,9 @@ async function start() {
       );
     }
   });
+
+  // Tells the startup guard in index.html that the app is running.
+  window.__instaPinmapStarted = true;
 }
 
 /* ================================================================== *
@@ -136,7 +138,7 @@ function wireInput() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const value = field.value.trim();
-    if (!value) return;
+    if (!value || $('btn-go').disabled) return;
     $('btn-go').disabled = true;
     try {
       await startAdd(value, env);
@@ -152,9 +154,11 @@ function wireInput() {
   // Paste from the clipboard: the way to go on the iPhone and the
   // fallback on Android if the share menu does not offer the app.
   $('btn-paste').addEventListener('click', async () => {
+    if ($('btn-go').disabled) return; // an add is still running
     try {
       const text = await navigator.clipboard.readText();
       if (!text) { toast('The clipboard is empty.', 'info'); return; }
+      if ($('btn-go').disabled) return;
       field.value = text.trim();
       form.requestSubmit();
     } catch {
@@ -313,7 +317,12 @@ function wireSettings() {
   });
 
   // --- Backup ---
-  $('settings-export-html').addEventListener('click', exportBackup);
+  $('settings-export-html').addEventListener('click', async () => {
+    if (await exportBackup()) {
+      $('settings-backup-age').textContent = backupAgeLabel();
+      $('backup-reminder').hidden = true;
+    }
+  });
 
   $('settings-restore').addEventListener('change', async (e) => {
     const f = e.target.files[0];
@@ -352,6 +361,7 @@ function wireShared() {
 start().catch((e) => {
   console.error(e);
   toast('Startup failed: ' + e.message, 'error', 0);
+  window.__instaPinmapStartFailed?.(); // the startup guard's "Reinstall app files" banner
 });
 
 // For the self-test page and for experimenting in the console

@@ -378,6 +378,8 @@ export function showDetail(pinId, env) {
       del.className = 'btn btn--small btn--danger';
       del.textContent = 'Remove post';
       del.addEventListener('click', () => {
+        // The dialog is drawn again below: keep title, note, status and tag edits first.
+        if (snapshot() !== initial) store.updatePin(pin.id, formValues());
         store.removePost(pin.id, post.url);
         env.redraw();
         showDetail(pin.id, env);
@@ -390,14 +392,18 @@ export function showDetail(pinId, env) {
   }
 
   // --- Footer buttons ---
-  $('detail-save').onclick = () => {
+  function formValues() {
     const active = statusGroup.querySelector('[aria-checked="true"]');
-    store.updatePin(pin.id, {
+    return {
       title: $('detail-title').value.trim() || pin.title,
       note: $('detail-note').value.trim(),
       status: active?.dataset.status || pin.status,
       tags,
-    });
+    };
+  }
+
+  $('detail-save').onclick = () => {
+    store.updatePin(pin.id, formValues());
     dlg.close();
     env.redraw();
     toast('Saved.', 'success');
@@ -594,35 +600,69 @@ async function applyImport(entries, sourceName, env) {
  * Backup
  * ================================================================== */
 
-function download(name, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
+/** Offers the file as a download (computers, Firefox). The link must outlive the user's tap on "Download". */
+function download(file) {
+  const url = URL.createObjectURL(file);
   const a = document.createElement('a');
   a.href = url;
-  a.download = name;
+  a.download = file.name;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 import { buildBackupHtml, backupAgeText } from './backup.js';
 
+async function fetchText(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${path} could not be loaded`);
+  return r.text();
+}
+
+/**
+ * Builds the backup file and hands it over: via the share sheet where the
+ * browser can share files (phones), otherwise as a download.
+ * Returns true when the backup was handed over, false otherwise.
+ */
 export async function exportBackup() {
   toast('Building the backup …', 'info', 0);
+  let file;
   try {
     const [leafletJs, leafletCss] = await Promise.all([
-      fetch('/vendor/leaflet/leaflet.js').then((r) => r.text()),
-      fetch('/vendor/leaflet/leaflet.css').then((r) => r.text()),
+      fetchText('/vendor/leaflet/leaflet.js'),
+      fetchText('/vendor/leaflet/leaflet.css'),
     ]);
     const html = buildBackupHtml(store.db, { leafletJs, leafletCss, colorOf: (p) => store.pinColor(p) });
     const date = new Date().toISOString().slice(0, 10);
-    download(`insta-pinmap-${date}.html`, html, 'text/html');
-    store.setSetting('lastBackupAt', new Date().toISOString());
-    toast('Backup saved. Keep the file somewhere safe (Files, iCloud Drive, Google Drive).', 'success', 6000);
+    file = new File([html], `insta-pinmap-${date}.html`, { type: 'text/html' });
   } catch (e) {
     toast("Couldn't build the backup: " + e.message, 'error');
+    return false;
   }
+
+  let canShare = false;
+  try { canShare = Boolean(navigator.canShare?.({ files: [file] })); } catch { /* no file sharing */ }
+  if (canShare) {
+    hideToast();
+    try {
+      await navigator.share({ files: [file], title: 'Insta Pinmap backup' });
+      store.setSetting('lastBackupAt', new Date().toISOString());
+      toast('Backup saved.', 'success', 6000);
+      return true;
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        toast('Backup not saved.', 'info', 4000);
+        return false;
+      }
+      // Share sheet refused (e.g. NotAllowedError): offer the download instead.
+    }
+  }
+
+  download(file);
+  store.setSetting('lastBackupAt', new Date().toISOString());
+  toast('Backup file created. Keep it somewhere safe (Files, iCloud Drive, Google Drive).', 'success', 6000);
+  return true;
 }
 
 /** Asks how to load a backup: merge (default) or replace everything (tap twice). */

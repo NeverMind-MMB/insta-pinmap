@@ -1,6 +1,10 @@
 /**
  * idb.js — a tiny key-value wrapper around IndexedDB.
  * One database "insta-pinmap", one object store "kv".
+ *
+ * The open connection is reused, but browsers can close it (iOS does after the
+ * app was in the background). Then the next call opens a new one, so saving
+ * keeps working without a reload.
  */
 
 const DB_NAME = 'insta-pinmap';
@@ -14,20 +18,35 @@ function open() {
   opening ??= new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onclose = () => { opening = null; };
+      db.onversionchange = () => { db.close(); opening = null; };
+      resolve(db);
+    };
     req.onerror = () => { opening = null; reject(req.error || new Error('Storage could not be opened.')); };
   });
   return opening;
 }
 
-function run(mode, action) {
-  return open().then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, mode);
-    const req = action(tx.objectStore(STORE_NAME));
-    tx.oncomplete = () => resolve(req.result);
-    tx.onerror = () => reject(tx.error || new Error('Storage error.'));
-    tx.onabort = () => reject(tx.error || new Error('Storage write was aborted (full?).'));
-  }));
+function run(mode, action, retried = false) {
+  return open().then((db) => {
+    let tx;
+    try {
+      tx = db.transaction(STORE_NAME, mode);
+    } catch (e) {
+      // The connection was closed under us (InvalidStateError, UnknownError): open a new one once.
+      opening = null;
+      if (retried) throw e;
+      return run(mode, action, true);
+    }
+    return new Promise((resolve, reject) => {
+      const req = action(tx.objectStore(STORE_NAME));
+      tx.oncomplete = () => resolve(req.result);
+      tx.onerror = () => reject(tx.error || new Error('Storage error.'));
+      tx.onabort = () => reject(tx.error || new Error('Storage write was aborted (full?).'));
+    });
+  });
 }
 
 export function idbGet(key) {

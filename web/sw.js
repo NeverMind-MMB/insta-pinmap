@@ -17,15 +17,19 @@ async function rebuild(res) {
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    if ((await cache.keys()).length === 0) {
-      const info = await (await fetch('/version.json', { cache: 'reload' })).json();
-      const urls = ['/version.json', ...info.files];
+    // version.json is written last, so its presence means the cache is complete.
+    // If it is missing (first install or an interrupted write), download everything again.
+    if (!(await cache.match('/version.json'))) {
+      const infoRes = await fetch('/version.json', { cache: 'reload' });
+      if (!infoRes.ok) throw new Error('Download failed: /version.json');
+      const info = await infoRes.clone().json();
       const fresh = [];
-      for (const url of urls) {
+      for (const url of info.files) {
         const res = await fetch(new Request(url, { cache: 'reload' }));
         if (!res.ok) throw new Error(`Download failed: ${url}`);
         fresh.push([url, await rebuild(res)]);
       }
+      fresh.push(['/version.json', await rebuild(infoRes)]);
       for (const [url, copy] of fresh) await cache.put(url, copy);
     }
     await self.skipWaiting();

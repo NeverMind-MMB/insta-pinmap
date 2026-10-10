@@ -349,6 +349,57 @@
 
 <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+<script>
+// Startup guard: if the app files are broken (e.g. an incomplete offline copy),
+// offer to download them again. Pins in phone storage are not touched.
+(function () {
+  var shown = false;
+  function show() {
+    if (shown || window.__instaPinmapStarted) return;
+    shown = true;
+    var bar = document.createElement('div');
+    bar.className = 'reminder';
+    bar.id = 'startup-guard';
+    bar.setAttribute('role', 'alert');
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;border-top:0;border-bottom:1px solid var(--border);';
+    var text = document.createElement('span');
+    text.textContent = "The app didn't start properly.";
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn--small btn--primary';
+    btn.textContent = 'Reinstall app files';
+    btn.addEventListener('click', function () {
+      var offline = function () { text.textContent = 'Connect to the internet, then tap again.'; };
+      if (!navigator.onLine) { offline(); return; }
+      btn.disabled = true;
+      Promise.resolve()
+        .then(function () { return window.caches ? caches.delete('insta-pinmap-app') : null; })
+        .then(function () {
+          return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : [];
+        })
+        .then(function (regs) { return Promise.all(regs.map(function (r) { return r.unregister(); })); })
+        .catch(function () { /* reload anyway */ })
+        .then(function () {
+          btn.disabled = false;
+          if (!navigator.onLine) { offline(); return; }
+          location.reload();
+        });
+    });
+    bar.append(text, btn);
+    document.body.appendChild(bar);
+    // A slow start that finishes after all: remove the banner again.
+    var poll = setInterval(function () {
+      if (window.__instaPinmapStarted) { clearInterval(poll); bar.remove(); }
+    }, 1000);
+  }
+  window.__instaPinmapStartFailed = show;
+  // A script or module that fails to load fires "error" on its element (no bubbling, so capture).
+  window.addEventListener('error', function (e) {
+    if (e.target && e.target.tagName === 'SCRIPT') show();
+  }, true);
+  setTimeout(show, 10000);
+})();
+</script>
 <script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/vendor/markercluster/leaflet.markercluster.js"></script>
 <script type="module" src="/js/app.js"></script>

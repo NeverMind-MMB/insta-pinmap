@@ -347,6 +347,15 @@ function logicChecks() {
     return 'Written and read back';
   });
 
+  check('Startup guard (Reinstall app files)', async () => {
+    const page = await (await fetch('/index.html')).text();
+    ok(page.includes('Reinstall app files'), 'index.html has no startup guard');
+    ok(page.indexOf('Reinstall app files') < page.indexOf('<script type="module"'), 'the guard must come before the app module');
+    const app = await (await fetch('/js/app.js')).text();
+    ok(app.includes('window.__instaPinmapStarted = true'), 'app.js does not report a successful start');
+    return 'index.html has the guard, app.js reports its start';
+  });
+
   check('Parse CSV', () => {
     const z = csvRows('Title,Note,URL\n"Café, klein","Sagt ""hallo""",https://x.y\nZwei,,https://a.b\n');
     equal(z.length, 3);
