@@ -8,9 +8,9 @@ import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
-  shortcutClipboard, SHORTCUT_NEEDS_LINK, SHORTCUT_RUN_URL, applyPasteToGuide, appleIdOf,
-  savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds,
-  roundTwoState, roundTwoStarted, markRoundTwoAnswered, roundTwoNotice, roundTwoButton,
+  SHORTCUT_RUN_URL, applyPasteToGuide, appleIdOf,
+  savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
+  lookupNotice, retryButton, copiedNotice,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
 
@@ -635,13 +635,12 @@ function openExternal(url) {
 }
 
 /**
- * The notice above the import list for a guide's Apple Maps places: hands the
- * guide link to the iPhone Shortcut and takes its results back (the whole guide
- * page; place pages or "@@" lines of older Shortcuts work too). Apple's guide
- * page holds only the first 20 places, so after a paste the button copies the
- * links of the places still missing for a second run (round 2). Clipboard
- * access happens right in the tap handlers (iOS allows it only there); where it
- * is refused, a text box takes its place.
+ * The notice above the import list for a guide's Apple Maps places: hands one
+ * place link per Apple ID to the iPhone Shortcut and takes its results back
+ * (the place pages; a guide page or "@@" lines of older Shortcuts work too),
+ * by paste or as a file. After a paste, the button tries the places still
+ * missing again. Clipboard access happens right in the tap handlers (iOS allows
+ * it only there); where it is refused, a text box takes its place.
  */
 function wireAppleLookup(guide, entries, onResults) {
   const box = $('import-apple');
@@ -654,40 +653,30 @@ function wireAppleLookup(guide, entries, onResults) {
   // A real link as a second way in, should iOS block opening Shortcuts from script.
   $('import-apple-open').href = SHORTCUT_RUN_URL;
   $('import-apple-results').value = '';
+  $('import-apple-file').value = '';
   if (!guide) return;
 
   const total = guide.appleIds.length;
-  const guideLink = shortcutClipboard(guide);
-  // Round 2 starts once a paste has found places or a round 2 was copied or
-  // answered (also when the dialog reopens with them).
-  let pasted = roundTwoStarted(guide);
-  const state = () => roundTwoState(guide, entries);
+  // After a paste (also when the dialog reopens with places found) the notice
+  // says what is missing and the button tries just those again.
+  let pasted = guide.found.size > 0;
+  const missing = () => missingAppleIds(guide.appleIds, entries);
 
   const drawNotice = () => {
-    const { missing, notFound, next, retry } = state();
+    const left = missing().length;
     $('import-apple-text').textContent = pasted
-      ? roundTwoNotice({ total, missing: missing.length, notFound: notFound.length })
+      ? lookupNotice({ total, missing: left })
       : `${total} ${total === 1 ? 'place is an Apple Maps place' : 'places are Apple Maps places'}. ` +
         "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
-    // Places no round 2 has tried come first; then the ones not found can be tried again.
-    $('import-apple-shortcut').textContent = pasted ? roundTwoButton(next.length, retry) : 'Look up with iPhone Shortcut';
-    $('import-apple-shortcut').hidden = pasted && !next.length;
+    $('import-apple-shortcut').textContent = pasted ? retryButton(left) : 'Look up with iPhone Shortcut';
+    $('import-apple-shortcut').hidden = pasted && !left;
   };
   drawNotice();
 
   $('import-apple-shortcut').onclick = async () => {
-    const left = pasted ? state().next : [];
-    const input = left.length ? shortcutInput(left) : guideLink;
-    // A guide kept from 2.0.4 has no link; round 1 needs it.
-    if (!input) {
-      toast(SHORTCUT_NEEDS_LINK, 'info', 6000);
-      return;
-    }
-    if (left.length) {
-      // Kept with the guide: the answer may come after iOS unloaded the page.
-      guide.requested = left;
-      savePendingGuide(guide);
-    }
+    // Before any paste every place is missing: one link per Apple ID of the guide.
+    const ids = missing();
+    const input = shortcutInput(ids);
     try {
       await navigator.clipboard.writeText(input);
     } catch {
@@ -697,10 +686,7 @@ function wireAppleLookup(guide, entries, onResults) {
       $('import-apple-list').select();
       return;
     }
-    $('import-apple-copied').textContent = (left.length
-      ? `Links of ${left.length} ${left.length === 1 ? 'place' : 'places'} copied.`
-      : `Guide link copied (${input.length.toLocaleString('en')} characters).`) +
-      ' Run the Shortcut, then come back and tap Paste results.';
+    $('import-apple-copied').textContent = copiedNotice(ids.length);
     $('import-apple-open-row').hidden = false;
     openExternal(SHORTCUT_RUN_URL);
   };
@@ -708,21 +694,33 @@ function wireAppleLookup(guide, entries, onResults) {
 
   const useResults = (text) => {
     // A guide page names its first 20 places: those the list doesn't have yet are added.
-    const { results, found, added, kind } = applyPasteToGuide(entries, guide.appleIds, text);
-    // Place pages answer the round 2 copied: what is still missing of it has no page on Apple Maps.
-    const answered = kind === 'pages' && Boolean(guide.requested?.length);
-    if (answered) markRoundTwoAnswered(guide);
-    if (found || added || answered) {
+    const { results, found, added } = applyPasteToGuide(entries, guide.appleIds, text);
+    if (found || added) {
       pasted = true;
       guide.found = foundAppleIds(guide.appleIds, entries);
       savePendingGuide(guide);
     }
     onResults(results);
     drawNotice();
-    const left = state().missing.length;
+    const left = missing().length;
     toast(`Found ${total - left} of ${total} ${total === 1 ? 'place' : 'places'}` +
       (added ? ` and added ${added} more.` : '.'), found || added ? 'success' : 'info', 5000);
-    return found + added > 0 || answered;
+    return found + added;
+  };
+  // The way back without the clipboard: the Shortcut saved its answer as a file.
+  $('import-apple-open-file').onclick = () => $('import-apple-file').click();
+  $('import-apple-file').onchange = async (ev) => {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    let text;
+    try {
+      text = await file.text();
+    } catch {
+      toast("Couldn't read this file.", 'error', 5000);
+      return;
+    }
+    useResults(text);
   };
   $('import-apple-paste').onclick = async () => {
     let text;

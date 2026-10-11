@@ -18,7 +18,7 @@ import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, 
 import { readLink, appleIdEntries } from './importers.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
-  loadPendingGuide, parseShortcutPages, missingAppleIds, markRoundTwoAnswered,
+  loadPendingGuide, parseShortcutPages, missingAppleIds,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
@@ -42,7 +42,7 @@ export async function startAdd(input, env) {
 
   // The whole guide page (what the Shortcut copies) pasted into the input bar.
   if (looksLikeGuidePage(text)) return addFromGuidePage(text, env);
-  // Round 2's place pages, likewise, for a waiting guide.
+  // The Shortcut's place pages, likewise, for a waiting guide.
   if (/<html/i.test(text) && addFromPlacePages(text, env)) return;
 
   // Fish the link out of shared text: Android often sends
@@ -169,7 +169,7 @@ function addFromGuidePage(html, env) {
 }
 
 /**
- * Round 2's place pages pasted into the main input bar: with a waiting guide
+ * The Shortcut's place pages pasted into the main input bar: with a waiting guide
  * whose Apple IDs they name, the import dialog opens with them filled in.
  * @returns {boolean} false when there is no such guide (the text goes on as before)
  */
@@ -179,7 +179,6 @@ function addFromPlacePages(html, env) {
   const entries = guideImportEntries(pending);
   if (!parseShortcutPages(html, missingAppleIds(pending.appleIds, entries)).size) return false;
   applyPasteToGuide(entries, pending.appleIds, html);
-  markRoundTwoAnswered(pending);
   env.showImport?.(entries, pending.title || 'Apple Guide', pending);
   env.inputDone?.();
   return true;
