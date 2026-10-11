@@ -190,19 +190,54 @@ function firstNamedId(page, pattern, wanted) {
   return '';
 }
 
+const MARKER_LINE = /^https:\/\/maps\.apple\.com\/place\?auid=(\d{1,20})[ \t]*\r?$/gm;
+
+/** [id, text up to the next marker] for every "place?auid=<id>" line followed by a page. */
+function markedPages(s) {
+  const marks = [...s.matchAll(MARKER_LINE)];
+  return marks.map((m, i) => [m[1], s.slice(m.index + m[0].length, i + 1 < marks.length ? marks[i + 1].index : s.length)])
+    .filter(([, chunk]) => /<(!doctype|html|head|meta)\b/i.test(chunk));
+}
+
+const CANONICAL = /<link\b[^>]*\brel="canonical"[^>]*>/i;
+
 /**
- * Reads what the short Shortcut copied: the raw Apple Maps pages, one after the
- * other. A page belongs to the guide ID it names first as data-ref="<id>"
- * (else claimId=<id>); pages of other places or without usable coordinates are
- * ignored, and an ID already filled keeps its first page.
+ * The guide ID a page's canonical link names: place?auid=<id>, or
+ * place-id=I<hex> (Apple's Place ID is the ID in hexadecimal). '' otherwise.
+ */
+function canonicalId(page, wanted) {
+  const tag = (page.match(CANONICAL) || [])[0] || '';
+  const auid = (tag.match(/[?&]auid=(\d{1,20})/) || [])[1];
+  if (auid) return wanted.has(auid) ? auid : '';
+  const hex = (tag.match(/[?&]place-id=I([0-9A-Fa-f]{1,16})\b/) || [])[1];
+  if (!hex) return '';
+  const id = BigInt(`0x${hex}`).toString();
+  return wanted.has(id) ? id : '';
+}
+
+/**
+ * Reads what the Shortcut copied: Apple Maps pages, whole or cut after </head>,
+ * one after the other. A page belongs to the guide ID it names first as
+ * data-ref="<id>" (else claimId=<id>, else its canonical link); pages of other
+ * places or without usable coordinates are ignored, and an ID already filled
+ * keeps its first page.
  * @returns {Map<string, {name, lat, lon, address}>}
  */
 export function parseShortcutPages(text, appleIds) {
   const found = new Map();
   const wanted = new Set(appleIds);
-  for (const page of splitPages(String(text ?? ''))) {
+  const s = String(text ?? '');
+  // The Shortcut's loop writes the place link it fetched above each page: that
+  // link decides, even when Apple's page names a newer ID for a merged place.
+  for (const [id, chunk] of markedPages(s)) {
+    if (!wanted.has(id) || found.has(id)) continue;
+    const place = parseApplePlaceHtml(chunk.slice(0, PAGE_HEAD_CHARS));
+    if (place) found.set(id, place);
+  }
+  for (const page of splitPages(s)) {
     const id = firstNamedId(page, /data-ref="(\d{1,20})"/g, wanted) ||
-      firstNamedId(page, /claimId=(\d{1,20})/g, wanted);
+      firstNamedId(page, /claimId=(\d{1,20})/g, wanted) ||
+      canonicalId(page, wanted);
     if (!id || found.has(id)) continue;
     const place = parseApplePlaceHtml(page.slice(0, PAGE_HEAD_CHARS));
     if (place) found.set(id, place);

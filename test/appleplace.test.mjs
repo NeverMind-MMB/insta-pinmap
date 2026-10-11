@@ -230,6 +230,39 @@ test('parseShortcutPages: a later page for an id already filled does not overwri
   assert.equal(m.get('555').name, 'Claimed');
 });
 
+test('parseShortcutPages: pages cut after </head> are matched by their canonical link (auid or hex Place ID)', () => {
+  const cut = (canonical, name) => appleHead({ name })
+    .replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" href="${canonical}">`)
+    .replace(/<\/head>[\s\S]*$/, '</head>');
+  const text = [
+    cut('https://maps.apple.com/place?place-id=I5509C51220287AAC', 'Hex place'),
+    cut('https://maps.apple.com/place?auid=7167797467403284193', 'Auid place'),
+    cut('https://maps.apple.com/place?place-id=IFFFF', 'Not in the guide'),
+  ].join('\n');
+  const m = parseShortcutPages(text, ['6127645449653877420', '7167797467403284193']);
+  assert.deepEqual([...m.keys()], ['6127645449653877420', '7167797467403284193']);
+  assert.equal(m.get('6127645449653877420').name, 'Hex place');
+  assert.equal(m.get('7167797467403284193').name, 'Auid place');
+});
+
+test('parseShortcutPages: the place link above a page decides (merged place with a newer ID)', () => {
+  const cut = (canonical, name) => appleHead({ name })
+    .replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" href="${canonical}">`)
+    .replace(/<\/head>[\s\S]*$/, '</head>');
+  const text = [
+    // The app's own list of links comes first (no pages after them): ignored.
+    'https://maps.apple.com/place?auid=111',
+    'https://maps.apple.com/place?auid=222',
+    'https://maps.apple.com/place?auid=111',
+    cut('https://maps.apple.com/place?place-id=IFFFFFF', 'Merged place'),
+    'https://maps.apple.com/place?auid=222',
+    cut('https://maps.apple.com/place?auid=222', 'Normal place'),
+  ].join('\n');
+  const m = parseShortcutPages(text, ['111', '222']);
+  assert.equal(m.get('111').name, 'Merged place');
+  assert.equal(m.get('222').name, 'Normal place');
+});
+
 test('parseShortcutPages: a paste without any doctype is split at <html; lowercase doctype works', () => {
   const strip = (id, name) => applePage(id, { name }).replace(/<!DOCTYPE html>\s*/, '');
   const m1 = parseShortcutPages(`${strip('111', 'A')}
