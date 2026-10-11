@@ -244,6 +244,16 @@ test('Apple Guide: the maps.apple.com/guides?user= form (base64url) reads like u
   return 'user= and ug= give the same guide';
 });
 
+test('Apple Guide: a raw ug link with "+" (unencoded) reads like the encoded one', () => {
+  const link = ugLink([pbText(1, 'Plus Guide'), pbIdRef(9902, '1016'), pbIdRef(6489, '2002')]);
+  ok(link.includes('%2B'), 'the test link must contain %2B');
+  const raw = decodeURIComponent(link); // ug=…+…==, as a Shortcut may hand it over
+  ok(raw.includes('+'), 'raw link has a plus');
+  equal(readAppleGuide(raw), readAppleGuide(link));
+  equal(readAppleGuide(raw).appleIds, ['1016', '2002']);
+  return '"+" survives';
+});
+
 test('Apple Maps URLs from the Shortcut\'s "Get Maps URL" become one place', () => {
   const one = (u) => { const r = readLink(u); equal(r.entries.length, 1, u); equal(r.appleIds, [], u); return r.entries[0]; };
   const a = one('https://maps.apple.com/?ll=48.1,11.5&q=Caf%C3%A9%20Test');

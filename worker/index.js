@@ -174,7 +174,10 @@ async function handleGuide(url, request, bindings) {
   if (await overLimit(bindings.GUIDE_LIMIT, `guide:${clientAddress(request)}`, GUIDE_MEMORY_LIMIT)) {
     return plainText('Too many requests. Wait a minute and try again.', 429);
   }
-  const link = url.searchParams.get('link') || '';
+  // A Shortcut may glue the guide link in without URL-encoding it: then everything
+  // after "link=" is the link, verbatim (its own %2B and further parameters included).
+  const raw = url.search.match(/[?&]link=(https?:.*)$/is);
+  const link = raw ? raw[1] : url.searchParams.get('link') || '';
   let appleIds = [];
   if (isAppleGuideLink(link)) {
     try {

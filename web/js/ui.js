@@ -637,10 +637,11 @@ function openExternal(url) {
 /**
  * The notice above the import list for a guide's Apple Maps places: hands one
  * place link per Apple ID to the iPhone Shortcut and takes its results back
- * (the place pages; a guide page or "@@" lines of older Shortcuts work too),
- * by paste or as a file. After a paste, the button copies the places still
- * missing; those it already copied once count as not found. Clipboard access happens right in the tap handlers (iOS allows
- * it only there); where it is refused, a text box takes its place.
+ * (the place pages; a guide page or "@@" lines of older Shortcuts work too)
+ * by paste. After a paste, the button copies the places still missing; those
+ * it already copied once count as not found. Clipboard access happens right in
+ * the tap handlers (iOS allows it only there); where it is refused, a text box
+ * takes its place.
  */
 function wireAppleLookup(guide, entries, onResults) {
   const box = $('import-apple');

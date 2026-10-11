@@ -59,6 +59,25 @@ test('/api/guide: 400 with a short plain message for junk, a missing link or a g
   }
 });
 
+/** Synthetic guide whose base64 holds a '+' (%2B in the link): POI 1016, region 2002. */
+const PLUS_GUIDE = ugLink([pbText(1, 'Plus Guide'), pbIdRef(9902, '1016'), pbIdRef(6489, '2002')]);
+const PLUS_LINES = 'https://maps.apple.com/place?auid=1016\nhttps://maps.apple.com/place?auid=2002';
+
+test('/api/guide: a guide link with %2B works URL-encoded, passed as-is, or decoded once ("+" turned into a space)', async () => {
+  assert.ok(PLUS_GUIDE.includes('%2B'), 'the test link must contain %2B');
+  const asIs = (link) => new Request(`https://pinmap.example/api/guide?link=${link}`, { headers: { 'CF-Connecting-IP': `10.4.0.${++address}` } });
+  for (const req of [
+    guideRequest(PLUS_GUIDE),                                   // encoded once (what a URL Encode action gives)
+    asIs(PLUS_GUIDE),                                           // the Shortcut glued the raw link in
+    asIs(`${PLUS_GUIDE}&lang=en`),                              // raw, with a further parameter of the guide link
+    guideRequest(decodeURIComponent(PLUS_GUIDE)),               // the link itself decoded once: ug=…+…
+  ]) {
+    const res = await handleRequest(req, bindings(), noFetch());
+    assert.equal(res.status, 200, req.url);
+    assert.equal(await res.text(), PLUS_LINES, req.url);
+  }
+});
+
 test('/api/guide: its own per-address limit gives 429', async () => {
   const b = bindings({ GUIDE_LIMIT: fakeLimit(1) });
   assert.equal((await handleRequest(guideRequest(GUIDE, '10.3.3.3'), b, noFetch())).status, 200);

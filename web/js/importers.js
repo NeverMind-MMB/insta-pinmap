@@ -125,6 +125,8 @@ export function readAppleGuide(urlOrUg) {
     /* then it is probably the bare parameter already */
   }
   if (!ug) throw new Error('No ug parameter found in the link.');
+  // Base64 has no spaces: a space is a "+" that an unencoded link lost to URL decoding.
+  ug = ug.replace(/ /g, '+');
 
   const fields = protobufFields(base64UrlToBytes(ug));
   let title = '';

@@ -150,7 +150,10 @@ version exists. **Settings → App → Check for updates → Install.**
   it sees the short link, where it points to, and your IP address.
 - Apple Maps places of an Apple Guide are looked up by the iPhone Shortcut or the
   computer script (see "Apple Guides"), straight from your own connection to Apple Maps.
-  The app's helper is not involved.
+- A guide shared from Apple Maps to the Shortcut goes to the app's helper once: it reads
+  the place IDs out of the link and answers with the place links. It sees the guide link
+  (title, your pins' names, addresses and coordinates) and your IP address, and stores
+  and logs neither.
 - Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
 - Map images come from OpenStreetMap.
@@ -190,7 +193,8 @@ their **own** free Cloudflare account. It takes about 15 minutes.
 7. Open that address on your phone and install the app (see "Install").
 
 Good to know:
-- Cloudflare's free plan allows 100,000 requests a day; one added post or short link is one request.
+- Cloudflare's free plan allows 100,000 requests a day; one added post, short link or
+  Shortcut run from a guide link is one request.
 - `WORK_DIFFICULTY` in `wrangler.toml` sets how much work a phone does per post
   (about 1 second at 18 on a phone; raise it only if your phone is fast).
 - To update your copy later: download the new version and run the deploy again.
@@ -213,7 +217,8 @@ Good to know:
 
 - `web/` — the app: plain HTML, CSS and ES modules, no build step.
 - `worker/` — the Cloudflare Worker: `/api/ig`, `/api/resolve` and `/api/guide`.
-- Server endpoint for the iPhone Shortcut: `GET /api/guide?link=<guide link>` answers one
+- Server endpoint for the iPhone Shortcut: `GET /api/guide?link=<guide link>` (URL-encoded;
+  a raw link as the last parameter works too) answers one
   `https://maps.apple.com/place?auid=<id>` line per Apple Maps place, read from the link itself.
 - `tools/apple-guide.mjs` — Apple Guide → GeoJSON on a computer (see "Apple Guides").
 - Tests: `node --test "test/*.test.mjs" "worker/*.test.mjs"` (Node 24, no install).
