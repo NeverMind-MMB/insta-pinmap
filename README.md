@@ -73,22 +73,28 @@ to look them up.
 
 Build it once in the Shortcuts app (action names as in the English Shortcuts app).
 Shortcuts app → **+** → name the shortcut exactly **Fetch Apple Guide**, then add
-six actions:
+these actions:
 
 ```
 1  Get Clipboard
-2  URL [Clipboard]
-3  Get Contents of URL [URL]
-4  Set Name of [Contents of URL] to [page.txt]
-5  Get Text from [Renamed Item]
-6  Copy [Text] to Clipboard
+2  Split Text [Clipboard] by New Lines
+3  Repeat with Each item in [Split Text]
+4    URL [Repeat Item]
+5    Get Contents of URL [URL]
+6    Set Name of [Contents of URL] to [page.txt]
+7    Get Text from [Renamed Item]
+8  End Repeat
+9  Combine [Repeat Results] with New Lines
+10 Copy [Combined Text] to Clipboard
 ```
 
-Step 2 matters: without the URL action, Shortcuts (seen on iOS 16) detects the
-link inside the text and cuts long guide links short, and Apple then shows an
-empty guide ("0 places"). Step 4 makes the Shortcut hand over the raw page source instead of the rendered
-text; step 5 puts it on the clipboard as plain text, not as a file. The guide page names every place of the guide, so one fetch is enough; the
-app reads names, addresses and coordinates out of it itself.
+The Shortcut fetches every link in the clipboard, one per line: a single guide
+link or a list of place links. Step 4 matters: without the URL action, Shortcuts
+(seen on iOS 16) detects the link inside the text and cuts long guide links
+short, and Apple then shows an empty guide ("0 places"). Step 6 makes the
+Shortcut hand over the raw page source instead of the rendered text; step 7
+puts it on the clipboard as plain text, not as a file. The app reads names,
+addresses and coordinates out of the pages itself.
 
 On the first run, tap **Always Allow** when the Shortcut asks to connect to
 guides.apple.com and maps.apple.com, and **Allow Paste** (to stop being asked:
@@ -101,21 +107,28 @@ Then:
 
 1. Paste the guide link in the app (input field or **Settings → Import**); the
    import dialog opens.
-2. Tap **Look up with iPhone Shortcut**: the app copies the guide link and starts
-   the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts** below the buttons.
-3. Go back to the app and tap **Paste results**, then **Import selected**.
+2. Round 1: tap **Look up with iPhone Shortcut**: the app copies the guide link
+   and starts the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts**
+   below the buttons. Go back to the app and tap **Paste results**.
+3. Apple's guide page carries only the first 20 places of a guide. If more are
+   missing, the app says so and the button becomes **Look up the other … places**.
+   Round 2: tap it: the app copies the links of the missing places; run the same
+   Shortcut again, go back and tap **Paste results**. With many places this round
+   takes a while (one page per place).
+4. Tap **Import selected**.
 
 After the Shortcut, tap Paste results in the import dialog — or just paste into the app's input bar; both work.
+Places Apple Maps no longer knows can't be found in any round; they stay unchecked.
 
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
-(for 24 hours). The Shortcut fetches the page from your phone's own connection.
+(for 24 hours), with the places already found. The Shortcut fetches the pages from your phone's own connection.
 The app copies the guide link in a form without special characters, because iOS can shorten links that contain %2F.
 
 **Paste results** still reads the output of the longer Shortcuts from earlier
 versions (one place page per Apple Maps place, or
 `<place link>@@<name>@@<lat>@@<lon>@@<address>` lines). The **Look up with iPhone
 Shortcut** button, however, needs the Shortcut named exactly **Fetch Apple Guide**:
-rebuild it as the six actions above.
+rebuild it as the actions above.
 
 ### Option B — computer
 
