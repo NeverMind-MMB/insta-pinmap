@@ -15,7 +15,7 @@ import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
 import { onServerVersion } from './api.js';
-import { loadPendingGuide, clearPendingGuide } from './appleplace.js';
+import { loadPendingGuide, clearPendingGuide, looksLikeGuidePage } from './appleplace.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -164,16 +164,32 @@ function wireInput() {
   // fallback on Android if the share menu does not offer the app.
   $('btn-paste').addEventListener('click', async () => {
     if ($('btn-go').disabled) return; // an add is still running
+    let text;
     try {
-      const text = await navigator.clipboard.readText();
-      if (!text) { toast('The clipboard is empty.', 'info'); return; }
-      if ($('btn-go').disabled) return;
-      field.value = text.trim();
-      form.requestSubmit();
+      text = await navigator.clipboard.readText();
     } catch {
       toast('Your browser blocked the clipboard. Tap the field, then tap Paste.', 'info', 6000);
       field.focus();
+      return;
     }
+    if (!text) { toast('The clipboard is empty.', 'info'); return; }
+    if ($('btn-go').disabled) return;
+    // A whole guide page (290 KB) goes straight to the add flow, not into the visible field.
+    if (looksLikeGuidePage(text)) {
+      $('btn-go').disabled = true;
+      submitted = text.trim();
+      try {
+        await startAdd(text, env);
+      } catch (err) {
+        console.error(err);
+        toast('Something went wrong: ' + err.message, 'error', 6000);
+      } finally {
+        $('btn-go').disabled = false;
+      }
+      return;
+    }
+    field.value = text.trim();
+    form.requestSubmit();
   });
 
   // When returning to the app: is there an Instagram link in the clipboard?

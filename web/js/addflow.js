@@ -16,6 +16,10 @@ import {
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, eventDate } from './extract.js';
 import { readLink, appleIdEntries } from './importers.js';
+import {
+  looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
+  loadPendingGuide,
+} from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
 
@@ -35,6 +39,9 @@ let state = null;   // the operation in progress
 export async function startAdd(input, env) {
   const text = String(input || '').trim();
   if (!text) return;
+
+  // The whole guide page (what the Shortcut copies) pasted into the input bar.
+  if (looksLikeGuidePage(text)) return addFromGuidePage(text, env);
 
   // Fish the link out of shared text: Android often sends
   // "Check this out: https://... " instead of just the URL.
@@ -130,6 +137,32 @@ export function guideOf(parsed) {
   return parsed.appleIds?.length
     ? { title: parsed.name, link: parsed.link || '', entries: parsed.entries, appleIds: parsed.appleIds }
     : null;
+}
+
+/**
+ * The Shortcut's answer pasted into the main input bar instead of the import
+ * dialog: goes the same way as "Paste results" (a waiting guide gets its Apple
+ * places filled), else every place of the page becomes a checked row.
+ */
+function addFromGuidePage(html, env) {
+  const places = parseGuidePage(html);
+  if (!places.length) {
+    env.toast('This Apple Guide page lists no places. Copy the guide link in the app again and rerun the Shortcut.', 'error', 8000);
+    return;
+  }
+  const pending = loadPendingGuide();
+  if (pending) {
+    const entries = guideImportEntries(pending);
+    const { found, added } = applyPasteToGuide(entries, pending.appleIds, html);
+    // Nothing in common: the page belongs to another guide.
+    if (found || added) {
+      env.showImport?.(entries, pending.title || guidePageTitle(html) || 'Apple Guide', pending);
+      env.inputDone?.();
+      return;
+    }
+  }
+  env.showImport?.(places.map(guidePlaceRow), guidePageTitle(html) || 'Apple Guide', null);
+  env.inputDone?.();
 }
 
 /** `resolved`: the link is already the answer of /api/resolve. */

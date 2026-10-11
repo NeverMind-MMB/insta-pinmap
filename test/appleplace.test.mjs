@@ -446,3 +446,16 @@ test('parseGuidePage: a full-size page (290 KB) parses fast', () => {
   assert.equal(places.length, 10);
   assert.ok(ms < 200, `took ${ms} ms`);
 });
+
+test('looksLikeGuidePage: the whole guide page, never links or short text; guidePageTitle strips Apple suffixes', async () => {
+  const { looksLikeGuidePage, guidePageTitle } = await import('../web/js/appleplace.js');
+  assert.equal(looksLikeGuidePage(GUIDE_PAGE), true);
+  for (const t of [
+    'https://www.instagram.com/p/ABC123/', 'https://guides.apple.com/?ug=Cg1FcGljIEdhbWVyaW5n',
+    'https://maps.apple.com/guides?x=1', 'https://maps.app.goo.gl/abc', 'Cafe Luitpold Muenchen',
+    applePage('111'), '111@@A@@1@@2@@x',
+  ]) assert.equal(looksLikeGuidePage(t), false, t.slice(0, 40));
+  assert.equal(guidePageTitle(GUIDE_PAGE), 'Epic Gamering');
+  assert.equal(guidePageTitle('<title>Caf&#233; &amp; Co – Apple Karten</title>'), 'Café & Co');
+  assert.equal(guidePageTitle('<html></html>'), '');
+});

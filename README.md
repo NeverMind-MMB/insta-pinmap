@@ -102,6 +102,8 @@ Then:
    the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts** below the buttons.
 3. Go back to the app and tap **Paste results**, then **Import selected**.
 
+After the Shortcut, tap Paste results in the import dialog — or just paste into the app's input bar; both work.
+
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
 (for 24 hours). The Shortcut fetches the page from your phone's own connection.
 The app copies the guide link in a form without special characters, because iOS can shorten links that contain %2F.

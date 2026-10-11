@@ -291,6 +291,22 @@ export function isGuidePage(text) {
 }
 
 /**
+ * True for the whole HTML of a guide page (what the Shortcut copies), not for
+ * a link or short text that merely mentions a guide: it needs markup as well.
+ */
+export function looksLikeGuidePage(text) {
+  const s = String(text ?? '');
+  return s.length > 1000 && /<(html|body|head|div|meta|title)\b/i.test(s) && isGuidePage(s);
+}
+
+/** The title of a guide page without Apple's " - Apple Maps" / " - Apple Karten" suffix; '' without one. */
+export function guidePageTitle(html) {
+  const m = String(html ?? '').match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!m) return '';
+  return decodeEntities(m[1]).replace(/\s+/g, ' ').trim().replace(/\s+[-–—|]\s*Apple\b.*$/i, '').trim();
+}
+
+/**
  * Reads every place of an Apple Maps guide page: the list links first (page
  * order), then places only the map annotations name. Places without valid
  * coordinates are skipped; a place named twice (same ID, or same name at the
@@ -356,13 +372,30 @@ export function appendGuidePlaces(entries, places) {
       distanceM(e.lat, e.lon, p.lat, p.lon) <= SAME_PLACE_M));
   const missing = places.filter((p) => !inList(p));
   if (missing.length === places.length) return [];
-  const added = missing.map((p) => ({
+  const added = missing.map(guidePlaceRow);
+  entries.push(...added);
+  return added;
+}
+
+/** An import row (checked) for a place read from a guide page. */
+export function guidePlaceRow(p) {
+  return {
     name: p.name, address: p.address, lat: p.lat, lon: p.lon,
     url: p.id ? `https://maps.apple.com/place?auid=${p.id}` : '',
     source: 'apple-guide', note: '', warning: '', checked: true,
-  }));
-  entries.push(...added);
-  return added;
+  };
+}
+
+/**
+ * Fills the rows of a waiting guide from the pasted text and appends the page's
+ * further places (the "Paste results" step, see readShortcutPaste).
+ * @returns {{results: Map, found: number, added: number}}
+ */
+export function applyPasteToGuide(entries, appleIds, text) {
+  const { results, places } = readShortcutPaste(text, appleIds);
+  const found = applyShortcutResults(entries, results);
+  const added = places ? appendGuidePlaces(entries, places).length : 0;
+  return { results, found, added };
 }
 
 /**
