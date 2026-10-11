@@ -5,7 +5,7 @@
  *   node tools/apple-guide.mjs "<guide link>" [out.geojson]
  *
  * Apple Guides name the places Apple Maps knows only by an ID. This script
- * fetches the guide page once from your own computer (it names every place of
+ * fetches the guide page once from your own computer (it names the first 20 places of
  * the guide), asks maps.apple.com only for places the page lacks (one request
  * per second) and writes all places of the guide to a GeoJSON file. Load that
  * file in the app: Settings → Import → Choose files.

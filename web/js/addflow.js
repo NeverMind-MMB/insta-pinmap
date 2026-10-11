@@ -18,7 +18,7 @@ import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, 
 import { readLink, appleIdEntries } from './importers.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
-  loadPendingGuide,
+  loadPendingGuide, parseShortcutPages,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
@@ -42,6 +42,8 @@ export async function startAdd(input, env) {
 
   // The whole guide page (what the Shortcut copies) pasted into the input bar.
   if (looksLikeGuidePage(text)) return addFromGuidePage(text, env);
+  // Round 2's place pages, likewise, for a waiting guide.
+  if (/<html/i.test(text) && addFromPlacePages(text, env)) return;
 
   // Fish the link out of shared text: Android often sends
   // "Check this out: https://... " instead of just the URL.
@@ -122,14 +124,15 @@ async function addFromInstagram(link, env) {
  * ================================================================== */
 
 /**
- * Import list of a guide: its inline entries plus one unchecked row per Apple
- * Maps place it names only by ID. The import dialog looks those up through the
- * iPhone Shortcut; the computer script makes a file instead (see appleplace.js).
- * @param {{entries: Array, appleIds?: string[]}} guide  readLink's answer or a pending guide
+ * Import list of a guide: its inline entries plus one row per Apple Maps place
+ * it names only by ID, filled for the places a pending guide already found,
+ * unchecked for the rest. The import dialog looks those up through the iPhone
+ * Shortcut; the computer script makes a file instead (see appleplace.js).
+ * @param {{entries: Array, appleIds?: string[], found?: Map}} guide  readLink's answer or a pending guide
  */
 export function guideImportEntries(guide) {
   const entries = guide.entries.map((e) => ({ ...e }));
-  return [...entries, ...appleIdEntries(guide.appleIds || [], new Map())];
+  return [...entries, ...appleIdEntries(guide.appleIds || [], guide.found || new Map())];
 }
 
 /** What the import dialog needs to look up a guide's Apple Maps places; null without any. */
@@ -163,6 +166,21 @@ function addFromGuidePage(html, env) {
   }
   env.showImport?.(places.map(guidePlaceRow), guidePageTitle(html) || 'Apple Guide', null);
   env.inputDone?.();
+}
+
+/**
+ * Round 2's place pages pasted into the main input bar: with a waiting guide
+ * whose Apple IDs they name, the import dialog opens with them filled in.
+ * @returns {boolean} false when there is no such guide (the text goes on as before)
+ */
+function addFromPlacePages(html, env) {
+  const pending = loadPendingGuide();
+  if (!pending || !parseShortcutPages(html, pending.appleIds).size) return false;
+  const entries = guideImportEntries(pending);
+  applyPasteToGuide(entries, pending.appleIds, html);
+  env.showImport?.(entries, pending.title || 'Apple Guide', pending);
+  env.inputDone?.();
+  return true;
 }
 
 /** `resolved`: the link is already the answer of /api/resolve. */

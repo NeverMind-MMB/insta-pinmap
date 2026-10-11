@@ -438,6 +438,64 @@ test('pending guide: keeps the original guide link', () => {
   assert.equal(loadPendingGuide({ storage: s, now }).link, '');
 });
 
+/* ---------- Round 2: the places the guide page lacks ---------- */
+
+test('foundAppleIds / missingAppleIds: read from the import rows, in guide order', async () => {
+  const { foundAppleIds, missingAppleIds } = await import('../web/js/appleplace.js');
+  const inline = { name: 'Inline', address: 'A', lat: 1, lon: 2, url: '', source: 'apple-guide', note: '', warning: '' };
+  const place = { name: 'Two', address: 'Town', lat: 48.1, lon: 11.5 };
+  const entries = [inline, ...appleIdEntries(['1', '2', '3'], new Map([['2', place]]))];
+  entries.push({ ...inline, url: 'https://maps.apple.com/place?auid=99' }); // a place only the guide page had
+  assert.deepEqual(missingAppleIds(['1', '2', '3'], entries), ['1', '3']);
+  assert.deepEqual([...foundAppleIds(['1', '2', '3'], entries)], [['2', place]]);
+  assert.deepEqual(missingAppleIds(['2'], entries), []);
+  assert.deepEqual(missingAppleIds(['7'], entries), ['7'], 'an ID without any row is missing too');
+});
+
+test('round 2: the missing places go to the Shortcut as auid lines; notice and button name the count', async () => {
+  const { missingAppleIds, roundTwoNotice, roundTwoButton } = await import('../web/js/appleplace.js');
+  const entries = appleIdEntries(['10', '20', '30'], new Map([['20', { name: 'B', address: '', lat: 1, lon: 2 }]]));
+  assert.equal(shortcutInput(missingAppleIds(['10', '20', '30'], entries)),
+    'https://maps.apple.com/place?auid=10\nhttps://maps.apple.com/place?auid=30');
+  assert.equal(roundTwoNotice({ total: 49, missing: 28, stuck: false }),
+    "Found 21 of 49. 28 places aren't on Apple's guide page (it shows only the first 20).");
+  assert.equal(roundTwoNotice({ total: 21, missing: 1, stuck: false }),
+    "Found 20 of 21. 1 place isn't on Apple's guide page (it shows only the first 20).");
+  assert.match(roundTwoNotice({ total: 49, missing: 3, stuck: true }),
+    /^Found 46 of 49\. The other 3 places weren't found\b.*may no longer exist in Apple Maps.*unchecked/);
+  assert.match(roundTwoNotice({ total: 49, missing: 1, stuck: true }), /^Found 48 of 49\. The other place wasn't found\b/);
+  assert.equal(roundTwoNotice({ total: 49, missing: 0, stuck: false }), 'Found 49 of 49.');
+  assert.equal(roundTwoButton(28), 'Look up the other 28 places');
+  assert.equal(roundTwoButton(1), 'Look up the other place');
+});
+
+test('pending guide: the places already found round-trip; a broken found is dropped, the guide still loads', () => {
+  const s = memoryStorage();
+  const now = Date.UTC(2026, 9, 11, 12, 0, 0);
+  const found = new Map([['111', { name: 'Alpha', lat: 48.1, lon: 11.5, address: 'Munich' }]]);
+  savePendingGuide({ ...GUIDE, found }, { storage: s, now });
+  assert.deepEqual(JSON.parse(s.map.get(PENDING_GUIDE_KEY)).found, { 111: { name: 'Alpha', lat: 48.1, lon: 11.5, address: 'Munich' } });
+  const g = loadPendingGuide({ storage: s, now });
+  assert.deepEqual(g.found, found);
+  assert.deepEqual(g.appleIds, GUIDE.appleIds);
+
+  savePendingGuide({ ...GUIDE, found: new Map() }, { storage: s, now });
+  assert.equal('found' in JSON.parse(s.map.get(PENDING_GUIDE_KEY)), false, 'nothing found yet: no found field');
+  assert.equal('found' in loadPendingGuide({ storage: s, now }), false);
+
+  const stored = { ...GUIDE, link: '', savedAt: now };
+  for (const broken of [
+    'nope', ['111'], { 111: { name: 'A', lat: 'x', lon: 2, address: '' } }, { 111: { name: 'A', lat: 99, lon: 2, address: '' } },
+    { 111: { name: 5, lat: 1, lon: 2, address: '' } }, { 333: { name: 'Not in the guide', lat: 1, lon: 2, address: '' } }, { 111: null },
+  ]) {
+    s.setItem(PENDING_GUIDE_KEY, JSON.stringify({ ...stored, found: broken }));
+    const back = loadPendingGuide({ storage: s, now });
+    assert.ok(back, JSON.stringify(broken));
+    assert.equal('found' in back, false, JSON.stringify(broken));
+    assert.deepEqual(back.appleIds, GUIDE.appleIds);
+  }
+});
+
 test('parseGuidePage: a full-size page (290 KB) parses fast', () => {
   const big = GUIDE_PAGE.replace('</body>', `<script>${'x'.repeat(280 * 1024)}</script></body>`);
   const t0 = performance.now();

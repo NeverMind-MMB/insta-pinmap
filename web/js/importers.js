@@ -26,14 +26,19 @@ import { kml, gpx } from '../vendor/togeojson.js';
  *          f4 = { f1 = latitude (double), f2 = longitude (double) }
  *          f5 = name of the place
  *        places Apple Maps knows carry only their Apple place ID:
- *          f1 = 9902 (varint), f2 = Apple place ID (uint64 varint)
+ *          f1 = kind (varint), f2 = Apple place ID (uint64 varint)
+ *          kind 9902 = a point of interest, 6489 = a region (village, lake, area)
  *        Those are real places too; maps.apple.com doesn't answer the app's
  *        helper, so the user looks them up with the iPhone Shortcut or the
  *        computer script (see appleplace.js and appleIdEntries).
  * ================================================================== */
 
-/** f1 value that marks an f2 entry as an Apple place ID reference. */
-const APPLE_ID_KIND = 9902n;
+/**
+ * f1 values that mark an f2 entry as an Apple place ID reference:
+ * 9902 = point of interest, 6489 = region. maps.apple.com/place?auid=<id>
+ * answers both. Other kinds are unknown and ignored.
+ */
+const APPLE_ID_KINDS = new Set([9902n, 6489n]);
 
 function base64UrlToBytes(s) {
   let t = String(s).replace(/-/g, '+').replace(/_/g, '/');
@@ -156,7 +161,7 @@ export function readAppleGuide(urlOrUg) {
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       // A place Apple Maps knows: only its ID is in the link.
-      if (kind === APPLE_ID_KIND && placeId !== null) {
+      if (APPLE_ID_KINDS.has(kind) && placeId !== null) {
         const id = placeId.toString();
         if (!appleIds.includes(id)) appleIds.push(id);
       }

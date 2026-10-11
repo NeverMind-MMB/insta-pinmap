@@ -155,3 +155,22 @@ test('apple-guide: Windows reserved names get a "_" prefix', () => {
   assert.equal(outputName('COM10'), 'COM10.geojson');
   assert.equal(outputName('Con Games'), 'Con Games.geojson');
 });
+
+test('apple-guide: a region ID (kind 6489) is looked up like a POI', async () => {
+  const { ugLink, pbText, pbIdRef } = await import('./ug.mjs');
+  const link = ugLink([pbText(1, 'Regions'), pbIdRef(9902, '1111'), pbIdRef(6489, '2222')]);
+  const asked = [];
+  const fetch = async (url) => {
+    const id = new URL(url).searchParams.get('auid');
+    if (!id) return new Response('not here', { status: 404 }); // no guide page
+    asked.push(id);
+    const res = new Response(placePage(id === '2222' ? 'Lakeside Village' : 'Museum', 47.6, 11.3, 'Bavaria, Germany'));
+    Object.defineProperty(res, 'url', { value: url });
+    return res;
+  };
+  const r = await guideToGeoJSON(link, { fetch, sleep: async () => {} });
+  assert.deepEqual(asked, ['1111', '2222']);
+  assert.equal(r.total, 2);
+  assert.equal(r.found, 2);
+  assert.equal(r.geojson.features[1].properties.name, 'Lakeside Village');
+});

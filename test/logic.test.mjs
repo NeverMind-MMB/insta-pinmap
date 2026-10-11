@@ -9,6 +9,7 @@ import {
   readAppleGuide, readApplePlace, googleCoordinates, readTakeoutGeoJSON, readGoogleCsv, csvRows,
   readLink, appleIdEntries, isAppleIdLink,
 } from '../web/js/importers.js';
+import { ugLink, pbText, pbIdRef, pbPin } from './ug.mjs';
 
 function equal(a, b, was = '') {
   if (JSON.stringify(a) !== JSON.stringify(b)) {
@@ -211,6 +212,23 @@ test('Apple Guide: known Apple Maps places come as IDs', () => {
   equal(readLink('https://maps.apple.com/place?coordinate=40.7,-73.9&name=Met').appleIds, [], 'no IDs for a place link');
   equal(readLink('https://www.google.com/maps/place/Y/@52.52,13.405,15z').appleIds, [], 'no IDs for a Google link');
   return '3 inline + 7 IDs';
+});
+
+test('Apple Guide: POI (9902) and region (6489) IDs are both looked up, unknown kinds are not', () => {
+  const link = ugLink([
+    pbText(1, 'Synthetic Guide'),
+    pbIdRef(9902, '1234567890123456789'),
+    pbIdRef(6489, '9876543210987'),
+    pbIdRef(1234, '555'),
+    pbPin('Pin?', 'Teststraße 1, Testdorf', 47.5, 11.25),
+  ]);
+  const { title, entries, appleIds } = readAppleGuide(link);
+  equal(title, 'Synthetic Guide');
+  equal(appleIds, ['1234567890123456789', '9876543210987'], 'POI and region IDs in guide order');
+  equal(entries.length, 1, 'the inline pin');
+  equal(entries[0].name, 'Pin');
+  near(entries[0].lat, 47.5, 1e-9); near(entries[0].lon, 11.25, 1e-9);
+  return '2 IDs + 1 pin, kind 1234 ignored';
 });
 
 test('Apple Guide: looked-up places become import entries, unknown ones stay unchecked', () => {

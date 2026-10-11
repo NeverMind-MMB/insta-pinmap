@@ -107,6 +107,57 @@ test('guide page with a waiting guide: its Apple ID rows are filled', async () =
   clearPendingGuide();
 });
 
+/** A raw Apple Maps place page as the Shortcut's round 2 fetches it (synthetic). */
+function placePage(id, name, lat, lon) {
+  return `<!DOCTYPE html><html><head><title>${name} in Testtown, Germany - Apple Maps</title>
+<meta property="place:location:latitude" content="${lat}">
+<meta property="place:location:longitude" content="${lon}">
+<meta property="og:title" content="${name}"></head><body><div data-ref="${id}"></div>${'<p>x</p>'.repeat(200)}</body></html>`;
+}
+
+test('place pages in the input bar with a waiting guide: import opens with the places found before and now', async () => {
+  globalThis.localStorage = memoryStorage();
+  const ids = ['101', '202', '303'];
+  const inline = [{ name: 'Pin', address: '', lat: 47.1, lon: 11.1, url: '', source: 'apple-guide', note: '', warning: '' }];
+  const found = new Map([['101', { name: 'Earlier', lat: 48.1, lon: 11.5, address: 'Testtown' }]]);
+  savePendingGuide({ title: 'Synthetic Guide', link: 'https://guides.apple.com/?ug=x', entries: inline, appleIds: ids, found });
+  const { toasts, ui } = fakeUi();
+  const imports = [];
+  let cleared = 0;
+  await startAdd(placePage('202', 'Second', 48.2, 11.6) + '\n' + placePage('999', 'Other', 1, 2),
+    { ...ui, inputDone: () => cleared++, showImport: (e, n, g) => imports.push({ e, n, g }) });
+  assert.equal(imports.length, 1);
+  const { e, n, g } = imports[0];
+  assert.equal(n, 'Synthetic Guide');
+  assert.deepEqual(g.appleIds, ids, 'the pending guide is handed on');
+  assert.equal(e.length, 4);
+  const row = (id) => e.find((r) => appleIdOf(r.url) === id);
+  assert.equal(row('101').name, 'Earlier');
+  assert.equal(row('101').lat, 48.1);
+  assert.notEqual(row('101').checked, false);
+  assert.equal(row('202').name, 'Second');
+  assert.equal(row('202').checked, true);
+  assert.equal(row('303').lat, null);
+  assert.equal(row('303').checked, false);
+  assert.equal(cleared, 1);
+  assert.deepEqual(toasts, []);
+  clearPendingGuide();
+});
+
+test('guide page with a waiting guide that has places found before: they stay filled', async () => {
+  globalThis.localStorage = memoryStorage();
+  const ids = ['4053793356543820372', '777'];
+  const found = new Map([['777', { name: 'Earlier', lat: 48.1, lon: 11.5, address: '' }]]);
+  savePendingGuide({ title: 'Epic Gamering', link: 'https://guides.apple.com/?ug=x', entries: [], appleIds: ids, found });
+  const { ui } = fakeUi();
+  const imports = [];
+  await startAdd(GUIDE_PAGE, { ...ui, showImport: (e, n, g) => imports.push({ e, n, g }) });
+  const { e } = imports[0];
+  assert.equal(e.find((r) => appleIdOf(r.url) === '777').name, 'Earlier');
+  assert.ok(Number.isFinite(e.find((r) => appleIdOf(r.url) === ids[0]).lat));
+  clearPendingGuide();
+});
+
 test('guide page without places: error toast, no import dialog', async () => {
   globalThis.localStorage = memoryStorage();
   const { toasts, ui } = fakeUi();
