@@ -88,44 +88,41 @@ these actions:
 10 Copy [Combined Text] to Clipboard
 ```
 
-The Shortcut fetches every link in the clipboard, one per line: a single guide
-link or a list of place links. Step 4 matters: without the URL action, Shortcuts
-(seen on iOS 16) detects the link inside the text and cuts long guide links
-short, and Apple then shows an empty guide ("0 places"). Step 6 makes the
-Shortcut hand over the raw page source instead of the rendered text; step 7
-puts it on the clipboard as plain text, not as a file. The app reads names,
-addresses and coordinates out of the pages itself.
+The app copies one place link per Apple Maps place of the guide, one per line.
+The Shortcut fetches one page per place, so a big guide takes a while (about a
+minute for 50 places). Step 4 matters: without the URL action, Shortcuts (seen
+on iOS 16) may cut links short. Step 6 makes the Shortcut hand over the raw page
+source instead of the rendered text; step 7 turns it into plain text, not a
+file. The app reads names, addresses and coordinates out of the pages itself.
 
 On the first run, tap **Always Allow** when the Shortcut asks to connect to
-guides.apple.com and maps.apple.com, and **Allow Paste** (to stop being asked:
-Settings → Apps → Shortcuts → Paste from Other Apps → Allow).
-
-**Check it once:** copy your guide link, run the Shortcut, paste into Notes — you
-should see page source that contains `mw-collection-place-name`.
+maps.apple.com, and **Allow Paste** (to stop being asked: Settings → Apps →
+Shortcuts → Paste from Other Apps → Allow).
 
 Then:
 
 1. Paste the guide link in the app (input field or **Settings → Import**); the
    import dialog opens.
-2. Round 1: tap **Look up with iPhone Shortcut**: the app copies the guide link
-   and starts the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts**
-   below the buttons. Go back to the app and tap **Paste results**.
-3. Apple's guide page carries only the first 20 places of a guide. If more are
-   missing, the app says so and the button becomes **Look up the other … places**.
-   Round 2: tap it: the app copies the links of the missing places; run the same
-   Shortcut again, go back and tap **Paste results**. With many places this round
-   takes a while (one page per place).
-4. Tap **Import selected**.
+2. Tap **Look up with iPhone Shortcut**: the app copies the place links and
+   starts the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts** below
+   the buttons.
+3. Go back to the app and tap **Paste results** (or just paste into the app's
+   input bar), then **Import selected**.
 
-After the Shortcut, tap Paste results in the import dialog — or just paste into the app's input bar; both work.
-Places Apple Maps no longer knows can't be found in any round; they stay unchecked.
+A place Apple Maps no longer knows can't be found; the app says how many and
+keeps them unchecked. **Try the … places again** runs the Shortcut for just
+those, in case Apple only refused a few pages on the first run.
+
+**If Paste results finds nothing or the phone struggles** with that much text
+(a 50-place guide is about 1.5 MB), replace the Shortcut's last action **Copy to
+Clipboard** with **Save File** (to Files, e.g. iCloud Drive), and in the app tap
+**Open results file** and choose that file.
 
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
-(for 24 hours), with the places already found. The Shortcut fetches the pages from your phone's own connection.
-The app copies the guide link in a form without special characters, because iOS can shorten links that contain %2F.
+(for 24 hours), with the places already found. The Shortcut fetches the pages
+from your phone's own connection.
 
-**Paste results** still reads the output of the longer Shortcuts from earlier
-versions (one place page per Apple Maps place, or
+**Paste results** still reads the output of older Shortcuts (the guide page, or
 `<place link>@@<name>@@<lat>@@<lon>@@<address>` lines). The **Look up with iPhone
 Shortcut** button, however, needs the Shortcut named exactly **Fetch Apple Guide**:
 rebuild it as the actions above.
