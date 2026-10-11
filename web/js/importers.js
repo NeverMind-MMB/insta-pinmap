@@ -17,6 +17,7 @@ import { kml, gpx } from '../vendor/togeojson.js';
 
 /* ================================================================== *
  * Apple Guides:  https://guides.apple.com/?ug=<base64url>
+ *            or  https://maps.apple.com/guides?user=<base64url> (what Safari shows)
  *
  * The ug parameter is a protobuf. Layout (determined by taking it apart):
  *   f1 = name of the guide
@@ -119,7 +120,7 @@ export function readAppleGuide(urlOrUg) {
   let ug = urlOrUg;
   try {
     const u = new URL(urlOrUg);
-    ug = u.searchParams.get('ug') || u.searchParams.get('g') || '';
+    ug = u.searchParams.get('ug') || u.searchParams.get('user') || u.searchParams.get('g') || '';
   } catch {
     /* then it is probably the bare parameter already */
   }
@@ -181,6 +182,12 @@ export function readAppleGuide(urlOrUg) {
   }
 
   return { title: appleName(title), entries, appleIds };
+}
+
+/** True for an Apple Guides link in any form readAppleGuide takes. */
+export function isAppleGuideLink(link) {
+  const s = String(link || '').trim();
+  return /guides\.apple\.com/i.test(s) || /[?&]ug=/.test(s) || /maps\.apple\.com\/guides\?(?:[^#]*&)?user=/i.test(s);
 }
 
 /** Apple Maps link of a place ID, also the marker for "came from a guide's ID entry". */
@@ -558,7 +565,7 @@ export async function readFile(file) {
 /** Text from the link field in the settings. */
 export function readLink(link) {
   const s = String(link || '').trim();
-  if (/guides\.apple\.com/i.test(s) || /[?&]ug=/.test(s)) {
+  if (isAppleGuideLink(s)) {
     const { title, entries, appleIds } = readAppleGuide(s);
     return { name: title || 'Apple Guide', entries, appleIds, link: s };
   }

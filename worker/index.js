@@ -5,6 +5,8 @@
  * routes the phone cannot do itself because of CORS:
  *   /api/ig       caption of an Instagram post (needs a work ticket)
  *   /api/resolve  where a short map link points to
+ *   /api/guide    the place links of an Apple guide link, read from the link
+ *                 itself (for the iPhone Shortcut; Apple is never contacted)
  *
  * Apple Maps places of Apple Guides are not looked up here: maps.apple.com
  * refuses Cloudflare's servers (see web/js/appleplace.js).
@@ -14,6 +16,7 @@ import { fetchPost, imageAsDataUrl } from './instagram.js';
 import { verifyTicket } from './ticket.js';
 import { ticketMinute } from '../web/js/ticket.js';
 import versionInfo from '../web/version.json' with { type: 'json' };
+import { readAppleGuide, isAppleGuideLink, appleIdLink } from '../web/js/importers.js';
 
 /** Short-link hosts the Worker follows. Any other host ends the walk. */
 const SHORT_LINK_HOSTS = [
@@ -24,6 +27,7 @@ const MAX_HOPS = 5;
 const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const MEMORY_LIMIT = 20; // per address and minute, used when the rate-limit binding is missing
 const memoryHits = new Map();
+const GUIDE_MEMORY_LIMIT = 30; // per address and minute for /api/guide without its binding
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -49,16 +53,17 @@ function isShortLinkHost(hostname) {
   return SHORT_LINK_HOSTS.some((h) => host === h || host.endsWith('.' + h));
 }
 
-async function overLimit(bindings, key) {
-  if (bindings.IG_LIMIT) {
-    const { success } = await bindings.IG_LIMIT.limit({ key });
+/** `limiter`: a rate-limit binding; without one, an in-memory count of `max` per minute. */
+async function overLimit(limiter, key, max = MEMORY_LIMIT) {
+  if (limiter) {
+    const { success } = await limiter.limit({ key });
     return !success;
   }
   const memoryKey = `${key}:${ticketMinute()}`;
   const hits = (memoryHits.get(memoryKey) || 0) + 1;
   memoryHits.set(memoryKey, hits);
   if (memoryHits.size > 5000) memoryHits.clear();
-  return hits > MEMORY_LIMIT;
+  return hits > max;
 }
 
 function tooMany(extraHeaders = {}) {
@@ -72,7 +77,7 @@ function clientAddress(request) {
 async function handleInstagram(url, request, bindings, deps) {
   const difficulty = Number(bindings.WORK_DIFFICULTY) || 18;
   const difficultyHeader = { 'X-Work-Difficulty': String(difficulty) };
-  if (await overLimit(bindings, `ig:${clientAddress(request)}`)) return tooMany(difficultyHeader);
+  if (await overLimit(bindings.IG_LIMIT, `ig:${clientAddress(request)}`)) return tooMany(difficultyHeader);
   const nowMinute = ticketMinute();
   const code = url.searchParams.get('code') || '';
   const valid = await verifyTicket({
@@ -103,7 +108,7 @@ async function handleInstagram(url, request, bindings, deps) {
  * the answer and is not fetched.
  */
 async function handleResolve(url, request, bindings, deps) {
-  if (await overLimit(bindings, `resolve:${clientAddress(request)}`)) return tooMany();
+  if (await overLimit(bindings.IG_LIMIT, `resolve:${clientAddress(request)}`)) return tooMany();
   let start;
   try {
     start = new URL(url.searchParams.get('url') || '');
@@ -148,6 +153,40 @@ async function handleResolve(url, request, bindings, deps) {
   return failed();
 }
 
+function plainText(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex, nofollow',
+      'X-App-Version': versionInfo.version,
+    },
+  });
+}
+
+/**
+ * One place link per Apple ID of the guide link, in guide order. The IDs are in
+ * the link itself, so nothing is fetched; no work ticket (a Shortcut can't solve
+ * one). Links are never logged.
+ */
+async function handleGuide(url, request, bindings) {
+  if (await overLimit(bindings.GUIDE_LIMIT, `guide:${clientAddress(request)}`, GUIDE_MEMORY_LIMIT)) {
+    return plainText('Too many requests. Wait a minute and try again.', 429);
+  }
+  const link = url.searchParams.get('link') || '';
+  let appleIds = [];
+  if (isAppleGuideLink(link)) {
+    try {
+      appleIds = readAppleGuide(link).appleIds;
+    } catch {
+      appleIds = [];
+    }
+  }
+  if (!appleIds.length) return plainText('Not an Apple guide link with Apple Maps places.', 400);
+  return plainText(appleIds.map(appleIdLink).join('\n'));
+}
+
 /** All routes. Tests replace `deps.fetch`; the default calls the global fetch. */
 export async function handleRequest(request, bindings, deps = { fetch: (...args) => fetch(...args) }) {
   const url = new URL(request.url);
@@ -156,6 +195,7 @@ export async function handleRequest(request, bindings, deps = { fetch: (...args)
   if (fromOtherSite(request)) return json({ ok: false, reason: 'forbidden', message: 'Not available.' }, 403);
   if (url.pathname === '/api/ig') return handleInstagram(url, request, bindings, deps);
   if (url.pathname === '/api/resolve') return handleResolve(url, request, bindings, deps);
+  if (url.pathname === '/api/guide') return handleGuide(url, request, bindings);
   return json({ ok: false, message: 'Not found.' }, 404);
 }
 

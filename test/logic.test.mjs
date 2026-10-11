@@ -231,6 +231,30 @@ test('Apple Guide: POI (9902) and region (6489) IDs are both looked up, unknown 
   return '2 IDs + 1 pin, kind 1234 ignored';
 });
 
+test('Apple Guide: the maps.apple.com/guides?user= form (base64url) reads like ug=', () => {
+  const link = ugLink([pbText(1, 'Synthetic Guide'), pbIdRef(9902, '1001'), pbPin('Pin?', 'Street 1, Town', 47.1, 11.1), pbIdRef(6489, '1002')]);
+  const user = new URL(link).searchParams.get('ug').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const userLink = `https://maps.apple.com/guides?user=${user}`;
+  equal(readAppleGuide(userLink), readAppleGuide(link));
+  equal(readAppleGuide(userLink).appleIds, ['1001', '1002']);
+  const r = readLink(userLink);
+  equal(r.name, 'Synthetic Guide');
+  equal(r.appleIds, ['1001', '1002']);
+  equal(r.entries.length, 1);
+  return 'user= and ug= give the same guide';
+});
+
+test('Apple Maps URLs from the Shortcut\'s "Get Maps URL" become one place', () => {
+  const one = (u) => { const r = readLink(u); equal(r.entries.length, 1, u); equal(r.appleIds, [], u); return r.entries[0]; };
+  const a = one('https://maps.apple.com/?ll=48.1,11.5&q=Caf%C3%A9%20Test');
+  equal([a.name, a.lat, a.lon], ['Café Test', 48.1, 11.5]);
+  const b = one('https://maps.apple.com/?address=Teststr.%201,%2080331%20Town&auid=123&ll=48.1,11.5&q=Caf%C3%A9');
+  equal([b.name, b.address, b.lat, b.lon], ['Café', 'Teststr. 1, 80331 Town', 48.1, 11.5]);
+  const c = one('https://maps.apple.com/place?coordinate=48.2,11.6&name=Spot&address=Street%202');
+  equal([c.name, c.address, c.lat, c.lon], ['Spot', 'Street 2', 48.2, 11.6]);
+  return 'll=, address= and coordinate= forms';
+});
+
 test('Apple Guide: looked-up places become import entries, unknown ones stay unchecked', () => {
   const found = new Map([['111', { id: '111', ok: true, name: 'Clutch23', address: 'Fellbach, Germany', lat: 48.8196266, lon: 9.2741936 }]]);
   const e = appleIdEntries(['111', '222'], found);

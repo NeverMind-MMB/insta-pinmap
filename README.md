@@ -212,7 +212,9 @@ Good to know:
 ## For developers
 
 - `web/` — the app: plain HTML, CSS and ES modules, no build step.
-- `worker/` — the Cloudflare Worker: `/api/ig` and `/api/resolve`.
+- `worker/` — the Cloudflare Worker: `/api/ig`, `/api/resolve` and `/api/guide`.
+- Server endpoint for the iPhone Shortcut: `GET /api/guide?link=<guide link>` answers one
+  `https://maps.apple.com/place?auid=<id>` line per Apple Maps place, read from the link itself.
 - `tools/apple-guide.mjs` — Apple Guide → GeoJSON on a computer (see "Apple Guides").
 - Tests: `node --test "test/*.test.mjs" "worker/*.test.mjs"` (Node 24, no install).
 - Local run: `npx --yes wrangler@4 dev`, then open `http://127.0.0.1:8787`.

@@ -16,3 +16,9 @@ WORK_DIFFICULTY = "18"
 name = "IG_LIMIT"
 namespace_id = "1001"
 simple = { limit = 20, period = 60 }
+
+# Per-address limit for /api/guide (same note as above).
+[[ratelimits]]
+name = "GUIDE_LIMIT"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }

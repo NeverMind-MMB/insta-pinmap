@@ -4,7 +4,7 @@
 
 import { store, DEFAULT_SETTINGS, pruneTagFilter } from './store.js';
 import { MainMap, TILES } from './map.js';
-import { startAdd, wireConfirm, guideImportEntries, guideOf } from './addflow.js';
+import { startAdd, wireConfirm, guideImportEntries, guideOf, isShortcutPaste } from './addflow.js';
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
@@ -15,7 +15,7 @@ import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
 import { onServerVersion } from './api.js';
-import { loadPendingGuide, clearPendingGuide, looksLikeGuidePage } from './appleplace.js';
+import { loadPendingGuide, clearPendingGuide } from './appleplace.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -160,6 +160,27 @@ function wireInput() {
     }
   });
 
+  // The Shortcut's output (a guide page of 290 KB, place pages, "@@" lines, a guide
+  // link with results) goes straight to the add flow: the field would drop its line breaks.
+  const addDirectly = async (text) => {
+    $('btn-go').disabled = true;
+    submitted = text.trim();
+    try {
+      await startAdd(text, env);
+    } catch (err) {
+      console.error(err);
+      toast('Something went wrong: ' + err.message, 'error', 6000);
+    } finally {
+      $('btn-go').disabled = false;
+    }
+  };
+  field.addEventListener('paste', (e) => {
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if ($('btn-go').disabled || !isShortcutPaste(text)) return;
+    e.preventDefault();
+    addDirectly(text);
+  });
+
   // Paste from the clipboard: the way to go on the iPhone and the
   // fallback on Android if the share menu does not offer the app.
   $('btn-paste').addEventListener('click', async () => {
@@ -174,18 +195,8 @@ function wireInput() {
     }
     if (!text) { toast('The clipboard is empty.', 'info'); return; }
     if ($('btn-go').disabled) return;
-    // A whole guide page (290 KB) goes straight to the add flow, not into the visible field.
-    if (looksLikeGuidePage(text)) {
-      $('btn-go').disabled = true;
-      submitted = text.trim();
-      try {
-        await startAdd(text, env);
-      } catch (err) {
-        console.error(err);
-        toast('Something went wrong: ' + err.message, 'error', 6000);
-      } finally {
-        $('btn-go').disabled = false;
-      }
+    if (isShortcutPaste(text)) {
+      await addDirectly(text);
       return;
     }
     field.value = text.trim();

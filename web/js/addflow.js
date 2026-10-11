@@ -15,10 +15,10 @@ import {
   findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, eventDate } from './extract.js';
-import { readLink, appleIdEntries } from './importers.js';
+import { readLink, appleIdEntries, isAppleGuideLink } from './importers.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
-  loadPendingGuide, parseShortcutPages, missingAppleIds,
+  loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
@@ -40,8 +40,12 @@ export async function startAdd(input, env) {
   const text = String(input || '').trim();
   if (!text) return;
 
+  // A guide link with the Shortcut's results below it.
+  if (addGuideWithResults(text, env)) return;
   // The whole guide page (what the Shortcut copies) pasted into the input bar.
   if (looksLikeGuidePage(text)) return addFromGuidePage(text, env);
+  // Only the Shortcut's "@@" lines: those places as checked rows.
+  if (text.includes('@@') && addFromResultLines(text, env)) return;
   // The Shortcut's place pages, likewise, for a waiting guide.
   if (/<html/i.test(text) && addFromPlacePages(text, env)) return;
 
@@ -180,6 +184,57 @@ function addFromPlacePages(html, env) {
   if (!parseShortcutPages(html, missingAppleIds(pending.appleIds, entries)).size) return false;
   applyPasteToGuide(entries, pending.appleIds, html);
   env.showImport?.(entries, pending.title || 'Apple Guide', pending);
+  env.inputDone?.();
+  return true;
+}
+
+/** {link, rest} when the first line is an Apple guide link and the rest the Shortcut's results; else null. */
+function guideWithResults(text) {
+  const [first, ...more] = String(text ?? '').trim().split(/\r?\n/);
+  const rest = more.join('\n');
+  return isAppleGuideLink(first.trim()) && (/<html/i.test(rest) || rest.includes('@@')) ? { link: first.trim(), rest } : null;
+}
+
+/**
+ * True for the Shortcut's output (a guide page, place pages, "@@" lines, or a
+ * guide link with results below it): it goes straight to startAdd, since a
+ * text field would drop its line breaks.
+ */
+export function isShortcutPaste(text) {
+  const s = String(text ?? '').trim();
+  return looksLikeGuidePage(s) || /<html/i.test(s) || guideWithResults(s) !== null ||
+    (s.includes('@@') && parseShortcutResults(s).size > 0);
+}
+
+/**
+ * A paste whose first line is an Apple guide link and the rest the Shortcut's
+ * results (place pages and/or "@@" lines): the import dialog for that guide with
+ * the results applied, as "Paste results" there would.
+ * @returns {boolean} false when it is no such paste (a guide link alone goes on as before)
+ */
+function addGuideWithResults(text, env) {
+  const paste = guideWithResults(text);
+  if (!paste) return false;
+  const { link, rest } = paste;
+  let parsed;
+  try {
+    parsed = readLink(link);
+  } catch (e) {
+    env.toast(e.message, 'error');
+    return true;
+  }
+  const entries = guideImportEntries(parsed);
+  applyPasteToGuide(entries, parsed.appleIds || [], rest);
+  env.showImport?.(entries, parsed.name, guideOf(parsed));
+  env.inputDone?.();
+  return true;
+}
+
+/** Only "@@" lines (no guide link): their places as checked import rows. */
+function addFromResultLines(text, env) {
+  const found = parseShortcutResults(text);
+  if (!found.size) return false;
+  env.showImport?.([...found].map(([id, p]) => guidePlaceRow({ id, ...p })), 'Apple Maps places', null);
   env.inputDone?.();
   return true;
 }

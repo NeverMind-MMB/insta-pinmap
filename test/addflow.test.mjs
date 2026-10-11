@@ -158,6 +158,83 @@ test('guide page with a waiting guide that has places found before: they stay fi
   clearPendingGuide();
 });
 
+/* ---------- A guide link with the Shortcut's results pasted into the main input bar ---------- */
+
+const { ugLink, pbText, pbIdRef, pbPin } = await import('./ug.mjs');
+const SYN_GUIDE = ugLink([pbText(1, 'Synthetic Guide'), pbIdRef(9902, '1001'), pbPin('Pin?', 'Street 1, Town', 47.1, 11.1), pbIdRef(6489, '1002')]);
+const SYN_USER = 'https://maps.apple.com/guides?user=' +
+  new URL(SYN_GUIDE).searchParams.get('ug').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+async function pasteIntoBar(text) {
+  globalThis.localStorage = memoryStorage();
+  const { toasts, ui } = fakeUi();
+  const imports = [];
+  let cleared = 0;
+  await startAdd(text, { ...ui, inputDone: () => cleared++, showImport: (e, n, g) => imports.push({ e, n, g }) });
+  return { imports, toasts, cleared };
+}
+
+const rowOf = (e, id) => e.find((r) => appleIdOf(r.url) === id);
+
+test('guide link + raw place pages: the import opens for that guide with the places found', async () => {
+  const text = [SYN_GUIDE, placePage('1001', 'Museum', 48.1, 11.5), placePage('1002', 'Lake Village', 47.6, 11.3)].join('\n');
+  const { imports, cleared } = await pasteIntoBar(text);
+  assert.equal(imports.length, 1);
+  const { e, n, g } = imports[0];
+  assert.equal(n, 'Synthetic Guide');
+  assert.deepEqual(g.appleIds, ['1001', '1002']);
+  assert.equal(e.length, 3);
+  assert.equal(e[0].name, 'Pin');
+  assert.equal(rowOf(e, '1001').name, 'Museum');
+  assert.equal(rowOf(e, '1001').checked, true);
+  assert.equal(rowOf(e, '1002').lat, 47.6);
+  assert.equal(cleared, 1);
+});
+
+test('guide link (user= form) + @@ lines: same; a place without a line stays unchecked', async () => {
+  const text = [SYN_USER, 'https://maps.apple.com/place?auid=1001@@Museum@@48.1@@11.5@@Town'].join('\n');
+  const { imports } = await pasteIntoBar(text);
+  const { e, g } = imports[0];
+  assert.deepEqual(g.appleIds, ['1001', '1002']);
+  assert.equal(rowOf(e, '1001').name, 'Museum');
+  assert.equal(rowOf(e, '1001').address, 'Town');
+  assert.equal(rowOf(e, '1002').lat, null);
+  assert.equal(rowOf(e, '1002').checked, false);
+});
+
+test('only @@ lines: the import opens with those places as checked rows', async () => {
+  const text = [
+    'https://maps.apple.com/place?auid=1001@@Museum@@48.1@@11.5@@Town',
+    '1002@@Lake Village@@47.6@@11.3@@Bavaria',
+  ].join('\n');
+  const { imports, cleared } = await pasteIntoBar(text);
+  assert.equal(imports.length, 1);
+  const { e, g } = imports[0];
+  assert.equal(g, null);
+  assert.deepEqual(e.map((r) => [r.name, r.lat, r.lon, r.address, r.checked]),
+    [['Museum', 48.1, 11.5, 'Town', true], ['Lake Village', 47.6, 11.3, 'Bavaria', true]]);
+  assert.equal(cleared, 1);
+});
+
+test('a guide link alone (user= form) still just opens the import with unchecked Apple rows', async () => {
+  const { imports } = await pasteIntoBar(SYN_USER);
+  const { e, n, g } = imports[0];
+  assert.equal(n, 'Synthetic Guide');
+  assert.deepEqual(g.appleIds, ['1001', '1002']);
+  assert.ok(e.slice(1).every((r) => r.lat === null && r.checked === false));
+});
+
+test('isShortcutPaste: Shortcut output goes straight to the add flow (a text field would drop its line breaks)', async () => {
+  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  assert.equal(isShortcutPaste(`${SYN_GUIDE}\n1001@@Museum@@48.1@@11.5@@Town`), true);
+  assert.equal(isShortcutPaste(`${SYN_USER}\n${placePage('1001', 'Museum', 48.1, 11.5)}`), true);
+  assert.equal(isShortcutPaste('1001@@Museum@@48.1@@11.5@@Town'), true);
+  assert.equal(isShortcutPaste(GUIDE_PAGE), true);
+  for (const t of [SYN_GUIDE, 'https://www.instagram.com/p/ABC123/', 'Check this out:\nhttps://www.instagram.com/p/ABC123/', 'Cafe Luitpold', 'a@@b']) {
+    assert.equal(isShortcutPaste(t), false, t.slice(0, 40));
+  }
+});
+
 test('guide page without places: error toast, no import dialog', async () => {
   globalThis.localStorage = memoryStorage();
   const { toasts, ui } = fakeUi();
