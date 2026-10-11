@@ -450,15 +450,21 @@ test('foundAppleIds / missingAppleIds: read from the import rows, in guide order
   assert.deepEqual(missingAppleIds(['7'], entries), ['7'], 'an ID without any row is missing too');
 });
 
-test('after a paste: notice, retry button and copied notice name the count', async () => {
-  const { lookupNotice, retryButton, copiedNotice } = await import('../web/js/appleplace.js');
-  assert.equal(lookupNotice({ total: 49, missing: 0 }), 'Found 49 of 49.');
-  assert.equal(lookupNotice({ total: 49, missing: 2 }),
+test('after a paste: notice, button and copied notice name the count', async () => {
+  const { lookupNotice, lookupButton, copiedNotice } = await import('../web/js/appleplace.js');
+  assert.equal(lookupNotice({ total: 49, notFound: 0, needed: 0 }), 'Found 49 of 49.');
+  assert.equal(lookupNotice({ total: 49, notFound: 2, needed: 0 }),
     "Found 47 of 49. 2 places weren't found in Apple Maps (they may no longer exist).");
-  assert.equal(lookupNotice({ total: 49, missing: 1 }),
+  assert.equal(lookupNotice({ total: 49, notFound: 1, needed: 0 }),
     "Found 48 of 49. 1 place wasn't found in Apple Maps (it may no longer exist).");
-  assert.equal(retryButton(2), 'Try the 2 places again');
-  assert.equal(retryButton(1), 'Try the place again');
+  assert.equal(lookupNotice({ total: 49, notFound: 0, needed: 29 }), 'Found 20 of 49. 29 places still need the Shortcut.');
+  assert.equal(lookupNotice({ total: 21, notFound: 0, needed: 1 }), 'Found 20 of 21. 1 place still needs the Shortcut.');
+  assert.equal(lookupNotice({ total: 49, notFound: 2, needed: 3 }),
+    "Found 44 of 49. 2 places weren't found in Apple Maps (they may no longer exist). 3 places still need the Shortcut.");
+  assert.equal(lookupButton({ notFound: [], needed: ['1'] }), 'Look up with iPhone Shortcut');
+  assert.equal(lookupButton({ notFound: ['2'], needed: ['1'] }), 'Look up with iPhone Shortcut');
+  assert.equal(lookupButton({ notFound: ['1', '2'], needed: [] }), 'Try the 2 places again');
+  assert.equal(lookupButton({ notFound: ['1'], needed: [] }), 'Try the place again');
   assert.equal(copiedNotice(49),
     '49 place links copied. Run the Shortcut (it fetches one page per place, about a minute), then come back and tap Paste results.');
   assert.equal(copiedNotice(1),
@@ -466,26 +472,42 @@ test('after a paste: notice, retry button and copied notice name the count', asy
 });
 
 test('one round: every place page in one paste; a page Apple lacks stays missing and is tried again alone', async () => {
-  const { lookupNotice } = await import('../web/js/appleplace.js');
+  const { lookupNotice, lookupState, rememberRequested } = await import('../web/js/appleplace.js');
   const ids = Array.from({ length: 49 }, (_, i) => String(5000 + i));
   const entries = appleIdEntries(ids, new Map());
   const guide = { appleIds: ids };
   assert.equal(shortcutClipboard(guide).split('\n').length, 49);
+  rememberRequested(guide, ids); // the button copied them
 
   // The Shortcut's answer: 48 pages with data, 1 without (404).
   const pages = ids.slice(0, 48).map((id, i) => applePage(id, { name: `Q${i}`, lat: '47.1', lon: '11.1' })).join('\n');
   const r = applyPasteToGuide(entries, ids, pages + '\n<!DOCTYPE html><html><head><title>Apple Maps</title></head><body></body></html>');
   assert.equal(r.found, 48);
-  const missing = missingAppleIds(ids, entries);
-  assert.deepEqual(missing, [ids[48]]);
-  assert.equal(lookupNotice({ total: 49, missing: missing.length }),
+  const st = lookupState(guide, entries);
+  assert.deepEqual(st.missing, [ids[48]]);
+  assert.deepEqual(st.notFound, [ids[48]]);
+  assert.deepEqual(st.needed, []);
+  assert.equal(lookupNotice({ total: 49, notFound: st.notFound.length, needed: st.needed.length }),
     "Found 48 of 49. 1 place wasn't found in Apple Maps (it may no longer exist).");
-  assert.equal(shortcutInput(missing), `https://maps.apple.com/place?auid=${ids[48]}`, 'the retry copies just that one');
+  assert.equal(shortcutInput(st.missing), `https://maps.apple.com/place?auid=${ids[48]}`, 'the retry copies just that one');
 
   applyPasteToGuide(entries, ids, applePage(ids[48], { name: 'Late', lat: '47.3', lon: '11.3' }));
   assert.deepEqual(missingAppleIds(ids, entries), []);
   assert.equal(entries[48].name, 'Late');
   assert.equal(entries[0].name, 'Q0', 'earlier finds stay');
+});
+
+test('lookupState: only places whose links were copied count as not found; an old guide page leaves the rest neutral', async () => {
+  const { lookupState, rememberRequested } = await import('../web/js/appleplace.js');
+  const ids = ['1', '2', '3', '4'];
+  const entries = appleIdEntries(ids, new Map([['1', { name: 'A', address: '', lat: 1, lon: 2 }]]));
+  const guide = { appleIds: ids };
+  assert.deepEqual(lookupState(guide, entries), { missing: ['2', '3', '4'], notFound: [], needed: ['2', '3', '4'] },
+    'a guide page filled 1, nothing was ever copied');
+  rememberRequested(guide, ['3']);
+  rememberRequested(guide, ['2', '3']);
+  assert.deepEqual(guide.requested, ['2', '3'], 'a set in guide order');
+  assert.deepEqual(lookupState(guide, entries), { missing: ['2', '3', '4'], notFound: ['2', '3'], needed: ['4'] });
 });
 
 test('applyPasteToGuide: place pages match only still-missing IDs, an earlier find is never overwritten', () => {
@@ -499,21 +521,33 @@ test('applyPasteToGuide: place pages match only still-missing IDs, an earlier fi
   assert.equal(entries[0].name, 'Alpha');
   assert.equal(entries[0].lat, 48.1);
   assert.equal(entries[1].name, 'Beta');
-
 });
 
-test('pending guide: one saved by 2.0.7 (with round-2 lists) still loads; the lists are neither returned nor kept', () => {
+test('pending guide: the requested IDs round-trip; a broken list is dropped; 2.0.7\'s tried list is ignored', () => {
   const s = memoryStorage();
   const now = Date.UTC(2026, 9, 11, 12, 0, 0);
+  savePendingGuide({ ...GUIDE, requested: ['222'] }, { storage: s, now });
+  assert.deepEqual(loadPendingGuide({ storage: s, now }).requested, ['222']);
+  savePendingGuide({ ...GUIDE, requested: [] }, { storage: s, now });
+  assert.equal('requested' in JSON.parse(s.map.get(PENDING_GUIDE_KEY)), false, 'an empty list is not stored');
+
+  // Saved by 2.0.7: requested (links copied) still counts, tried is dropped.
   const found = { 111: { name: 'Alpha', lat: 48.1, lon: 11.5, address: '' } };
-  s.setItem(PENDING_GUIDE_KEY, JSON.stringify({ ...GUIDE, link: '', savedAt: now, found, requested: ['222'], tried: ['222'] }));
+  const stored = { ...GUIDE, link: '', savedAt: now };
+  s.setItem(PENDING_GUIDE_KEY, JSON.stringify({ ...stored, found, requested: ['222'], tried: ['222'] }));
   const g = loadPendingGuide({ storage: s, now });
-  assert.deepEqual(g.appleIds, GUIDE.appleIds);
   assert.equal(g.found.get('111').name, 'Alpha');
-  assert.equal('requested' in g || 'tried' in g, false);
-  savePendingGuide({ ...g, requested: ['222'], tried: ['222'] }, { storage: s, now });
-  const raw = JSON.parse(s.map.get(PENDING_GUIDE_KEY));
-  assert.equal('requested' in raw || 'tried' in raw, false);
+  assert.deepEqual(g.requested, ['222']);
+  assert.equal('tried' in g, false);
+  savePendingGuide({ ...g, tried: ['222'] }, { storage: s, now });
+  assert.equal('tried' in JSON.parse(s.map.get(PENDING_GUIDE_KEY)), false);
+
+  for (const broken of ['222', [222], ['333'], [null], { 0: '222' }]) {
+    s.setItem(PENDING_GUIDE_KEY, JSON.stringify({ ...stored, requested: broken }));
+    const back = loadPendingGuide({ storage: s, now });
+    assert.ok(back, JSON.stringify(broken));
+    assert.equal('requested' in back, false, JSON.stringify(broken));
+  }
 });
 
 test('pending guide: the places already found round-trip; a broken found is dropped, the guide still loads', () => {

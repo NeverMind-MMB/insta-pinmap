@@ -10,7 +10,7 @@ import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
   SHORTCUT_RUN_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
-  lookupNotice, retryButton, copiedNotice,
+  lookupState, lookupNotice, lookupButton, rememberRequested, copiedNotice,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
 
@@ -638,8 +638,8 @@ function openExternal(url) {
  * The notice above the import list for a guide's Apple Maps places: hands one
  * place link per Apple ID to the iPhone Shortcut and takes its results back
  * (the place pages; a guide page or "@@" lines of older Shortcuts work too),
- * by paste or as a file. After a paste, the button tries the places still
- * missing again. Clipboard access happens right in the tap handlers (iOS allows
+ * by paste or as a file. After a paste, the button copies the places still
+ * missing; those it already copied once count as not found. Clipboard access happens right in the tap handlers (iOS allows
  * it only there); where it is refused, a text box takes its place.
  */
 function wireAppleLookup(guide, entries, onResults) {
@@ -663,13 +663,13 @@ function wireAppleLookup(guide, entries, onResults) {
   const missing = () => missingAppleIds(guide.appleIds, entries);
 
   const drawNotice = () => {
-    const left = missing().length;
+    const state = lookupState(guide, entries);
     $('import-apple-text').textContent = pasted
-      ? lookupNotice({ total, missing: left })
+      ? lookupNotice({ total, notFound: state.notFound.length, needed: state.needed.length })
       : `${total} ${total === 1 ? 'place is an Apple Maps place' : 'places are Apple Maps places'}. ` +
         "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
-    $('import-apple-shortcut').textContent = pasted ? retryButton(left) : 'Look up with iPhone Shortcut';
-    $('import-apple-shortcut').hidden = pasted && !left;
+    $('import-apple-shortcut').textContent = pasted ? lookupButton(state) : 'Look up with iPhone Shortcut';
+    $('import-apple-shortcut').hidden = pasted && !state.missing.length;
   };
   drawNotice();
 
@@ -677,6 +677,9 @@ function wireAppleLookup(guide, entries, onResults) {
     // Before any paste every place is missing: one link per Apple ID of the guide.
     const ids = missing();
     const input = shortcutInput(ids);
+    // Kept with the guide: a place copied once and still missing after the answer is "not found".
+    rememberRequested(guide, ids);
+    savePendingGuide(guide);
     try {
       await navigator.clipboard.writeText(input);
     } catch {

@@ -447,22 +447,48 @@ export function missingAppleIds(appleIds, entries) {
   return appleIds.filter((id) => !found.has(id));
 }
 
-/**
- * The Apple notice after a paste. A place still missing had no usable page in
- * the Shortcut's answer; "Try … again" fetches just those once more (a throttled
- * or cut-short run looks the same as a place Apple no longer has).
- */
-export function lookupNotice({ total, missing }) {
-  const head = `Found ${total - missing} of ${total}.`;
-  if (!missing) return head;
-  return `${head} ` + (missing === 1
-    ? "1 place wasn't found in Apple Maps (it may no longer exist)."
-    : `${missing} places weren't found in Apple Maps (they may no longer exist).`);
+/** Adds `ids` to the Apple IDs whose place links were copied for the Shortcut (guide.requested, guide order). */
+export function rememberRequested(guide, ids) {
+  const requested = new Set([...(guide.requested || []), ...ids]);
+  guide.requested = guide.appleIds.filter((id) => requested.has(id));
 }
 
-/** Label of the Shortcut button for the places still missing after a paste. */
-export function retryButton(missing) {
-  return missing === 1 ? 'Try the place again' : `Try the ${missing} places again`;
+/**
+ * The Apple IDs still missing, split by whether their place links were copied:
+ * notFound had a lookup and no usable page came back (a throttled or cut-short
+ * run looks the same as a place Apple no longer has); needed never had one
+ * (e.g. after pasting an old guide page, which holds only the first 20 places).
+ * @returns {{missing: string[], notFound: string[], needed: string[]}}
+ */
+export function lookupState(guide, entries) {
+  const requested = new Set(guide.requested || []);
+  const missing = missingAppleIds(guide.appleIds, entries);
+  return {
+    missing,
+    notFound: missing.filter((id) => requested.has(id)),
+    needed: missing.filter((id) => !requested.has(id)),
+  };
+}
+
+/** The Apple notice after a paste: how many were found, and what is missing why. */
+export function lookupNotice({ total, notFound, needed }) {
+  const parts = [`Found ${total - notFound - needed} of ${total}.`];
+  if (notFound) {
+    parts.push(notFound === 1
+      ? "1 place wasn't found in Apple Maps (it may no longer exist)."
+      : `${notFound} places weren't found in Apple Maps (they may no longer exist).`);
+  }
+  if (needed) parts.push(`${needed} ${needed === 1 ? 'place still needs' : 'places still need'} the Shortcut.`);
+  return parts.join(' ');
+}
+
+/**
+ * Label of the Shortcut button after a paste (it copies every place still
+ * missing): the normal lookup while some never had one, else a retry.
+ */
+export function lookupButton({ notFound, needed }) {
+  if (needed.length) return 'Look up with iPhone Shortcut';
+  return notFound.length === 1 ? 'Try the place again' : `Try the ${notFound.length} places again`;
 }
 
 /* ================================================================== *
@@ -480,14 +506,16 @@ function browserStorage() {
 }
 
 /**
- * @param {{title, link?, entries, appleIds, found?}} guide  link: the guide link the user gave;
- *   found: Map of the Apple IDs already looked up (see foundAppleIds), kept only when not empty
+ * @param {{title, link?, entries, appleIds, found?, requested?}} guide  link: the guide link the
+ *   user gave; found: Map of the Apple IDs already looked up (see foundAppleIds); requested: the
+ *   IDs whose place links were copied (see lookupState). Each kept only when not empty.
  */
 export function savePendingGuide(guide, { storage = browserStorage(), now = Date.now() } = {}) {
   const kept = {
     title: guide.title, link: guide.link || '', entries: guide.entries, appleIds: guide.appleIds, savedAt: now,
   };
   if (guide.found?.size) kept.found = Object.fromEntries(guide.found);
+  if (guide.requested?.length) kept.requested = guide.requested;
   try {
     storage?.setItem(PENDING_GUIDE_KEY, JSON.stringify(kept));
   } catch { /* full or blocked: the open dialog still has everything */ }
@@ -505,6 +533,13 @@ function readFound(found, appleIds) {
     map.set(id, { name: p.name, lat: p.lat, lon: p.lon, address: p.address });
   }
   return map;
+}
+
+/** A stored list of the guide's Apple IDs; null when broken. */
+function readIds(list, appleIds) {
+  if (!Array.isArray(list)) return null;
+  const ids = new Set(appleIds.map(String));
+  return list.every((id) => typeof id === 'string' && ids.has(id)) ? list : null;
 }
 
 export function clearPendingGuide({ storage = browserStorage() } = {}) {
@@ -537,6 +572,8 @@ export function loadPendingGuide({ storage = browserStorage(), now = Date.now() 
   // A broken found list is dropped: the places just get looked up again.
   const found = g.found === undefined ? null : readFound(g.found, g.appleIds);
   if (found?.size) guide.found = found;
-  // 2.0.7 also stored round-2 lists (requested, tried); they are ignored.
+  const requested = g.requested === undefined ? null : readIds(g.requested, g.appleIds);
+  if (requested?.length) guide.requested = requested;
+  // 2.0.7 also stored a round-2 list "tried"; it is ignored.
   return guide;
 }
