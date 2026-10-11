@@ -498,11 +498,48 @@ test('round 2 state: places copied and answered but still missing are not found;
   st = roundTwoState(guide, entries);
   assert.deepEqual(st.missing, ids.slice(47));
   assert.deepEqual(st.notFound, ids.slice(47));
-  assert.deepEqual(st.offer, [], 'no further round');
+  assert.deepEqual(st.offer, [], 'no place left that no round 2 has tried');
   assert.equal(roundTwoNotice({ total: 49, missing: st.missing.length, notFound: st.notFound.length }),
     "Found 47 of 49. 2 places weren't found in Apple Maps (they may no longer exist).");
+  assert.deepEqual(st.next, ids.slice(47), 'but the button can try the 2 again');
+  assert.equal(st.retry, true);
   markRoundTwoAnswered(guide);
   assert.deepEqual(guide.tried, ids.slice(20), 'answering again adds nothing twice');
+
+  // Retry: one of the two comes back this time (say Apple throttled it before).
+  guide.requested = st.next;
+  applyPasteToGuide(entries, ids, applePage(ids[47], { name: 'Late', lat: '47.3', lon: '11.3' }));
+  markRoundTwoAnswered(guide);
+  st = roundTwoState(guide, entries);
+  assert.equal(entries.find((e) => e.url.endsWith(`=${ids[47]}`)).name, 'Late', 'filled normally');
+  assert.deepEqual(st.missing, [ids[48]]);
+  assert.deepEqual(st.notFound, [ids[48]]);
+  assert.deepEqual(st.next, [ids[48]]);
+  assert.equal(st.retry, true);
+  assert.equal(guide.tried.length, 29);
+});
+
+test('round 2 state: places never tried come first; a retry only when none are left; nothing when all are found', async () => {
+  const { roundTwoState, roundTwoButton } = await import('../web/js/appleplace.js');
+  const entries = appleIdEntries(['1', '2', '3'], new Map([['1', { name: 'A', address: '', lat: 1, lon: 2 }]]));
+  const mixed = roundTwoState({ appleIds: ['1', '2', '3'], tried: ['2'] }, entries);
+  assert.deepEqual(mixed.next, ['3']);
+  assert.equal(mixed.retry, false);
+  const none = roundTwoState({ appleIds: ['1'] }, entries);
+  assert.deepEqual(none.next, []);
+  assert.equal(none.retry, false);
+  assert.equal(roundTwoButton(2, true), 'Try the 2 places again');
+  assert.equal(roundTwoButton(1, true), 'Try the place again');
+  assert.equal(roundTwoButton(3, false), 'Look up the other 3 places');
+});
+
+test('roundTwoStarted: places found, a round 2 tried or a round 2 copied (Continue reopens in round 2)', async () => {
+  const { roundTwoStarted } = await import('../web/js/appleplace.js');
+  assert.equal(roundTwoStarted({ appleIds: ['1'] }), false);
+  assert.equal(roundTwoStarted({ appleIds: ['1'], found: new Map() }), false);
+  assert.equal(roundTwoStarted({ appleIds: ['1'], found: new Map([['1', {}]]) }), true);
+  assert.equal(roundTwoStarted({ appleIds: ['1'], tried: ['1'] }), true);
+  assert.equal(roundTwoStarted({ appleIds: ['1'], requested: ['1'] }), true, 'round 1 found no Apple IDs, round 2 copied');
 });
 
 test('applyPasteToGuide: place pages match only still-missing IDs, an earlier find is never overwritten; kind tells the paste form', () => {

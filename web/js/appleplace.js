@@ -451,17 +451,23 @@ export function missingAppleIds(appleIds, entries) {
  * Where round 2 stands. guide.requested: the IDs round 2 copied, not yet
  * answered; guide.tried: the IDs a round 2 copied and a paste of place pages
  * answered. A tried ID still missing has no page on Apple Maps.
- * @returns {{missing: string[], notFound: string[], offer: string[]}}
- *   offer: what the button copies next (missing, never tried)
+ * @returns {{missing: string[], notFound: string[], offer: string[], next: string[], retry: boolean}}
+ *   offer: missing, never tried; next: what the button copies: the offer, or when
+ *   that is empty the places not found (retry: true), since a throttled or cut-short
+ *   round 2 looks the same as a place Apple no longer has
  */
 export function roundTwoState(guide, entries) {
   const tried = new Set(guide.tried || []);
   const missing = missingAppleIds(guide.appleIds, entries);
-  return {
-    missing,
-    notFound: missing.filter((id) => tried.has(id)),
-    offer: missing.filter((id) => !tried.has(id)),
-  };
+  const notFound = missing.filter((id) => tried.has(id));
+  const offer = missing.filter((id) => !tried.has(id));
+  const retry = !offer.length && notFound.length > 0;
+  return { missing, notFound, offer, next: retry ? notFound : offer, retry };
+}
+
+/** True once round 2 has begun: places found, or a round 2 copied or answered. */
+export function roundTwoStarted(guide) {
+  return guide.found?.size > 0 || Boolean(guide.tried?.length) || Boolean(guide.requested?.length);
 }
 
 /** A paste of place pages answers the IDs round 2 copied: they move to guide.tried. */
@@ -490,8 +496,9 @@ export function roundTwoNotice({ total, missing, notFound }) {
   return parts.join(' ');
 }
 
-/** Label of the Shortcut button in round 2. */
-export function roundTwoButton(missing) {
+/** Label of the Shortcut button in round 2; retry: the places not found, once more. */
+export function roundTwoButton(missing, retry = false) {
+  if (retry) return missing === 1 ? 'Try the place again' : `Try the ${missing} places again`;
   return missing === 1 ? 'Look up the other place' : `Look up the other ${missing} places`;
 }
 

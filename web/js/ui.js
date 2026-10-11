@@ -10,7 +10,7 @@ import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
   shortcutClipboard, SHORTCUT_NEEDS_LINK, SHORTCUT_RUN_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds,
-  roundTwoState, markRoundTwoAnswered, roundTwoNotice, roundTwoButton,
+  roundTwoState, roundTwoStarted, markRoundTwoAnswered, roundTwoNotice, roundTwoButton,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
 
@@ -658,25 +658,25 @@ function wireAppleLookup(guide, entries, onResults) {
 
   const total = guide.appleIds.length;
   const guideLink = shortcutClipboard(guide);
-  // Round 2 starts once a paste has found places or answered a round 2 (also
-  // when the dialog reopens with them).
-  let pasted = guide.found.size > 0 || Boolean(guide.tried?.length);
+  // Round 2 starts once a paste has found places or a round 2 was copied or
+  // answered (also when the dialog reopens with them).
+  let pasted = roundTwoStarted(guide);
   const state = () => roundTwoState(guide, entries);
 
   const drawNotice = () => {
-    const { missing, notFound, offer } = state();
+    const { missing, notFound, next, retry } = state();
     $('import-apple-text').textContent = pasted
       ? roundTwoNotice({ total, missing: missing.length, notFound: notFound.length })
       : `${total} ${total === 1 ? 'place is an Apple Maps place' : 'places are Apple Maps places'}. ` +
         "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
-    // Another round only for places no round 2 has tried yet.
-    $('import-apple-shortcut').textContent = pasted ? roundTwoButton(offer.length) : 'Look up with iPhone Shortcut';
-    $('import-apple-shortcut').hidden = pasted && !offer.length;
+    // Places no round 2 has tried come first; then the ones not found can be tried again.
+    $('import-apple-shortcut').textContent = pasted ? roundTwoButton(next.length, retry) : 'Look up with iPhone Shortcut';
+    $('import-apple-shortcut').hidden = pasted && !next.length;
   };
   drawNotice();
 
   $('import-apple-shortcut').onclick = async () => {
-    const left = pasted ? state().offer : [];
+    const left = pasted ? state().next : [];
     const input = left.length ? shortcutInput(left) : guideLink;
     // A guide kept from 2.0.4 has no link; round 1 needs it.
     if (!input) {
