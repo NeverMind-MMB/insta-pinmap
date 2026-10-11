@@ -115,7 +115,7 @@ The app copies the guide link in a form without special characters, because iOS 
 versions (one place page per Apple Maps place, or
 `<place link>@@<name>@@<lat>@@<lon>@@<address>` lines). The **Look up with iPhone
 Shortcut** button, however, needs the Shortcut named exactly **Fetch Apple Guide**:
-rebuild it as the five actions above.
+rebuild it as the six actions above.
 
 ### Option B — computer
 
