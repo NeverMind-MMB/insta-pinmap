@@ -653,7 +653,6 @@ function wireAppleLookup(guide, entries, onResults) {
   // A real link as a second way in, should iOS block opening Shortcuts from script.
   $('import-apple-open').href = SHORTCUT_RUN_URL;
   $('import-apple-results').value = '';
-  $('import-apple-file').value = '';
   if (!guide) return;
 
   const total = guide.appleIds.length;
@@ -709,21 +708,6 @@ function wireAppleLookup(guide, entries, onResults) {
     toast(`Found ${total - left} of ${total} ${total === 1 ? 'place' : 'places'}` +
       (added ? ` and added ${added} more.` : '.'), found || added ? 'success' : 'info', 5000);
     return found + added;
-  };
-  // The way back without the clipboard: the Shortcut saved its answer as a file.
-  $('import-apple-open-file').onclick = () => $('import-apple-file').click();
-  $('import-apple-file').onchange = async (ev) => {
-    const file = ev.target.files?.[0];
-    ev.target.value = '';
-    if (!file) return;
-    let text;
-    try {
-      text = await file.text();
-    } catch {
-      toast("Couldn't read this file.", 'error', 5000);
-      return;
-    }
-    useResults(text);
   };
   $('import-apple-paste').onclick = async () => {
     let text;

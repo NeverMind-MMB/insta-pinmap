@@ -113,11 +113,6 @@ A place Apple Maps no longer knows can't be found; the app says how many and
 keeps them unchecked. **Try the … places again** runs the Shortcut for just
 those, in case Apple only refused a few pages on the first run.
 
-**If Paste results finds nothing or the phone struggles** with that much text
-(a 50-place guide is about 1.5 MB), replace the Shortcut's last action **Copy to
-Clipboard** with **Save File** (to Files, e.g. iCloud Drive), and in the app tap
-**Open results file** and choose that file.
-
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
 (for 24 hours), with the places already found. The Shortcut fetches the pages
 from your phone's own connection.
