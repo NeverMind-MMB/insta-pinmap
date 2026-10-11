@@ -18,7 +18,7 @@ import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, 
 import { readLink, appleIdEntries } from './importers.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
-  loadPendingGuide, parseShortcutPages,
+  loadPendingGuide, parseShortcutPages, missingAppleIds, markRoundTwoAnswered,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
@@ -175,9 +175,11 @@ function addFromGuidePage(html, env) {
  */
 function addFromPlacePages(html, env) {
   const pending = loadPendingGuide();
-  if (!pending || !parseShortcutPages(html, pending.appleIds).size) return false;
+  if (!pending) return false;
   const entries = guideImportEntries(pending);
+  if (!parseShortcutPages(html, missingAppleIds(pending.appleIds, entries)).size) return false;
   applyPasteToGuide(entries, pending.appleIds, html);
+  markRoundTwoAnswered(pending);
   env.showImport?.(entries, pending.title || 'Apple Guide', pending);
   env.inputDone?.();
   return true;

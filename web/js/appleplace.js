@@ -329,12 +329,16 @@ export function parseGuidePage(html) {
 /**
  * What "Paste results" reads, in this order: a guide page, raw place pages
  * (the text contains `<html`), the "@@" / tab lines.
- * @returns {{results: Map<string, {name, lat, lon, address}>, places: Array | null}}
- *   results: the guide's Apple IDs found; places: every place of a guide page, else null
+ * @param {string[]} [pageIds]  the IDs place pages may belong to (default: appleIds)
+ * @returns {{results: Map<string, {name, lat, lon, address}>, places: Array | null, kind: string}}
+ *   results: the guide's Apple IDs found; places: every place of a guide page, else null;
+ *   kind: 'guide', 'pages' (also when no page had data: that is round 2's answer for
+ *   places Apple has no page for) or 'lines'
  */
-export function readShortcutPaste(text, appleIds) {
+export function readShortcutPaste(text, appleIds, pageIds = appleIds) {
   const s = String(text ?? '');
-  if (isGuidePage(s)) {
+  const guidePage = isGuidePage(s);
+  if (guidePage) {
     const places = parseGuidePage(s);
     if (places.length) {
       const wanted = new Set(appleIds);
@@ -342,14 +346,14 @@ export function readShortcutPaste(text, appleIds) {
       for (const { id, name, lat, lon, address } of places) {
         if (id && wanted.has(id) && !results.has(id)) results.set(id, { name, lat, lon, address });
       }
-      return { results, places };
+      return { results, places, kind: 'guide' };
     }
   }
-  if (/<html/i.test(s)) {
-    const pages = parseShortcutPages(s, appleIds);
-    if (pages.size) return { results: pages, places: null };
-  }
-  return { results: parseShortcutResults(s), places: null };
+  const pages = /<html/i.test(s) ? parseShortcutPages(s, pageIds) : null;
+  if (pages?.size) return { results: pages, places: null, kind: 'pages' };
+  const lines = parseShortcutResults(s);
+  if (pages && !lines.size && !guidePage) return { results: pages, places: null, kind: 'pages' };
+  return { results: lines, places: null, kind: 'lines' };
 }
 
 /** The guide's Apple IDs found in a paste (see readShortcutPaste). */
@@ -390,14 +394,15 @@ export function guidePlaceRow(p) {
 
 /**
  * Fills the rows of a waiting guide from the pasted text and appends the page's
- * further places (the "Paste results" step, see readShortcutPaste).
- * @returns {{results: Map, found: number, added: number}}
+ * further places (the "Paste results" step, see readShortcutPaste). Place pages
+ * count only for places still missing, so they never overwrite an earlier find.
+ * @returns {{results: Map, found: number, added: number, kind: string}}
  */
 export function applyPasteToGuide(entries, appleIds, text) {
-  const { results, places } = readShortcutPaste(text, appleIds);
+  const { results, places, kind } = readShortcutPaste(text, appleIds, missingAppleIds(appleIds, entries));
   const found = applyShortcutResults(entries, results);
   const added = places ? appendGuidePlaces(entries, places).length : 0;
-  return { results, found, added };
+  return { results, found, added, kind };
 }
 
 /**
@@ -443,18 +448,46 @@ export function missingAppleIds(appleIds, entries) {
 }
 
 /**
- * The Apple notice after a paste: how many were found and why the rest is missing.
- * stuck: the last round found none of the places still missing.
+ * Where round 2 stands. guide.requested: the IDs round 2 copied, not yet
+ * answered; guide.tried: the IDs a round 2 copied and a paste of place pages
+ * answered. A tried ID still missing has no page on Apple Maps.
+ * @returns {{missing: string[], notFound: string[], offer: string[]}}
+ *   offer: what the button copies next (missing, never tried)
  */
-export function roundTwoNotice({ total, missing, stuck }) {
-  const head = `Found ${total - missing} of ${total}.`;
-  if (!missing) return head;
-  if (stuck) {
-    const which = missing === 1 ? "The other place wasn't found" : `The other ${missing} places weren't found`;
-    return `${head} ${which} either: ${missing === 1 ? 'it' : 'they'} may no longer exist in Apple Maps ` +
-      `and ${missing === 1 ? 'stays' : 'stay'} unchecked.`;
+export function roundTwoState(guide, entries) {
+  const tried = new Set(guide.tried || []);
+  const missing = missingAppleIds(guide.appleIds, entries);
+  return {
+    missing,
+    notFound: missing.filter((id) => tried.has(id)),
+    offer: missing.filter((id) => !tried.has(id)),
+  };
+}
+
+/** A paste of place pages answers the IDs round 2 copied: they move to guide.tried. */
+export function markRoundTwoAnswered(guide) {
+  const tried = new Set(guide.tried || []);
+  for (const id of guide.requested || []) tried.add(id);
+  guide.tried = guide.appleIds.filter((id) => tried.has(id));
+  guide.requested = [];
+}
+
+/**
+ * The Apple notice after a paste: how many were found and why the rest is missing.
+ * notFound: how many of the missing ones round 2 tried in vain.
+ */
+export function roundTwoNotice({ total, missing, notFound }) {
+  const parts = [`Found ${total - missing} of ${total}.`];
+  if (notFound) {
+    parts.push(notFound === 1
+      ? "1 place wasn't found in Apple Maps (it may no longer exist)."
+      : `${notFound} places weren't found in Apple Maps (they may no longer exist).`);
   }
-  return `${head} ${missing} ${missing === 1 ? "place isn't" : "places aren't"} on Apple's guide page (it shows only the first 20).`;
+  const left = missing - notFound;
+  if (left) {
+    parts.push(`${left} ${left === 1 ? "place isn't" : "places aren't"} on Apple's guide page (it shows only the first 20).`);
+  }
+  return parts.join(' ');
 }
 
 /** Label of the Shortcut button in round 2. */
@@ -477,14 +510,17 @@ function browserStorage() {
 }
 
 /**
- * @param {{title, link?, entries, appleIds, found?}} guide  link: the guide link the user gave;
- *   found: Map of the Apple IDs already looked up (see foundAppleIds), kept only when not empty
+ * @param {{title, link?, entries, appleIds, found?, requested?, tried?}} guide  link: the guide
+ *   link the user gave; found: Map of the Apple IDs already looked up (see foundAppleIds);
+ *   requested/tried: round 2's IDs (see roundTwoState). Each kept only when not empty.
  */
 export function savePendingGuide(guide, { storage = browserStorage(), now = Date.now() } = {}) {
   const kept = {
     title: guide.title, link: guide.link || '', entries: guide.entries, appleIds: guide.appleIds, savedAt: now,
   };
   if (guide.found?.size) kept.found = Object.fromEntries(guide.found);
+  if (guide.requested?.length) kept.requested = guide.requested;
+  if (guide.tried?.length) kept.tried = guide.tried;
   try {
     storage?.setItem(PENDING_GUIDE_KEY, JSON.stringify(kept));
   } catch { /* full or blocked: the open dialog still has everything */ }
@@ -506,6 +542,13 @@ function readFound(found, appleIds) {
 
 export function clearPendingGuide({ storage = browserStorage() } = {}) {
   try { storage?.removeItem(PENDING_GUIDE_KEY); } catch { /* nothing to do */ }
+}
+
+/** A stored list of the guide's Apple IDs; null when broken. */
+function readIds(list, appleIds) {
+  if (!Array.isArray(list)) return null;
+  const ids = new Set(appleIds.map(String));
+  return list.every((id) => typeof id === 'string' && ids.has(id)) ? list : null;
 }
 
 /** The waiting guide import, or null when there is none, it is broken or older than 24 hours. */
@@ -534,5 +577,9 @@ export function loadPendingGuide({ storage = browserStorage(), now = Date.now() 
   // A broken found list is dropped: the places just get looked up again.
   const found = g.found === undefined ? null : readFound(g.found, g.appleIds);
   if (found?.size) guide.found = found;
+  for (const key of ['requested', 'tried']) {
+    const ids = g[key] === undefined ? null : readIds(g[key], g.appleIds);
+    if (ids?.length) guide[key] = ids;
+  }
   return guide;
 }

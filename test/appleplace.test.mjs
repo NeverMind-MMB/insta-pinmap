@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   parseApplePlaceHtml, parseShortcutResults, parseShortcutPages, parseShortcutPaste, shortcutInput, SHORTCUT_RUN_URL,
-  applyShortcutResults, savePendingGuide, loadPendingGuide, clearPendingGuide, PENDING_GUIDE_KEY,
+  applyShortcutResults, savePendingGuide, loadPendingGuide, clearPendingGuide, PENDING_GUIDE_KEY, applyPasteToGuide,
   parseGuidePage, isGuidePage, readShortcutPaste, appendGuidePlaces, shortcutClipboard, SHORTCUT_NAME, SHORTCUT_NEEDS_LINK,
 } from '../web/js/appleplace.js';
 import { pruneTagFilter } from '../web/js/store.js';
@@ -457,16 +457,93 @@ test('round 2: the missing places go to the Shortcut as auid lines; notice and b
   const entries = appleIdEntries(['10', '20', '30'], new Map([['20', { name: 'B', address: '', lat: 1, lon: 2 }]]));
   assert.equal(shortcutInput(missingAppleIds(['10', '20', '30'], entries)),
     'https://maps.apple.com/place?auid=10\nhttps://maps.apple.com/place?auid=30');
-  assert.equal(roundTwoNotice({ total: 49, missing: 28, stuck: false }),
+  assert.equal(roundTwoNotice({ total: 49, missing: 28, notFound: 0 }),
     "Found 21 of 49. 28 places aren't on Apple's guide page (it shows only the first 20).");
-  assert.equal(roundTwoNotice({ total: 21, missing: 1, stuck: false }),
+  assert.equal(roundTwoNotice({ total: 21, missing: 1, notFound: 0 }),
     "Found 20 of 21. 1 place isn't on Apple's guide page (it shows only the first 20).");
-  assert.match(roundTwoNotice({ total: 49, missing: 3, stuck: true }),
-    /^Found 46 of 49\. The other 3 places weren't found\b.*may no longer exist in Apple Maps.*unchecked/);
-  assert.match(roundTwoNotice({ total: 49, missing: 1, stuck: true }), /^Found 48 of 49\. The other place wasn't found\b/);
-  assert.equal(roundTwoNotice({ total: 49, missing: 0, stuck: false }), 'Found 49 of 49.');
+  assert.equal(roundTwoNotice({ total: 49, missing: 2, notFound: 2 }),
+    "Found 47 of 49. 2 places weren't found in Apple Maps (they may no longer exist).");
+  assert.equal(roundTwoNotice({ total: 49, missing: 1, notFound: 1 }),
+    "Found 48 of 49. 1 place wasn't found in Apple Maps (it may no longer exist).");
+  assert.equal(roundTwoNotice({ total: 49, missing: 5, notFound: 2 }),
+    "Found 44 of 49. 2 places weren't found in Apple Maps (they may no longer exist). " +
+    "3 places aren't on Apple's guide page (it shows only the first 20).");
+  assert.equal(roundTwoNotice({ total: 49, missing: 0, notFound: 0 }), 'Found 49 of 49.');
   assert.equal(roundTwoButton(28), 'Look up the other 28 places');
   assert.equal(roundTwoButton(1), 'Look up the other place');
+});
+
+test('round 2 state: places copied and answered but still missing are not found; only never-tried ones are offered', async () => {
+  const { roundTwoState, markRoundTwoAnswered, roundTwoNotice } = await import('../web/js/appleplace.js');
+  const ids = Array.from({ length: 49 }, (_, i) => String(5000 + i));
+  const place = (i) => ({ name: `P${i}`, address: '', lat: 40 + i / 100, lon: 10 });
+  const entries = appleIdEntries(ids, new Map(ids.slice(0, 20).map((id, i) => [id, place(i)]))); // round 1: the first 20
+  const guide = { appleIds: ids };
+
+  let st = roundTwoState(guide, entries);
+  assert.equal(st.missing.length, 29);
+  assert.deepEqual(st.notFound, []);
+  assert.deepEqual(st.offer, ids.slice(20), 'round 2 offers the 29 the page lacked');
+
+  guide.requested = st.offer; // the button copied them
+  assert.deepEqual(roundTwoState(guide, entries).notFound, [], 'copied but not answered yet: nothing is "not found"');
+  assert.deepEqual(roundTwoState(guide, entries).offer, ids.slice(20), 'and the button still offers them');
+
+  // The Shortcut's answer: 27 pages with data, 2 without (404).
+  const pages = ids.slice(20, 47).map((id, i) => applePage(id, { name: `Q${i}`, lat: '47.1', lon: '11.1' })).join('\n');
+  applyPasteToGuide(entries, ids, pages + '\n<!DOCTYPE html><html><head><title>Apple Maps</title></head><body></body></html>');
+  markRoundTwoAnswered(guide);
+  assert.deepEqual(guide.requested, []);
+  assert.deepEqual(guide.tried, ids.slice(20));
+  st = roundTwoState(guide, entries);
+  assert.deepEqual(st.missing, ids.slice(47));
+  assert.deepEqual(st.notFound, ids.slice(47));
+  assert.deepEqual(st.offer, [], 'no further round');
+  assert.equal(roundTwoNotice({ total: 49, missing: st.missing.length, notFound: st.notFound.length }),
+    "Found 47 of 49. 2 places weren't found in Apple Maps (they may no longer exist).");
+  markRoundTwoAnswered(guide);
+  assert.deepEqual(guide.tried, ids.slice(20), 'answering again adds nothing twice');
+});
+
+test('applyPasteToGuide: place pages match only still-missing IDs, an earlier find is never overwritten; kind tells the paste form', () => {
+  const found = new Map([['111', { name: 'Alpha', address: 'Munich', lat: 48.1, lon: 11.5 }]]);
+  const entries = appleIdEntries(['111', '222'], found);
+  // A page of 222 that names the already-found 111 first (say, in a "nearby" list).
+  const page = appleHead({ name: 'Beta', lat: '47.2', lon: '11.2', title: 'Beta in Town, Germany - Apple Maps' })
+    .replace('<div id="app">', '<div data-ref="111"></div><div id="app" data-ref="222">');
+  const r = applyPasteToGuide(entries, ['111', '222'], page);
+  assert.equal(r.kind, 'pages');
+  assert.equal(r.found, 1);
+  assert.equal(entries[0].name, 'Alpha');
+  assert.equal(entries[0].lat, 48.1);
+  assert.equal(entries[1].name, 'Beta');
+
+  assert.equal(readShortcutPaste(GUIDE_PAGE, GUIDE_IDS).kind, 'guide');
+  assert.equal(readShortcutPaste('111@@Beta@@1@@2@@x', ['111']).kind, 'lines');
+  const notFound = readShortcutPaste('<!DOCTYPE html><html><head><title>Apple Maps</title></head><body></body></html>', ['111']);
+  assert.equal(notFound.kind, 'pages', 'pages without data are still the answer of a round 2');
+  assert.equal(notFound.results.size, 0);
+});
+
+test('pending guide: the IDs round 2 copied and tried round-trip; broken lists are dropped, the guide still loads', () => {
+  const s = memoryStorage();
+  const now = Date.UTC(2026, 9, 11, 12, 0, 0);
+  savePendingGuide({ ...GUIDE, requested: ['222'], tried: ['111'] }, { storage: s, now });
+  let g = loadPendingGuide({ storage: s, now });
+  assert.deepEqual(g.requested, ['222']);
+  assert.deepEqual(g.tried, ['111']);
+  savePendingGuide({ ...GUIDE, requested: [], tried: [] }, { storage: s, now });
+  const raw = JSON.parse(s.map.get(PENDING_GUIDE_KEY));
+  assert.equal('requested' in raw || 'tried' in raw, false, 'empty lists are not stored');
+
+  const stored = { ...GUIDE, link: '', savedAt: now };
+  for (const broken of ['222', [222], ['333'], [null], { 0: '222' }]) {
+    s.setItem(PENDING_GUIDE_KEY, JSON.stringify({ ...stored, requested: broken, tried: broken }));
+    g = loadPendingGuide({ storage: s, now });
+    assert.ok(g, JSON.stringify(broken));
+    assert.equal('requested' in g || 'tried' in g, false, JSON.stringify(broken));
+    assert.deepEqual(g.appleIds, GUIDE.appleIds);
+  }
 });
 
 test('pending guide: the places already found round-trip; a broken found is dropped, the guide still loads', () => {

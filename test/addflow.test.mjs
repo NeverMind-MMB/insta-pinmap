@@ -144,6 +144,20 @@ test('place pages in the input bar with a waiting guide: import opens with the p
   clearPendingGuide();
 });
 
+test('place pages in the input bar answer round 2: the copied IDs count as tried', async () => {
+  globalThis.localStorage = memoryStorage();
+  const ids = ['101', '202', '303'];
+  const found = new Map([['101', { name: 'Earlier', lat: 48.1, lon: 11.5, address: '' }]]);
+  savePendingGuide({ title: 'Synthetic Guide', link: '', entries: [], appleIds: ids, found, requested: ['202', '303'] });
+  const { ui } = fakeUi();
+  const imports = [];
+  await startAdd(placePage('202', 'Second', 48.2, 11.6), { ...ui, showImport: (e, n, g) => imports.push({ e, n, g }) });
+  const { g } = imports[0];
+  assert.deepEqual(g.tried, ['202', '303']);
+  assert.deepEqual(g.requested, []);
+  clearPendingGuide();
+});
+
 test('guide page with a waiting guide that has places found before: they stay filled', async () => {
   globalThis.localStorage = memoryStorage();
   const ids = ['4053793356543820372', '777'];

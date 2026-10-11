@@ -9,8 +9,8 @@ import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
   shortcutClipboard, SHORTCUT_NEEDS_LINK, SHORTCUT_RUN_URL, applyPasteToGuide, appleIdOf,
-  savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
-  roundTwoNotice, roundTwoButton, isGuidePage,
+  savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds,
+  roundTwoState, markRoundTwoAnswered, roundTwoNotice, roundTwoButton,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
 
@@ -658,29 +658,35 @@ function wireAppleLookup(guide, entries, onResults) {
 
   const total = guide.appleIds.length;
   const guideLink = shortcutClipboard(guide);
-  // Round 2 starts once a paste has found places (also when the dialog reopens with them).
-  let pasted = guide.found.size > 0;
-  let stuck = false;
-  const missing = () => missingAppleIds(guide.appleIds, entries);
+  // Round 2 starts once a paste has found places or answered a round 2 (also
+  // when the dialog reopens with them).
+  let pasted = guide.found.size > 0 || Boolean(guide.tried?.length);
+  const state = () => roundTwoState(guide, entries);
 
   const drawNotice = () => {
-    const left = missing().length;
+    const { missing, notFound, offer } = state();
     $('import-apple-text').textContent = pasted
-      ? roundTwoNotice({ total, missing: left, stuck })
+      ? roundTwoNotice({ total, missing: missing.length, notFound: notFound.length })
       : `${total} ${total === 1 ? 'place is an Apple Maps place' : 'places are Apple Maps places'}. ` +
         "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
-    $('import-apple-shortcut').textContent = pasted ? roundTwoButton(left) : 'Look up with iPhone Shortcut';
-    $('import-apple-shortcut').hidden = pasted && !left;
+    // Another round only for places no round 2 has tried yet.
+    $('import-apple-shortcut').textContent = pasted ? roundTwoButton(offer.length) : 'Look up with iPhone Shortcut';
+    $('import-apple-shortcut').hidden = pasted && !offer.length;
   };
   drawNotice();
 
   $('import-apple-shortcut').onclick = async () => {
-    const left = pasted ? missing() : [];
+    const left = pasted ? state().offer : [];
     const input = left.length ? shortcutInput(left) : guideLink;
     // A guide kept from 2.0.4 has no link; round 1 needs it.
     if (!input) {
       toast(SHORTCUT_NEEDS_LINK, 'info', 6000);
       return;
+    }
+    if (left.length) {
+      // Kept with the guide: the answer may come after iOS unloaded the page.
+      guide.requested = left;
+      savePendingGuide(guide);
     }
     try {
       await navigator.clipboard.writeText(input);
@@ -701,23 +707,22 @@ function wireAppleLookup(guide, entries, onResults) {
   $('import-apple-run').onclick = () => openExternal(SHORTCUT_RUN_URL);
 
   const useResults = (text) => {
-    const before = missing().length;
     // A guide page names its first 20 places: those the list doesn't have yet are added.
-    const { results, found, added } = applyPasteToGuide(entries, guide.appleIds, text);
-    const left = missing().length;
-    // Place pages that filled none of the missing places: Apple has no page for them (any more).
-    const roundTwoPages = /<html/i.test(text) && !isGuidePage(text);
-    stuck = pasted && before > 0 && left === before && roundTwoPages;
-    if (found || added) {
+    const { results, found, added, kind } = applyPasteToGuide(entries, guide.appleIds, text);
+    // Place pages answer the round 2 copied: what is still missing of it has no page on Apple Maps.
+    const answered = kind === 'pages' && Boolean(guide.requested?.length);
+    if (answered) markRoundTwoAnswered(guide);
+    if (found || added || answered) {
       pasted = true;
       guide.found = foundAppleIds(guide.appleIds, entries);
       savePendingGuide(guide);
     }
     onResults(results);
     drawNotice();
+    const left = state().missing.length;
     toast(`Found ${total - left} of ${total} ${total === 1 ? 'place' : 'places'}` +
       (added ? ` and added ${added} more.` : '.'), found || added ? 'success' : 'info', 5000);
-    return found + added > 0 || stuck;
+    return found + added > 0 || answered;
   };
   $('import-apple-paste').onclick = async () => {
     let text;
