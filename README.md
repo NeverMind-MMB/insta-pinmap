@@ -73,18 +73,21 @@ to look them up.
 
 Build it once in the Shortcuts app (action names as in the English Shortcuts app).
 Shortcuts app → **+** → name the shortcut exactly **Fetch Apple Guide**, then add
-five actions:
+six actions:
 
 ```
 1  Get Clipboard
-2  Get Contents of URL [Clipboard]
-3  Set Name of [Contents of URL] to [page.txt]
-4  Get Text from [Renamed Item]
-5  Copy [Text] to Clipboard
+2  URL [Clipboard]
+3  Get Contents of URL [URL]
+4  Set Name of [Contents of URL] to [page.txt]
+5  Get Text from [Renamed Item]
+6  Copy [Text] to Clipboard
 ```
 
-Step 3 makes the Shortcut hand over the raw page source instead of the rendered
-text; step 4 puts it on the clipboard as plain text, not as a file. The guide page names every place of the guide, so one fetch is enough; the
+Step 2 matters: without the URL action, Shortcuts (seen on iOS 16) detects the
+link inside the text and cuts long guide links short, and Apple then shows an
+empty guide ("0 places"). Step 4 makes the Shortcut hand over the raw page source instead of the rendered
+text; step 5 puts it on the clipboard as plain text, not as a file. The guide page names every place of the guide, so one fetch is enough; the
 app reads names, addresses and coordinates out of it itself.
 
 On the first run, tap **Always Allow** when the Shortcut asks to connect to
