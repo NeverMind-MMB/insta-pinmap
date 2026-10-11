@@ -396,13 +396,37 @@ test('appendGuidePlaces: a page of another guide (nothing in common) adds nothin
   assert.equal(entries.length, 1);
 });
 
-test('shortcutClipboard: the guide link itself; nothing for a guide saved without its link', () => {
-  assert.equal(shortcutClipboard({ link: GUIDE_LINK, appleIds: ['1'] }), GUIDE_LINK);
+test('shortcutClipboard: a plain link stays as is; nothing for a guide saved without its link', () => {
+  assert.equal(shortcutClipboard({ link: GUIDE_LINK, appleIds: ['1'] }), 'https://maps.apple.com/guides?user=Cg1FcGljIEdhbWVyaW5n');
   assert.equal(shortcutClipboard({ appleIds: ['1', '2'] }), '');
   assert.equal(shortcutClipboard({ link: '', appleIds: ['1'] }), '');
   assert.equal(SHORTCUT_NEEDS_LINK, 'Paste the guide link again to use the Shortcut.');
   assert.equal(SHORTCUT_NAME, 'Fetch Apple Guide');
   assert.equal(SHORTCUT_RUN_URL, 'shortcuts://run-shortcut?name=Fetch%20Apple%20Guide&input=clipboard');
+});
+
+const OWNER_LINK = 'https://guides.apple.com/?ug=Cg1FcGljIEdhbWVyaW5nElcaM0hvbHpzY2h1aGVyc3RyYcOfZSAzNiwgOTA0MzkgTsO8cm5iZXJnLCBEZXV0c2NobGFuZCISCak0vB8SuUhAEcvv2d9%2BGSZAKgxIaXZlIEdhbWluZz8SDQiuTRDUhIiNx%2FL9oDgSURo1R3Jvw59lbmhhaW5lciBTdHJhw59lIDE4OCwgMDExMjkgRHJlc2RlbiwgRGV1dHNjaGxhbmQiEgna1vjlEYxJQBErmInXrHArQCoENDA0PxJrGjxPbHltcGlhcGFyaywgVG9uaS1NZXJrZW5zLVdlZyA0LCA4MDgwOSBNw7xuY2hlbiwgRGV1dHNjaGxhbmQiEgmZbbTiuhVIQBHGXDAhvhQnQCoXUmVkIEJ1bGwgR2FtaW5nIEdhcmRlbj8SDgiuTRDq57OmgKKGic8BEg4Irk0Qxeiv6pCt5ZyIARINCK5NEMrCuI7%2Bh6LKORINCK5NEI%2BtreyGx%2Fe1TxINCK5NEIrU7sq7pqLZMBIOCK5NEML2otPY%2BsCgzgE%3D';
+const b64Bytes = (p) => Buffer.from(p.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+
+test('shortcutClipboard: the owner link becomes the safe base64url form, same bytes', () => {
+  const out = shortcutClipboard({ link: OWNER_LINK, appleIds: ['1'] });
+  const prefix = 'https://maps.apple.com/guides?user=';
+  assert.ok(out.startsWith(prefix));
+  const param = out.slice(prefix.length);
+  assert.match(param, /^[A-Za-z0-9_-]+$/);
+  assert.ok(b64Bytes(param).equals(Buffer.from(new URL(OWNER_LINK).searchParams.get('ug'), 'base64')));
+  assert.ok(out.length < OWNER_LINK.length);
+});
+
+test('shortcutClipboard: %2B, %2F and %3D%3D map to -, _ and nothing', () => {
+  assert.equal(shortcutClipboard({ link: 'https://guides.apple.com/?ug=ab%2Bc%2Fd%3D%3D' }), 'https://maps.apple.com/guides?user=ab-c_d');
+  assert.equal(shortcutClipboard({ link: 'https://maps.apple.com/guides?user=ab-c_d' }), 'https://maps.apple.com/guides?user=ab-c_d');
+});
+
+test('shortcutClipboard: no ug/user parameter keeps the raw link; empty link needs a link', () => {
+  assert.equal(shortcutClipboard({ link: 'https://guides.apple.com/' }), 'https://guides.apple.com/');
+  assert.equal(shortcutClipboard({ link: '' }), '');
+  assert.equal(shortcutClipboard({}), '');
 });
 
 test('pending guide: keeps the original guide link', () => {

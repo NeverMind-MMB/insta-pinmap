@@ -670,6 +670,8 @@ function wireAppleLookup(guide, entries, onResults) {
       $('import-apple-list').select();
       return;
     }
+    $('import-apple-copied').textContent =
+      `Guide link copied (${input.length.toLocaleString('en')} characters). Run the Shortcut, then come back and tap Paste results.`;
     $('import-apple-open-row').hidden = false;
     openExternal(SHORTCUT_RUN_URL);
   };

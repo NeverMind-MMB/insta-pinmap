@@ -104,6 +104,7 @@ Then:
 
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
 (for 24 hours). The Shortcut fetches the page from your phone's own connection.
+The app copies the guide link in a form without special characters, because iOS can shorten links that contain %2F.
 
 **Paste results** still reads the output of the longer Shortcuts from earlier
 versions (one place page per Apple Maps place, or

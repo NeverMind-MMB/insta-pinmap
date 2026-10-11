@@ -21,11 +21,14 @@ function placePage(name, lat, lon, city) {
  * Fake Apple: answers every auid with a place page, except the ids in `failing`.
  * The guide link gets `guidePage` (a 404 when there is none).
  */
+const SAFE_UG = 'https://maps.apple.com/guides?user=' + new URL(APPLE_UG).searchParams.get('ug').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
 function fakeApple({ failing = [], guidePage = null } = {}) {
   const calls = [];
   const fn = async (url, init) => {
     calls.push({ url, init });
-    if (url === APPLE_UG) {
+    if (url === SAFE_UG || url === APPLE_UG) {
+      if (url === APPLE_UG && guidePage !== null) throw new Error('raw link should not be needed');
       if (guidePage === null) return new Response('not here', { status: 404 });
       const res = new Response(guidePage, { status: 200 });
       Object.defineProperty(res, 'url', { value: 'https://maps.apple.com/guides?user=abc' });
@@ -63,7 +66,7 @@ test('apple-guide: inline places plus 7 looked-up places give 10 features, one r
     properties: { name: 'Place 0', address: 'Fellbach, Germany', source: 'apple-guide' },
   });
   assert.deepEqual(fetch.calls.map((c) => c.url),
-    [APPLE_UG, ...IDS.map((id) => `https://maps.apple.com/place?auid=${id}`)], 'the guide page first, then the places in guide order');
+    [SAFE_UG, APPLE_UG, ...IDS.map((id) => `https://maps.apple.com/place?auid=${id}`)], 'the guide page first, then the places in guide order');
   assert.match(fetch.calls[1].init.headers['User-Agent'], /^Mozilla\/5\.0/);
   assert.deepEqual(pauses, Array(7).fill(1000), '1 s between requests, none after the last');
 });
@@ -75,7 +78,7 @@ test('apple-guide: one fetch of the guide page gives all 10 places, no place req
   const pauses = [];
   const seen = [];
   const r = await guideToGeoJSON(APPLE_UG, { fetch, sleep: async (ms) => pauses.push(ms), onPlace: (id, p, n) => seen.push([id, p?.name, n]) });
-  assert.deepEqual(fetch.calls.map((c) => c.url), [APPLE_UG]);
+  assert.deepEqual(fetch.calls.map((c) => c.url), [SAFE_UG]);
   assert.match(fetch.calls[0].init.headers['User-Agent'], /iPhone/);
   assert.deepEqual(pauses, []);
   assert.equal(r.total, 7);
@@ -97,7 +100,7 @@ test('apple-guide: ids the guide page lacks are fetched one by one', async () =>
   const fetch = fakeApple({ guidePage: page });
   const pauses = [];
   const r = await guideToGeoJSON(APPLE_UG, { fetch, sleep: async (ms) => pauses.push(ms) });
-  assert.deepEqual(fetch.calls.map((c) => c.url), [APPLE_UG, 'https://maps.apple.com/place?auid=4149090964667769162']);
+  assert.deepEqual(fetch.calls.map((c) => c.url), [SAFE_UG, 'https://maps.apple.com/place?auid=4149090964667769162']);
   assert.deepEqual(pauses, [1000]);
   assert.equal(r.found, 7);
   assert.equal(r.geojson.features.length, 10);

@@ -98,12 +98,30 @@ export function shortcutInput(appleIds) {
 }
 
 /**
- * What "Look up with iPhone Shortcut" copies: the guide link itself (the
- * Shortcut fetches the whole guide page once). '' for a guide saved without
- * its link (by 2.0.4): then the user has to paste the guide link again.
+ * The guide link in a form without special characters:
+ * https://maps.apple.com/guides?user=<base64url>. iOS can cut a link at a %2F,
+ * so the percent-encoded base64 of the original is turned into base64url.
+ * A link without a ug/user parameter comes back unchanged.
+ */
+export function safeGuideLink(link) {
+  let param = '';
+  try {
+    const u = new URL(link);
+    param = u.searchParams.get('ug') || u.searchParams.get('user') || '';
+  } catch {
+    return link;
+  }
+  const b64u = param.replace(/\s/g, '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return /^[A-Za-z0-9_-]+$/.test(b64u) ? `https://maps.apple.com/guides?user=${b64u}` : link;
+}
+
+/**
+ * What "Look up with iPhone Shortcut" copies: the guide link in its safe form
+ * (the Shortcut fetches the whole guide page once). '' for a guide saved
+ * without its link (by 2.0.4): then the user has to paste the guide link again.
  */
 export function shortcutClipboard(guide) {
-  return guide.link || '';
+  return guide.link ? safeGuideLink(guide.link) : '';
 }
 
 export const SHORTCUT_NEEDS_LINK = 'Paste the guide link again to use the Shortcut.';

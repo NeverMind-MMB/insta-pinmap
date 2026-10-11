@@ -17,7 +17,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readAppleGuide, appleIdLink } from '../web/js/importers.js';
-import { parseApplePlaceHtml, parseGuidePage, appendGuidePlaces } from '../web/js/appleplace.js';
+import { parseApplePlaceHtml, parseGuidePage, appendGuidePlaces, safeGuideLink } from '../web/js/appleplace.js';
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 /** The guide page is known to come complete for an iPhone's Safari. */
@@ -78,7 +78,9 @@ export async function guideToGeoJSON(link, { fetch: fetchFn = globalThis.fetch, 
   const pause = async () => { if (requests++ > 0) await sleep(PAUSE_MS); };
 
   await pause();
-  const pagePlaces = await guidePage(link, fetchFn);
+  const safe = safeGuideLink(link);
+  let pagePlaces = await guidePage(safe, fetchFn);
+  if (!pagePlaces.length && safe !== link) pagePlaces = await guidePage(link, fetchFn);
   const fromPage = new Map(pagePlaces.filter((p) => p.id).map((p) => [p.id, p]));
 
   const rows = entries.map((e) => ({ ...e }));
