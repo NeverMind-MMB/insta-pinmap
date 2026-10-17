@@ -282,6 +282,15 @@ function placeLinks(text) {
  */
 function addFromPlaceLinks(text, env) {
   const { entries, appleIds, links } = placeLinks(text);
+  // The place links "Look up with iPhone Shortcut" copied, pasted before the
+  // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
+  const pending = appleIds.length && !entries.length ? loadPendingGuide() : null;
+  if (pending && appleIds.every((id) => pending.appleIds.includes(id))) {
+    env.showImport?.(guideImportEntries(pending), pending.title || 'Apple Guide', pending);
+    env.toast("The Shortcut isn't done yet — paste again when it is.", 'info', 6000);
+    env.inputDone?.();
+    return true;
+  }
   if (links < 2) return false;
   const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
   env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);

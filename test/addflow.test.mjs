@@ -376,3 +376,43 @@ test('Settings → Import → Read: an empty field does nothing; a link nothing 
   assert.equal(failed.toasts.at(-1)[1], 'error');
   assert.equal(failed.field.value, AUID_LINK, 'kept, so it can be fixed');
 });
+
+/* ---------- Fix round 1 (2.0.10 review) ---------- */
+
+const { shortcutInput, loadPendingGuide } = await import('../web/js/appleplace.js');
+
+/** startAdd with a guide waiting as "Look up with iPhone Shortcut" leaves it: own pin, 1 of 3 Apple IDs found. */
+async function addWithWaitingGuide(text) {
+  globalThis.localStorage = memoryStorage();
+  const inline = [{ name: 'Pin', address: '', lat: 47.1, lon: 11.1, url: '', source: 'apple-guide', note: '', warning: '' }];
+  const found = new Map([['101', { name: 'Earlier', lat: 48.1, lon: 11.5, address: 'Testtown' }]]);
+  savePendingGuide({ title: 'Synthetic Guide', link: 'https://guides.apple.com/?ug=x', entries: inline,
+    appleIds: ['101', '202', '303'], found, requested: ['202', '303'] });
+  const { toasts, ui } = fakeUi();
+  const imports = [];
+  await startAdd(text, { ...ui, inputDone: () => {}, showImport: (e, n, g) => imports.push({ e, n, g }) });
+  return { imports, toasts };
+}
+
+test('the copied place links pasted back before the Shortcut is done: the waiting guide reopens, with a hint', async () => {
+  for (const ids of [['202', '303'], ['101', '202', '303'], ['303']]) {
+    const { imports, toasts } = await addWithWaitingGuide(shortcutInput(ids));
+    assert.equal(imports.length, 1, ids.join());
+    const { e, n, g } = imports[0];
+    assert.equal(n, 'Synthetic Guide', ids.join());
+    assert.deepEqual(g.appleIds, ['101', '202', '303'], 'the waiting guide, not a new list');
+    assert.deepEqual(g.requested, ['202', '303']);
+    assert.equal(e[0].name, 'Pin', 'its own pins stay');
+    assert.equal(rowOf(e, '101').name, 'Earlier', 'earlier finds stay');
+    assert.match(toasts.at(-1)[0], /Shortcut isn't done yet/);
+    assert.equal(loadPendingGuide().title, 'Synthetic Guide');
+  }
+});
+
+test('place links that are not all the waiting guide\'s, or come with other places, make their own list', async () => {
+  for (const text of [shortcutInput(['202', '999']), `${shortcutInput(['202'])}\n${LL_LINK}`]) {
+    const { imports, toasts } = await addWithWaitingGuide(text);
+    assert.equal(imports[0].n, '', text);
+    assert.ok(!toasts.some(([t]) => /isn't done yet/.test(t)), text);
+  }
+});
