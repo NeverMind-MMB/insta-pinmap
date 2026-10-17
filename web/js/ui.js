@@ -658,7 +658,7 @@ export function showImport(entries, sourceName, env, guide = null) {
 export function showUnsupported(link) {
   const site = siteOf(link);
   $('unsupported-text').textContent =
-    `${site} links don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.`;
+    `${site} links don't work in this version of the app. If nobody has asked for it yet, open an issue on GitHub.`;
   $('unsupported-issues').href = issuesSearchUrl(site);
   $('unsupported-list').replaceChildren(...SUPPORTED_SOURCES.map((group) => {
     const p = document.createElement('p');

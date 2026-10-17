@@ -63,7 +63,7 @@ const FILE_SAMPLES = {
   'Google Maps lists (Google Takeout)': file('Want to go.csv',
     'Title,Note,URL\nSynthetic Bar,,https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721\n'),
   'Other map files (GeoJSON)': file('places.geojson', geojson({ type: 'Point', coordinates: [11.5, 48.1] })),
-  'oPin backups': file('backup.json', JSON.stringify({ version: 1, pins: [], tags: [], deleted: [] })),
+  'Backups from this app': file('backup.json', JSON.stringify({ version: 1, pins: [], tags: [], deleted: [] })),
 };
 const BROWSER_ONLY_FILES = new Set([
   'Google My Maps and Google Earth maps',
