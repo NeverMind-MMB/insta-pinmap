@@ -22,6 +22,7 @@ import {
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
+import { siteOf } from './sources.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -63,8 +64,19 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
     return addFromInstagram(candidateLink, env);
   }
 
-  if (/maps\.apple|guides\.apple|google\.[a-z.]+\/maps|maps\.google\.|maps\.app\.goo\.gl/i.test(candidateLink)) {
+  if (isMapLink(candidateLink)) {
     return addFromMapLink(candidateLink, env);
+  }
+
+  // A link this version can't read: say so instead of searching for its address.
+  const site = linkInText ? siteOf(candidateLink) : '';
+  if (site) {
+    if (/(^|\.)instagram\.com$/i.test(site)) {
+      env.toast("This Instagram link isn't a post or reel.", 'error');
+      return;
+    }
+    env.showUnsupported?.(candidateLink);
+    return;
   }
 
   // Free text: treat it as a place search
@@ -75,6 +87,11 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
     countries: [],
     env,
   });
+}
+
+/** A map link the input bar reads: Apple Maps (maps.apple.com) places and guides, Google Maps, their short links. */
+export function isMapLink(link) {
+  return /maps\.apple\.com|guides\.apple|google\.[a-z.]+\/maps|maps\.google\.|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(String(link));
 }
 
 /**

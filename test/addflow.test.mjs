@@ -546,3 +546,57 @@ test('the input bar: a paste whose first line is a guide link never brings the h
     assert.ok(!toasts.some(([t]) => t === SEVERAL_LINKS_HINT || t === INSTAGRAM_HINT), text);
   }
 });
+
+/* ---------- Links to sites this version doesn't read (2.0.10) ---------- */
+
+test('the input bar: one link to a site this version doesn\'t read opens the unsupported-link dialog, no place search', async () => {
+  for (const [text, link] of [
+    ['https://www.pinterest.com/pin/123456789/', 'https://www.pinterest.com/pin/123456789/'],
+    ['https://pin.it/AbCdEf', 'https://pin.it/AbCdEf'],
+    ['https://www.youtube.com/watch?v=abc123', 'https://www.youtube.com/watch?v=abc123'],
+    ['https://maps.apple/p/AbCdEf1234', 'https://maps.apple/p/AbCdEf1234'],
+    ['Look at this: https://pin.it/AbCdEf, nice', 'https://pin.it/AbCdEf'],
+  ]) {
+    const calls = [];
+    globalThis.fetch = async (url) => { calls.push(String(url)); return new Response('{}'); };
+    const shown = [];
+    const { toasts, ui } = fakeUi();
+    await startAdd(text, { ...ui, showUnsupported: (l) => shown.push(l), showImport: () => shown.push('import') });
+    assert.deepEqual(shown, [link], text);
+    assert.deepEqual(calls, [], `${text}: nothing searched`);
+    assert.deepEqual(toasts, [], text);
+  }
+});
+
+test('the input bar: an Instagram link that isn\'t a post, or an Apple Maps link it can\'t read, gets an error toast', async () => {
+  for (const text of ['https://www.instagram.com/synthetic.user/', AUID_LINK]) {
+    const shown = [];
+    const { toasts, ui } = fakeUi();
+    await startAdd(text, { ...ui, showUnsupported: (l) => shown.push(l) });
+    assert.deepEqual(shown, [], text);
+    assert.equal(toasts.at(-1)?.[1], 'error', text);
+  }
+});
+
+test('the input bar: a goo.gl/maps short link is resolved like maps.app.goo.gl', async () => {
+  const calls = stubResolve(() => ({ ok: false, message: "This short link doesn't lead anywhere." }));
+  const shown = [];
+  const { toasts, ui } = fakeUi();
+  await startAdd('https://goo.gl/maps/AbCdEf123', { ...ui, showUnsupported: (l) => shown.push(l) });
+  assert.deepEqual(shown, []);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /^\/api\/resolve\?url=/);
+  assert.match(toasts.at(-1)[0], /short link/);
+});
+
+test('the input bar: free text without a link still runs the place search', async () => {
+  const opened = [];
+  globalThis.document = { getElementById: (id) => { opened.push(id); throw new Error('confirm dialog reached'); } };
+  try {
+    const { ui } = fakeUi();
+    await assert.rejects(startAdd('Cafe Luitpold Munich', { ...ui, showUnsupported: () => opened.push('unsupported') }), /confirm dialog reached/);
+    assert.deepEqual(opened, ['dlg-confirm']);
+  } finally {
+    delete globalThis.document;
+  }
+});

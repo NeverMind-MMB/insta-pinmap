@@ -17,6 +17,7 @@
     "/js/importers.js",
     "/js/map.js",
     "/js/sha256.js",
+    "/js/sources.js",
     "/js/store.js",
     "/js/ticket-worker.js",
     "/js/ticket.js",
