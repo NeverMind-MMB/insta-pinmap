@@ -217,7 +217,7 @@ function wireInput() {
           (p.posts || []).some((x) => x.url && text.includes(x.shortcode)));
         if (!alreadySaved) {
           field.value = text;
-          toast('Instagram link inserted from the clipboard.', 'info', 4000);
+          toast('Link inserted from the clipboard.', 'info', 4000);
         }
       }
     } catch { /* permission denied, no problem */ }

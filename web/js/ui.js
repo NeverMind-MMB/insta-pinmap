@@ -170,7 +170,7 @@ export function drawList(pins, onClick) {
     const li = document.createElement('li');
     li.className = 'list__empty';
     li.textContent = total === 0
-      ? 'Nothing saved yet. Paste an Instagram link below.'
+      ? 'Nothing saved yet. Paste a link below.'
       : 'No place matches this filter.';
     ol.appendChild(li);
     return;
