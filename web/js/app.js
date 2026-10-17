@@ -383,7 +383,7 @@ function wireGuideReminder() {
   $('guide-reminder-continue').addEventListener('click', () => {
     $('guide-reminder').hidden = true;
     const guide = loadPendingGuide();
-    if (!guide) { toast('This import is older than a day. Read the guide link again.', 'info', 6000); return; }
+    if (!guide) { toast('This import is older than a day. Paste the guide link again.', 'info', 6000); return; }
     showImport(guideImportEntries(guide), guide.title || 'Apple Guide', env, guide);
   });
   $('guide-reminder-discard').addEventListener('click', () => {

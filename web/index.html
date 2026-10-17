@@ -262,16 +262,17 @@
       <fieldset class="fieldgroup">
         <legend>Import</legend>
         <p class="field__help">
-          Apple Guides, Apple place links, Google Takeout (GeoJSON and list CSV),
-          My&nbsp;Maps (KML/KMZ), GPX and GeoJSON.
+          Files from Google Takeout (GeoJSON and list CSV), My&nbsp;Maps (KML/KMZ), GPX and
+          GeoJSON, or several map links at once. A single link, an Apple Guide link too, goes in
+          the input bar.
         </p>
         <label class="field">
           <span class="field__label">Choose files</span>
           <input type="file" id="settings-import-file" accept=".json,.geojson,.csv,.kml,.kmz,.gpx,.zip,.html,.htm" multiple>
         </label>
         <label class="field">
-          <span class="field__label">Or paste links (Apple Guide, place links, Shortcut results)</span>
-          <textarea id="settings-import-link" rows="3" placeholder="https://guides.apple.com/?ug=…" autocapitalize="off" spellcheck="false"></textarea>
+          <span class="field__label">Several links at once (one per line)</span>
+          <textarea id="settings-import-link" rows="3" placeholder="https://maps.apple.com/…" autocapitalize="off" spellcheck="false"></textarea>
         </label>
         <div class="buttonrow">
           <button type="button" class="btn btn--small" id="settings-import-link-go">Read</button>
@@ -279,7 +280,7 @@
         <details class="field__help">
           <summary>Shortcut help</summary>
           <p>No Shortcut yet? <a data-shortcut-install target="_blank" rel="noopener">Install "Fetch Apple Guide"</a>, then tap Add Shortcut.</p>
-          <p>Big guides take 10–30 seconds (from the Maps app longer than from Safari). Wait until the Shortcut is done, then paste here.</p>
+          <p>Big guides take 10–30 seconds (from the Maps app longer than from Safari). Wait until the Shortcut is done, then paste into the input bar.</p>
           <p>Shortcut missing from the Share menu? Restart the iPhone.</p>
           <p>From Safari: in the iPhone Settings app → Shortcuts → Advanced, turn on Allow Running Scripts and Allow Sharing Large Amounts of Data.</p>
           <p>Asked "Allow … to send …?" → tap Always Allow, so it asks only once.</p>
