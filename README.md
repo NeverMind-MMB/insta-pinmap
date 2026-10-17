@@ -54,7 +54,7 @@ The app runs on your phone. Its helper is the small server part on Cloudflare
 (a Worker, at the `/api/…` addresses of your copy). Only three things use it:
 
 - reading Instagram posts (`/api/ig`),
-- expanding short map links such as maps.app.goo.gl, pasted or in an imported
+- expanding short Google Maps links such as maps.app.goo.gl, pasted or in an imported
   file (`/api/resolve`),
 - a guide shared from the Maps app to the iPhone Shortcut (`/api/guide`).
 
@@ -193,8 +193,8 @@ version exists. **Settings → App → Check for updates → Install.**
 - Pins, notes and tags never leave your phone.
 - Reading a post sends only the post's code to the app's helper on Cloudflare,
   together with a small computed "work ticket" that keeps scripts from misusing it.
-- Short map links (maps.app.goo.gl, maps.apple) are expanded by the same helper;
-  it sees the short link, where it points to, and your IP address.
+- Short Google Maps links (maps.app.goo.gl, goo.gl/maps) are expanded by the same
+  helper; it sees the short link, where it points to, and your IP address.
 - Apple Maps places of an Apple Guide are looked up by the iPhone Shortcut or the
   computer script (see "Apple Guides"), straight from your own connection to Apple Maps.
 - A guide shared from the Maps app to the Shortcut goes to the app's helper once: it
