@@ -424,3 +424,16 @@ test('a guide link stays out of a list of place links; with one place link it ke
   ({ imports } = await pasteIntoBar([SYN_GUIDE, LL_LINK].join('\n')));
   assert.equal(imports[0].n, 'Synthetic Guide', 'the guide\'s import, with its title and tag');
 });
+
+test('a list of place links says in one toast how many other links it left out', async () => {
+  const text = [LL_LINK, AUID_LINK, 'https://maps.apple/p/AbCdEf1234', 'https://www.instagram.com/p/ABC123/', SYN_GUIDE, LL_LINK].join('\n');
+  const { imports, toasts } = await pasteIntoBar(text);
+  assert.equal(imports[0].e.length, 2);
+  assert.deepEqual(toasts, [["Skipped 3 links that aren't place links this app can read.", 'info']]);
+});
+
+test('the copied place links with another link in the paste: their own list, not the waiting guide', async () => {
+  const { imports, toasts } = await addWithWaitingGuide(`${shortcutInput(['202', '303'])}\nhttps://maps.apple/p/AbCdEf1234`);
+  assert.equal(imports[0].n, '');
+  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read.", 'info']]);
+});

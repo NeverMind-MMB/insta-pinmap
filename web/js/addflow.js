@@ -245,21 +245,22 @@ function appleIdOnly(link) {
  * once: their places as import rows, and the Apple IDs of Apple links without
  * coordinates that name their place by ID (each ID once). Guide links stay out:
  * a guide goes its own way, with its title.
- * @returns {{entries: Array, appleIds: string[], links: number}} links: how many brought a place
+ * @returns {{entries: Array, appleIds: string[], links: number, skipped: number}}
+ *   links: how many brought a place; skipped: how many other links (guides, links it can't read)
  */
 function placeLinks(text) {
   const entries = [];
   const appleIds = [];
   const seen = new Set();
   let links = 0;
+  let skipped = 0;
   for (const [match] of String(text ?? '').matchAll(/https?:\/\/\S+/g)) {
     const link = match.replace(/[),.]+$/, '');
     if (seen.has(link)) continue;
     seen.add(link);
-    if (isAppleGuideLink(link)) continue;
     let parsed = null;
     try {
-      parsed = readLink(link);
+      parsed = isAppleGuideLink(link) ? null : readLink(link);
     } catch { /* no link readLink knows; perhaps an Apple link with only an ID */ }
     const id = parsed?.entries.some((e) => Number.isFinite(e.lat)) ? '' : appleIdOnly(link);
     if (id) {
@@ -268,11 +269,12 @@ function placeLinks(text) {
     } else if (parsed?.entries.length) {
       entries.push(...parsed.entries);
     } else {
+      skipped++;
       continue;
     }
     links++;
   }
-  return { entries, appleIds, links };
+  return { entries, appleIds, links, skipped };
 }
 
 /**
@@ -282,10 +284,10 @@ function placeLinks(text) {
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
 function addFromPlaceLinks(text, env) {
-  const { entries, appleIds, links } = placeLinks(text);
+  const { entries, appleIds, links, skipped } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
-  const pending = appleIds.length && !entries.length ? loadPendingGuide() : null;
+  const pending = appleIds.length && !entries.length && !skipped ? loadPendingGuide() : null;
   if (pending && appleIds.every((id) => pending.appleIds.includes(id))) {
     env.showImport?.(guideImportEntries(pending), pending.title || 'Apple Guide', pending);
     env.toast("The Shortcut isn't done yet — paste again when it is.", 'info', 6000);
@@ -295,6 +297,9 @@ function addFromPlaceLinks(text, env) {
   if (links < 2) return false;
   const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
   env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
+  if (skipped) {
+    env.toast(`Skipped ${skipped} ${skipped === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read.`, 'info', 6000);
+  }
   env.inputDone?.();
   return true;
 }
