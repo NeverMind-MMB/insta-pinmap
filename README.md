@@ -289,8 +289,8 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
 
 ## Disclaimer
 
-- **Personal, non-commercial use only.** This is a hobby project, not a product
-  or a service. No warranty, no support, use at your own risk.
+- **Made for personal use.** This is a hobby project, not a product or a
+  service. No warranty, no support, use at your own risk (see "License").
 - **Don't use someone else's copy.** Do not use another person's deployment (their
   address) or their Cloudflare account or credentials. Deploy your own copy as
   described above.
@@ -324,3 +324,18 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
 
 Third-party libraries in `web/vendor/` (Leaflet, Leaflet.markercluster, fflate,
 @tmcw/togeojson) keep their own license files next to them.
+
+## License
+
+Copyright (C) 2026 oPin contributors.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the full text in [`LICENSE`](LICENSE).
+
+In short: you may use, change and share it, also commercially; if you share a
+changed version, you share its source under the same license. The libraries in
+`web/vendor/` keep their own (GPL-compatible) licenses.
