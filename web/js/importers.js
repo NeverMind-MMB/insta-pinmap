@@ -12,6 +12,7 @@
  */
 
 import { readBackupText } from './backup.js';
+import { sourceOf, linkIs } from './sources.js';
 import { unzipSync, strFromU8 } from '../vendor/fflate.js';
 import { kml, gpx } from '../vendor/togeojson.js';
 
@@ -186,10 +187,9 @@ export function readAppleGuide(urlOrUg) {
   return { title: appleName(title), entries, appleIds };
 }
 
-/** True for an Apple Guides link in any form readAppleGuide takes. */
+/** True for an Apple Guides link (guides.apple.com/…, maps.apple.com/guides…), by its prefix (sources.js). */
 export function isAppleGuideLink(link) {
-  const s = String(link || '').trim();
-  return /guides\.apple\.com/i.test(s) || /[?&]ug=/.test(s) || /maps\.apple\.com\/guides\?(?:[^#]*&)?user=/i.test(s);
+  return linkIs(link, 'guides');
 }
 
 /** Apple Maps link of a place ID, also the marker for "came from a guide's ID entry". */
@@ -230,13 +230,13 @@ export function appleIdEntries(ids, found) {
  * ================================================================== */
 
 export function readApplePlace(link) {
+  if (sourceOf(link) !== 'apple') return null;
   let u;
   try {
     u = new URL(link);
   } catch {
     return null;
   }
-  if (!/(^|\.)(maps\.apple(\.com)?|guides\.apple\.com)$/i.test(u.hostname)) return null;
 
   const q = u.searchParams;
   let lat = null;
@@ -305,8 +305,9 @@ export function googleName(link) {
   }
 }
 
+/** True for a Google Maps short link (maps.app.goo.gl/…, goo.gl/maps/…), by its prefix (sources.js). */
 export function isGoogleShortLink(link) {
-  return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\//i.test(String(link || ''));
+  return linkIs(link, 'short');
 }
 
 /* ================================================================== *
@@ -566,17 +567,18 @@ export async function readFile(file) {
   throw new Error(`I can't do anything with the extension ".${ext}".`);
 }
 
-/** Text from the link field in the settings. */
+/** A map link: its source (by prefix, sources.js) picks the reader. */
 export function readLink(link) {
   const s = String(link || '').trim();
-  if (isAppleGuideLink(s)) {
+  const source = sourceOf(s);
+  if (source === 'apple' && isAppleGuideLink(s)) {
     const { title, entries, appleIds } = readAppleGuide(s);
     return { name: title || 'Apple Guide', entries, appleIds, link: s };
   }
-  const apple = readApplePlace(s);
+  const apple = source === 'apple' ? readApplePlace(s) : null;
   if (apple) return { name: apple.name, entries: [apple], appleIds: [] };
 
-  if (/google\.[a-z.]+\/maps|maps\.google\./i.test(s) || isGoogleShortLink(s)) {
+  if (source === 'google') {
     const k = googleCoordinates(s);
     return {
       name: googleName(s) || 'Google place',

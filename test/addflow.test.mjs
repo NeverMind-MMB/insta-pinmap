@@ -600,3 +600,12 @@ test('the input bar: free text without a link still runs the place search', asyn
     delete globalThis.document;
   }
 });
+
+test('the input bar: lookalike links are no Instagram or Apple Maps links: the unsupported-link dialog', async () => {
+  for (const link of ['https://notinstagram.com/p/ABC123/', 'https://maps.apple.com.evil.example/place?ll=48.1,11.5&q=X']) {
+    const shown = [];
+    const { ui } = fakeUi();
+    await startAdd(link, { ...ui, showUnsupported: (l) => shown.push(l) });
+    assert.deepEqual(shown, [link]);
+  }
+});

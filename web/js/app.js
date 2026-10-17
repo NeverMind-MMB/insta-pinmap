@@ -11,6 +11,7 @@ import {
   exportBackup, showRestore, backupAgeLabel, linkShortcutInstall, showUnsupported,
 } from './ui.js';
 import { readFile } from './importers.js';
+import { isInstagramLink, shortcode } from './dedupe.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
@@ -213,7 +214,8 @@ function wireInput() {
     if (field.value.trim()) return;
     try {
       const text = (await navigator.clipboard.readText()).trim();
-      if (/instagram\.com\/(p|reel|reels|tv)\//i.test(text)) {
+      const link = (text.match(/https?:\/\/\S+/) || [text])[0];
+      if (isInstagramLink(link) && shortcode(link)) {
         const alreadySaved = store.db.pins.some((p) =>
           (p.posts || []).some((x) => x.url && text.includes(x.shortcode)));
         if (!alreadySaved) {

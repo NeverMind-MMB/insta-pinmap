@@ -98,3 +98,66 @@ test('a track in several parts (what togeojson makes of a GPX track with pauses)
   const read = await readFile(file('track.geojson', track));
   assert.deepEqual(read.entries.map((e) => [e.name, e.lat, e.lon]), [['Synthetic Tour', 47.1, 11.1]]);
 });
+
+/* ---------- Which source a link belongs to: its prefix, nothing more ---------- */
+
+const { sourceOf, SOURCE_GROUPS } = await import('../web/js/sources.js');
+const { isAppleGuideLink, isGoogleShortLink } = await import('../web/js/importers.js');
+
+test('sourceOf: every prefix in the table maps to its group', () => {
+  const linked = SOURCE_GROUPS.filter((g) => g.prefixes?.length);
+  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google']);
+  for (const g of linked) {
+    for (const prefix of g.prefixes) assert.equal(sourceOf(`https://${prefix.replace('*', 'com')}x`), g.id, prefix);
+  }
+});
+
+test('sourceOf: real link forms of each source', () => {
+  const cases = {
+    'https://www.instagram.com/p/ABC123/?igsh=x': 'instagram',
+    'https://www.instagram.com/reel/ABC123/': 'instagram',
+    'https://www.instagram.com/reels/ABC123/': 'instagram',
+    'https://www.instagram.com/tv/ABC123/': 'instagram',
+    'https://www.instagram.com/synthetic.user/p/ABC123/': 'instagram',
+    'https://instagr.am/p/ABC123/': 'instagram',
+    'https://maps.apple.com/guides?user=abc': 'apple',
+    'https://guides.apple.com/?ug=abc': 'apple',
+    'https://maps.apple.com/place?auid=1': 'apple',
+    'https://maps.apple.com/?ll=48.1,11.5&q=Cafe': 'apple',
+    'https://www.google.com/maps/place/Bar/@45.4,9.2,17z': 'google',
+    'https://www.google.de/maps/place/Bar': 'google',
+    'https://www.google.co.uk/maps?q=Bar': 'google',
+    'https://maps.google.com/?q=45.4,9.2': 'google',
+    'https://maps.google.de/?q=45.4,9.2': 'google',
+    'https://maps.app.goo.gl/abc': 'google',
+    'https://goo.gl/maps/abc': 'google',
+  };
+  for (const [link, group] of Object.entries(cases)) assert.equal(sourceOf(link), group, link);
+});
+
+test('sourceOf: scheme, "www.", "m." and the host\'s case don\'t matter', () => {
+  for (const link of ['instagram.com/p/ABC/', 'http://instagram.com/p/ABC/', 'https://m.instagram.com/p/ABC/', 'https://WWW.Instagram.COM/p/ABC/']) {
+    assert.equal(sourceOf(link), 'instagram', link);
+  }
+});
+
+test('sourceOf: lookalikes and other sites have no source', () => {
+  for (const link of [
+    'https://notinstagram.com/p/x', 'https://instagram.com.evil.example/p/x', 'https://www.pinterest.com/pin/1/', 'https://pin.it/x',
+    'https://maps.apple/p/x', 'https://maps.apple.com.evil.example/place?ll=1,2', 'https://google.evil.example/maps',
+    'https://www.google.com/search?q=maps', 'https://goo.gl/abc', 'ftp://instagram.com/p/x', 'Cafe Luitpold', '', null,
+  ]) {
+    assert.equal(sourceOf(link), null, String(link));
+  }
+});
+
+test('the longest prefix also says what a link is: a guide, a short link', () => {
+  assert.equal(isAppleGuideLink('https://maps.apple.com/guides?user=abc'), true);
+  assert.equal(isAppleGuideLink('https://guides.apple.com/?ug=abc'), true);
+  assert.equal(isAppleGuideLink('https://maps.apple.com/place?auid=1'), false);
+  assert.equal(isAppleGuideLink('https://evil.example/?ug=abc'), false, 'no source, no guide');
+  assert.equal(isGoogleShortLink('https://maps.app.goo.gl/abc'), true);
+  assert.equal(isGoogleShortLink('https://goo.gl/maps/abc'), true);
+  assert.equal(isGoogleShortLink('https://www.google.com/maps/place/Bar'), false);
+  assert.equal(isGoogleShortLink('https://goo.gl/abc'), false);
+});

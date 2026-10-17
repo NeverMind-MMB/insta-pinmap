@@ -6,7 +6,7 @@ import { store, normTag } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
-import { googleCoordinates, googleName, isAppleIdLink } from './importers.js';
+import { googleCoordinates, googleName, isAppleIdLink, isGoogleShortLink } from './importers.js';
 import {
   SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
@@ -801,7 +801,7 @@ export async function applyImport(entries, sourceName, env, tag = '') {
     let lon = e.lon;
 
     // Resolve short link
-    if (!Number.isFinite(lat) && e.url && /goo\.gl|maps\.apple\/|g\.co/i.test(e.url)) {
+    if (!Number.isFinite(lat) && e.url && isGoogleShortLink(e.url)) {
       const j = await resolveShortLink(e.url);
       if (j.ok && j.url) {
         const k = googleCoordinates(j.url);

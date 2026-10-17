@@ -7,6 +7,8 @@
  *     the decision is made by hand.
  */
 
+import { sourceOf } from './sources.js';
+
 /* ------------------------------------------------------------------ *
  * Instagram links
  * ------------------------------------------------------------------ */
@@ -38,8 +40,9 @@ export function embedLink(input) {
   return code ? `https://www.instagram.com/p/${code}/embed/captioned/` : null;
 }
 
+/** True for a link from Instagram, by its prefix (sources.js); shortcode() then reads the post's code. */
 export function isInstagramLink(input) {
-  return shortcode(input) !== null;
+  return sourceOf(input) === 'instagram';
 }
 
 /* ------------------------------------------------------------------ *

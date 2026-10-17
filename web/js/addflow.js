@@ -15,14 +15,14 @@ import {
   findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, eventDate } from './extract.js';
-import { readLink, appleIdEntries, isAppleGuideLink } from './importers.js';
+import { readLink, appleIdEntries, isAppleGuideLink, isGoogleShortLink } from './importers.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
   loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
-import { siteOf } from './sources.js';
+import { siteOf, sourceOf } from './sources.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -60,6 +60,7 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   const linkInText = text.match(/https?:\/\/\S+/);
   const candidateLink = linkInText ? linkInText[0].replace(/[),.]+$/, '') : text;
 
+  // The link's source, by its prefix (sources.js), picks the reader.
   if (isInstagramLink(candidateLink)) {
     return addFromInstagram(candidateLink, env);
   }
@@ -68,13 +69,8 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
     return addFromMapLink(candidateLink, env);
   }
 
-  // A link this version can't read: say so instead of searching for its address.
-  const site = linkInText ? siteOf(candidateLink) : '';
-  if (site) {
-    if (/(^|\.)instagram\.com$/i.test(site)) {
-      env.toast("This Instagram link isn't a post or reel.", 'error');
-      return;
-    }
+  // A link from no source this version reads: say so instead of searching for its address.
+  if (linkInText && siteOf(candidateLink)) {
     env.showUnsupported?.(candidateLink);
     return;
   }
@@ -89,9 +85,10 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   });
 }
 
-/** A map link the input bar reads: Apple Maps (maps.apple.com) places and guides, Google Maps, their short links. */
+/** A map link: from Apple Maps (places and guides) or Google Maps, by its prefix (sources.js). */
 export function isMapLink(link) {
-  return /maps\.apple\.com|guides\.apple|google\.[a-z.]+\/maps|maps\.google\.|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(String(link));
+  const source = sourceOf(link);
+  return source === 'apple' || source === 'google';
 }
 
 /**
@@ -115,6 +112,10 @@ export async function addFromSettings(field, env, closeSettings) {
 async function addFromInstagram(link, env) {
   const canonical = normalizeLink(link);
   const code = shortcode(link);
+  if (!code) {
+    env.toast("This Instagram link isn't a post or reel.", 'error');
+    return;
+  }
 
   // 1) Do we already know this post?
   const existing = findPost(store.db, canonical);
@@ -249,13 +250,13 @@ export function isShortcutPaste(text) {
  * '' for anything else.
  */
 function appleIdOnly(link) {
+  if (sourceOf(link) !== 'apple') return '';
   let u;
   try {
     u = new URL(link);
   } catch {
     return '';
   }
-  if (!/(^|\.)maps\.apple(\.com)?$/i.test(u.hostname)) return '';
   const auid = u.searchParams.get('auid') || '';
   if (/^\d{1,20}$/.test(auid)) return auid;
   const hex = /^I([0-9A-Fa-f]{1,16})$/.exec(u.searchParams.get('place-id') || '');
@@ -406,7 +407,7 @@ async function addFromMapLink(link, env, resolved = false) {
 
   // Short link? Resolve it first.
   // Resolved at most once: an answer that is again a short link is not sent back.
-  if (!resolved && !Number.isFinite(e0.lat) && /goo\.gl|maps\.apple\/|g\.co/i.test(e0.url || link)) {
+  if (!resolved && !Number.isFinite(e0.lat) && isGoogleShortLink(e0.url || link)) {
     const sent = e0.url || link;
     env.toast('Resolving the short link …', 'info', 8000);
     const j = await resolveShortLink(sent);
