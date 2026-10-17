@@ -19,11 +19,15 @@ export function issuesSearchUrl(site) {
  * where "*" in the host stands for a domain ending ("com", "de", "co.uk").
  * Reading the link (post codes, coordinates, guides) comes after, in that
  * source's reader. A new source is one more entry.
+ *   color: the default colour of its pins (store.pinColor), from the palette in store.js;
+ *   sources: the pin `source` values the readers write for it;
  *   guides: the prefixes of Apple guide links; short: those of short links the helper expands.
  */
 export const SOURCE_GROUPS = [
   {
     id: 'instagram',
+    color: '#8f4b6b',
+    sources: ['instagram'],
     prefixes: [
       'instagram.com/p/', 'instagram.com/reel/', 'instagram.com/reels/', 'instagram.com/tv/',
       // Any other instagram.com link is Instagram's too: the post reader tells a post
@@ -33,15 +37,30 @@ export const SOURCE_GROUPS = [
   },
   {
     id: 'apple',
+    color: '#3a6ea5',
+    sources: ['apple-ort', 'apple-guide'],
     prefixes: ['maps.apple.com/guides', 'guides.apple.com/', 'maps.apple.com/'],
     guides: ['maps.apple.com/guides', 'guides.apple.com/'],
   },
   {
     id: 'google',
+    color: '#2f7d5d',
+    sources: ['google-link', 'google-takeout', 'google-csv'],
     prefixes: ['google.*/maps', 'maps.google.*/', 'maps.app.goo.gl/', 'goo.gl/maps/'],
     short: ['maps.app.goo.gl/', 'goo.gl/maps/'],
   },
+  { id: 'gps', color: '#a3762b', sources: ['gpx'] },
+  { id: 'files', color: '#7a4b8f', sources: ['kml', 'geojson'] },
+  { id: 'search', color: '#b8543f', sources: ['manual'] },
 ];
+
+/** The colour of pins from a source the table doesn't know. */
+export const UNKNOWN_SOURCE_COLOR = '#8a8f98';
+
+/** A pin's default colour: that of the group its `source` value belongs to. */
+export function sourceColor(pinSource) {
+  return SOURCE_GROUPS.find((g) => g.sources.includes(pinSource))?.color ?? UNKNOWN_SOURCE_COLOR;
+}
 
 /** What "*" in a prefix's host stands for: a domain ending such as "com", "de", "co.uk", "com.au". */
 const DOMAIN_ENDING = /^[a-z]{2,3}(\.[a-z]{2})?$/;

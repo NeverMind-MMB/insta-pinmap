@@ -144,3 +144,46 @@ test('addPin stores a trimmed "when" and the post date', () => {
   clearTimeout(store._saveTimer);
   store._saveTimer = null;
 });
+
+/* ---------- Pin colours ---------- */
+
+const { buildBackupHtml, readBackupText } = await import('../web/js/backup.js');
+const T = '2026-01-01T00:00:00.000Z';
+
+test('pinColor: the pin\'s own colour, else its source\'s; tags no longer colour pins', () => {
+  store.db = normalizeDb({ tags: [{ name: 'coffee', color: '#111111' }] });
+  assert.equal(store.pinColor({ source: 'gpx', tags: ['coffee'], color: '#2F7D7A' }), '#2f7d7a');
+  assert.equal(store.pinColor({ source: 'gpx', tags: ['coffee'] }), '#a3762b');
+  for (const bad of ['red', '#abc', '#12345g', '', null]) assert.equal(store.pinColor({ source: 'kml', color: bad }), '#7a4b8f', String(bad));
+  assert.equal(store.pinColor({ source: 'somewhere-else', tags: ['coffee'] }), '#8a8f98');
+});
+
+test('normalizeDb keeps a valid pin colour and drops an invalid one', () => {
+  const db = normalizeDb({ pins: [pin('a', T, { color: '#2F7D7A' }), pin('b', T, { color: 'javascript:x' }), pin('c', T)] });
+  assert.equal(db.pins[0].color, '#2f7d7a');
+  assert.equal('color' in db.pins[1], false);
+  assert.equal('color' in db.pins[2], false);
+});
+
+test('addPin takes a colour; updatePin sets one, and Auto ("") clears it back to the source colour', () => {
+  store.db = normalizeDb({});
+  const p = store.addPin({ lat: 1, lon: 2, title: 'T', source: 'gpx', color: '#3a6ea5' });
+  assert.equal(p.color, '#3a6ea5');
+  store.updatePin(p.id, { color: '#8f4b6b' });
+  assert.equal(store.pin(p.id).color, '#8f4b6b');
+  store.updatePin(p.id, { color: '' });
+  assert.equal('color' in store.pin(p.id), false);
+  assert.equal(store.pinColor(store.pin(p.id)), '#a3762b');
+  assert.equal('color' in store.addPin({ lat: 1, lon: 3, title: 'U', source: 'gpx' }), false);
+  clearTimeout(store._saveTimer);
+  store._saveTimer = null;
+});
+
+test('a pin colour survives the backup (and its viewer draws it) and the merge', () => {
+  const db = normalizeDb({ pins: [pin('a', T, { color: '#7a4b8f', source: 'gpx' })] });
+  const html = buildBackupHtml(db, { leafletJs: '', leafletCss: '', colorOf: (p) => store.pinColor(p) });
+  assert.match(html, /"f":"#7a4b8f"/);
+  const back = normalizeDb(readBackupText(html));
+  assert.equal(back.pins[0].color, '#7a4b8f');
+  assert.equal(mergeDb(normalizeDb({}), back).db.pins[0].color, '#7a4b8f');
+});

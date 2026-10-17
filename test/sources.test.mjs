@@ -161,3 +161,25 @@ test('the longest prefix also says what a link is: a guide, a short link', () =>
   assert.equal(isGoogleShortLink('https://www.google.com/maps/place/Bar'), false);
   assert.equal(isGoogleShortLink('https://goo.gl/abc'), false);
 });
+
+/* ---------- A pin's colour defaults to its source ---------- */
+
+const { sourceColor } = await import('../web/js/sources.js');
+const { PIN_COLORS } = await import('../web/js/store.js');
+
+test('source colours: each source value the app writes gets its group\'s colour; unknown ones the grey', () => {
+  const want = {
+    instagram: '#8f4b6b', 'apple-ort': '#3a6ea5', 'apple-guide': '#3a6ea5',
+    'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d',
+    gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f',
+  };
+  for (const [source, color] of Object.entries(want)) assert.equal(sourceColor(source), color, source);
+  for (const source of ['import', 'somewhere-else', '', undefined]) assert.equal(sourceColor(source), '#8a8f98', String(source));
+});
+
+test('source colours: one per group, all different, all from the pin colour palette', () => {
+  const colors = SOURCE_GROUPS.map((g) => g.color);
+  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id), ['instagram', 'apple', 'google', 'gps', 'files', 'search']);
+  assert.equal(new Set(colors).size, colors.length);
+  for (const c of colors) assert.ok(PIN_COLORS.some((p) => p.color === c), c);
+});

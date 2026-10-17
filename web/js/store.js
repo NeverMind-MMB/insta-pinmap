@@ -8,6 +8,7 @@
 
 import { buildIndex, newId, shortcode } from './dedupe.js';
 import { idbGet, idbSet } from './idb.js';
+import { sourceColor } from './sources.js';
 
 const DB_KEY = 'db';
 const SETTINGS_KEY = 'settings';
@@ -26,6 +27,18 @@ const COLORS = [
   '#b8543f', '#2f7d5d', '#3a6ea5', '#a3762b', '#7a4b8f',
   '#c0603f', '#2f7d7a', '#8f4b6b', '#4f7a2b', '#5a5f8f',
 ];
+
+/** The pin colours to choose from (pin colour picker): eight of the colours above, with names. */
+export const PIN_COLORS = [
+  { name: 'Rust', color: '#b8543f' }, { name: 'Amber', color: '#a3762b' }, { name: 'Olive', color: '#4f7a2b' },
+  { name: 'Green', color: '#2f7d5d' }, { name: 'Teal', color: '#2f7d7a' }, { name: 'Blue', color: '#3a6ea5' },
+  { name: 'Purple', color: '#7a4b8f' }, { name: 'Plum', color: '#8f4b6b' },
+];
+
+/** A pin colour as stored: "#rrggbb" in lowercase; '' for anything else. */
+export function pinColorValue(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '';
+}
 
 export const store = {
   db: normalizeDb({}),
@@ -111,7 +124,7 @@ export const store = {
 
   pin(id) { return this.db.pins.find((p) => p.id === id) || null; },
 
-  addPin({ lat, lon, title, address = '', note = '', when = '', status = 'wishlist', tags = [], post = null, source = 'manual' }) {
+  addPin({ lat, lon, title, address = '', note = '', when = '', status = 'wishlist', tags = [], post = null, source = 'manual', color = '' }) {
     const now = new Date().toISOString();
     const pin = {
       id: newId('p'),
@@ -124,6 +137,7 @@ export const store = {
       posts: [],
       keptApartFrom: [],
     };
+    if (pinColorValue(color)) pin.color = pinColorValue(color);
     if (post) pin.posts.push(makePost(post));
     this.change((db) => {
       db.pins.push(pin);
@@ -156,6 +170,11 @@ export const store = {
       }
       if (fields.lat != null) pin.lat = round7(fields.lat);
       if (fields.lon != null) pin.lon = round7(fields.lon);
+      // A colour, or '' (Auto) for the source's colour.
+      if ('color' in fields) {
+        if (pinColorValue(fields.color)) pin.color = pinColorValue(fields.color);
+        else delete pin.color;
+      }
       pin.updatedAt = new Date().toISOString();
       return pin;
     });
@@ -201,10 +220,9 @@ export const store = {
     return COLORS[h % COLORS.length];
   },
 
-  /** Color of a pin: that of its first tag, otherwise the accent color. */
+  /** Colour of a pin: its own (pin.color), else its source's (sources.js). Tags don't colour pins. */
   pinColor(pin) {
-    const t = (pin.tags || [])[0];
-    return t ? this.tagColor(t) : '#8a8f98';
+    return pinColorValue(pin?.color) || sourceColor(pin?.source);
   },
 
   /* ---------------- Backup ---------------- */
@@ -382,6 +400,7 @@ export function normalizeDb(raw) {
       status: p.status === 'visited' ? 'visited' : 'wishlist',
       tags: [...new Set((Array.isArray(p.tags) ? p.tags : []).map(normTag).filter(Boolean))],
       source: p.source || p.quelle || 'manual',
+      ...(pinColorValue(p.color) ? { color: pinColorValue(p.color) } : {}),
       createdAt: p.createdAt || new Date().toISOString(),
       updatedAt: p.updatedAt || p.createdAt || new Date().toISOString(),
       posts: (Array.isArray(p.posts) ? p.posts : []).filter((x) => x && typeof x === 'object' && /^https?:[/][/]/i.test(String(x.url || ''))).map((x) => ({
