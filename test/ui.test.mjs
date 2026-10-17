@@ -173,3 +173,57 @@ test('import tag: no stray hyphens where emoji or "&" were, in the prefill and i
   const pin = await importRows([row('New place', 47.1, 11.1)], 'Synthetic Guide', ' Bars & Cafés 🍸', []);
   assert.deepEqual(pin('New place').tags, ['bars-cafés']);
 });
+
+/* ---------- The unsupported-link dialog (2.0.10) ---------- */
+
+test('index.html: the unsupported-link dialog, its GitHub link without an address, and the supported list collapsed', () => {
+  const dlg = between('id="dlg-unsupported"', '</dialog>');
+  assert.match(dlg, /<h2 id="dlg-unsupported-title">This link isn't supported yet<\/h2>/);
+  const link = dlg.match(/<a\b[^>]*\bid="unsupported-issues"[^>]*>([^<]*)<\/a>/);
+  assert.ok(link, 'Check GitHub issues link');
+  assert.equal(link[1], 'Check GitHub issues');
+  assert.match(link[0], /target="_blank"/);
+  assert.match(link[0], /rel="noopener"/);
+  assert.doesNotMatch(link[0], /\bhref=/, 'the address comes from sources.js');
+  const details = dlg.match(/<details\b([^>]*)>\s*<summary>Supported links and files<\/summary>/);
+  assert.ok(details, 'Supported links and files');
+  assert.doesNotMatch(details[1], /\bopen\b/, 'collapsed');
+  assert.ok(!html.includes('github.com'), 'ISSUES_URL lives in sources.js only');
+});
+
+/** Just enough document for showUnsupported. */
+function dialogDocument() {
+  const node = () => ({
+    textContent: '', href: '', open: true, shown: false, children: [],
+    append(...kids) { this.children.push(...kids); },
+    replaceChildren(...kids) { this.children = kids; },
+    showModal() { this.shown = true; },
+  });
+  const els = new Map();
+  return { getElementById: (id) => els.get(id) ?? els.set(id, node()).get(id), createElement: () => node() };
+}
+
+test('showUnsupported: names the site, searches GitHub issues for it, lists what works, collapsed', async () => {
+  const { showUnsupported } = await import('../web/js/ui.js');
+  const doc = dialogDocument();
+  globalThis.document = doc;
+  try {
+    doc.getElementById('unsupported-list').children = ['left over'];
+    showUnsupported('https://www.pinterest.com/pin/123456789/');
+    assert.equal(doc.getElementById('unsupported-text').textContent,
+      "pinterest.com links don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.");
+    assert.equal(doc.getElementById('unsupported-issues').href,
+      'https://github.com/NeverMind-MMB/insta-pinmap/issues?q=is%3Aissue%20pinterest.com');
+    const lines = doc.getElementById('unsupported-list').children
+      .map((p) => p.children.map((c) => (typeof c === 'string' ? c : c.textContent)).join(''));
+    assert.equal(lines.length, 3);
+    assert.match(lines[0], /^One link at a time \(input bar\): instagram\.com\/p\/… · instagram\.com\/reel\/… · /);
+    assert.match(lines[0], / — or type a place name to search$/);
+    assert.match(lines[1], /^Several links at once \(Settings → Import\): maps\.apple\.com\/… place links · /);
+    assert.match(lines[2], /^Files \(Settings → Import → Choose files\): Google Maps saved places \(Google Takeout\) · /);
+    assert.equal(doc.getElementById('unsupported-sources').open, false);
+    assert.equal(doc.getElementById('dlg-unsupported').shown, true);
+  } finally {
+    delete globalThis.document;
+  }
+});

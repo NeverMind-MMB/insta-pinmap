@@ -406,6 +406,29 @@
   </form>
 </dialog>
 
+<!-- A link to a site the app doesn't read yet -->
+<dialog class="sheet sheet--narrow" id="dlg-unsupported" aria-labelledby="dlg-unsupported-title">
+  <form method="dialog" class="sheet__form">
+    <header class="sheet__head">
+      <h2 id="dlg-unsupported-title">This link isn't supported yet</h2>
+      <button type="submit" formnovalidate value="close" class="iconbtn" aria-label="Close">✕</button>
+    </header>
+    <div class="sheet__body">
+      <p id="unsupported-text"></p>
+      <div class="buttonrow">
+        <a class="btn btn--small" id="unsupported-issues" target="_blank" rel="noopener">Check GitHub issues</a>
+      </div>
+      <details class="field__help" id="unsupported-sources">
+        <summary>Supported links and files</summary>
+        <div id="unsupported-list"></div>
+      </details>
+    </div>
+    <footer class="sheet__foot">
+      <button type="submit" formnovalidate value="close" class="btn btn--primary">OK</button>
+    </footer>
+  </form>
+</dialog>
+
 <output class="toast" id="toast" role="status" aria-live="polite" popover="manual"></output>
 
 <script>

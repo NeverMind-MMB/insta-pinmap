@@ -13,6 +13,7 @@ import {
   lookupState, lookupNotice, lookupButton, rememberRequested, copiedNotice,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
+import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf } from './sources.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -648,6 +649,26 @@ export function showImport(entries, sourceName, env, guide = null) {
   };
 
   dlg.showModal();
+}
+
+/**
+ * The dialog for a link to a site this version doesn't read: which site, a
+ * GitHub issue search for it, and (collapsed) every supported link and file.
+ */
+export function showUnsupported(link) {
+  const site = siteOf(link);
+  $('unsupported-text').textContent =
+    `${site} links don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.`;
+  $('unsupported-issues').href = issuesSearchUrl(site);
+  $('unsupported-list').replaceChildren(...SUPPORTED_SOURCES.map((group) => {
+    const p = document.createElement('p');
+    const title = document.createElement('strong');
+    title.textContent = `${group.title}: `;
+    p.append(title, group.items.join(' · ') + (group.note ? ` — ${group.note}` : ''));
+    return p;
+  }));
+  $('unsupported-sources').open = false;
+  $('dlg-unsupported').showModal();
 }
 
 /** Points the "Shortcut help" install links (import dialog, Settings) at the shared Shortcut. */

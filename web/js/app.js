@@ -8,7 +8,7 @@ import { startAdd, addFromSettings, wireConfirm, guideImportEntries, isShortcutP
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
-  exportBackup, showRestore, backupAgeLabel, linkShortcutInstall,
+  exportBackup, showRestore, backupAgeLabel, linkShortcutInstall, showUnsupported,
 } from './ui.js';
 import { readFile } from './importers.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
@@ -28,6 +28,7 @@ const env = {
   redraw,
   showDetail: (id) => showDetail(id, env),
   showImport: (e, n, guide) => showImport(e, n, env, guide),
+  showUnsupported,
 };
 
 /* ================================================================== *
