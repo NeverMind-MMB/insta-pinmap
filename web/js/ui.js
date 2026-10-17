@@ -6,7 +6,7 @@ import { store, normTag } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
-import { googleCoordinates, isAppleIdLink } from './importers.js';
+import { googleCoordinates, googleName, isAppleIdLink } from './importers.js';
 import {
   SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
@@ -518,6 +518,8 @@ function linkButton(text, href) {
 
 /** Source names the callers of showImport use when there is no real one: no tag from them. */
 const STAND_IN_NAMES = new Set(['', 'apple guide', 'places found', 'apple maps places']);
+/** Names importers.js gives a place without one (a Google short link, a list row without a title). */
+const STAND_IN_PLACE_NAMES = new Set(['Google place', 'Untitled']);
 const IMPORT_FILE_EXTENSION = /\.(csv|tsv|json|geojson|kml|kmz|gpx|zip)(?=,|$)/gi;
 
 /**
@@ -775,12 +777,14 @@ export async function applyImport(entries, sourceName, env, tag = '') {
       if (j.ok && j.url) {
         const k = googleCoordinates(j.url);
         if (k) { lat = k.lat; lon = k.lon; }
+        // A short link carries no name; the resolved one often does.
+        if (STAND_IN_PLACE_NAMES.has(e.name)) e.name = googleName(j.url) || e.name;
       }
     }
 
     // Search by name — not for Apple Maps places the guide names only by ID
-    // ("Apple Maps place" would find something random).
-    if (!Number.isFinite(lat) && !isAppleIdLink(e.url)) {
+    // ("Apple Maps place" would find something random), nor for a stand-in name.
+    if (!Number.isFinite(lat) && !isAppleIdLink(e.url) && !STAND_IN_PLACE_NAMES.has(e.name)) {
       const q = [e.name, e.address].filter(Boolean).join(', ');
       const j = await searchPlaces(q, { limit: 1 });
       const t = (j.results || [])[0];

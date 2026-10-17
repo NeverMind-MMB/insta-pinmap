@@ -113,3 +113,45 @@ test('Import selected from Google list files: the field replaces the list name i
   pin = await importRows([listRow('A', 40, 'mailand'), listRow('B', 41, 'rom')], 'Mailand.csv, Rom.csv', '', []);
   assert.deepEqual([pin('A').tags, pin('B').tags], [['mailand'], ['rom']]);
 });
+
+/* ---------- Fix round 1 (2.0.10 review) ---------- */
+
+/** fetch for /api/resolve (answers `resolved`) and the place search (answers `hit` or nothing); records the URLs. */
+function stubNetwork({ resolved, hit = null }) {
+  const calls = [];
+  const json = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    if (u.startsWith('/api/resolve')) return json({ ok: true, url: resolved });
+    if (u.includes('photon')) {
+      return json({ features: hit ? [{ geometry: { coordinates: [hit.lon, hit.lat] }, properties: { name: hit.name } }] : [] });
+    }
+    return json([]);
+  };
+  return calls;
+}
+
+/** A batch row for a Google short link, as readLink makes it. */
+const shortLinkRow = (url) => row('Google place', null, null, { url, source: 'google-link', warning: 'Short link; it will be resolved on import.' });
+
+test('a Google short link in an import: the pin takes name and spot from the resolved link', async () => {
+  stubNetwork({ resolved: 'https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721' });
+  const pin = await importRows([shortLinkRow('https://maps.app.goo.gl/synthetic1')], '', '', []);
+  assert.equal(store.db.pins.length, 1);
+  assert.equal(pin('Synthetic Bar')?.lat, 45.4719);
+});
+
+test('a Google short link resolving to a name without a spot: searched by that name', async () => {
+  const calls = stubNetwork({ resolved: 'https://www.google.com/maps/place/Synthetic+Bar/', hit: { name: 'Synthetic Bar', lat: 45.5, lon: 9.3 } });
+  const pin = await importRows([shortLinkRow('https://maps.app.goo.gl/synthetic2')], '', '', []);
+  assert.equal(pin('Synthetic Bar')?.lat, 45.5);
+  assert.ok(calls.some((u) => u.includes('photon') && u.includes('q=Synthetic+Bar')), calls.join('\n'));
+});
+
+test('a Google short link resolving to neither name nor spot: no place search for "Google place"', async () => {
+  const calls = stubNetwork({ resolved: 'https://www.google.com/maps?cid=1234567890' });
+  await importRows([shortLinkRow('https://maps.app.goo.gl/synthetic3')], '', '', []);
+  assert.equal(store.db.pins.length, 0, 'left without coordinates');
+  assert.deepEqual(calls.filter((u) => !u.startsWith('/api/resolve')), [], 'nothing searched');
+});
