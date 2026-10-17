@@ -438,12 +438,26 @@ test('place links that are not all the waiting guide\'s, or come with other plac
   }
 });
 
-test('a guide link stays out of a list of place links; with one place link it keeps its own path', async () => {
+test('Settings → Import: a guide link stays out of a list of place links', async () => {
   const { imports } = await readInSettings([SYN_GUIDE, LL_LINK, PLACE_ID_LINK].join('\n'));
   assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe', 'Synthetic Lake']);
   assert.equal(imports[0].g, null, 'none of the guide\'s Apple IDs');
-  const bar = await pasteIntoBar([SYN_GUIDE, LL_LINK].join('\n'));
-  assert.equal(bar.imports[0].n, 'Synthetic Guide', 'the guide\'s import, with its title and tag');
+});
+
+test('the input bar: any two links bring the hint and import nothing (two posts, two guides, a guide and a place)', async () => {
+  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  for (const text of [
+    'https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/',
+    `${APPLE_UG}\n${SYN_GUIDE}`,
+    `${SYN_GUIDE}\n${LL_LINK}`,
+    `Look: https://www.instagram.com/p/AAA111/ and ${LL_LINK}`,
+  ]) {
+    const { imports, toasts, cleared } = await pasteIntoBar(text);
+    assert.deepEqual(imports, [], text);
+    assert.deepEqual(toasts, [[SEVERAL_LINKS_HINT, 'info']], text);
+    assert.equal(cleared, 0, text);
+    assert.equal(isShortcutPaste(text), true, `${text}: straight to the add flow, so the hint shows on paste`);
+  }
 });
 
 test('Settings → Import: a list of place links says in one toast how many other links it left out', async () => {

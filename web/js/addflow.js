@@ -216,14 +216,14 @@ function guideWithResults(text) {
 
 /**
  * True for the Shortcut's output (a guide page, place pages, "@@" lines, or a
- * guide link with results below it) and for two or more map place links (which
+ * guide link with results below it) and for two or more different links (which
  * startAdd sends to Settings → Import): it goes straight to startAdd, since a
  * text field would drop its line breaks.
  */
 export function isShortcutPaste(text) {
   const s = String(text ?? '').trim();
   return looksLikeGuidePage(s) || /<html/i.test(s) || guideWithResults(s) !== null ||
-    (s.includes('@@') && parseShortcutResults(s).size > 0) || placeLinks(s).links >= 2;
+    (s.includes('@@') && parseShortcutResults(s).size > 0) || placeLinks(s).distinct >= 2;
 }
 
 /**
@@ -250,8 +250,9 @@ function appleIdOnly(link) {
  * once: their places as import rows, and the Apple IDs of Apple links without
  * coordinates that name their place by ID (each ID once). Guide links stay out:
  * a guide goes its own way, with its title.
- * @returns {{entries: Array, appleIds: string[], links: number, skipped: number}}
- *   links: how many brought a place; skipped: how many other links (guides, links it can't read)
+ * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number}}
+ *   links: how many brought a place; skipped: how many other links (guides, links it can't read);
+ *   distinct: how many different links the paste has
  */
 function placeLinks(text) {
   const entries = [];
@@ -279,7 +280,7 @@ function placeLinks(text) {
     }
     links++;
   }
-  return { entries, appleIds, links, skipped };
+  return { entries, appleIds, links, skipped, distinct: seen.size };
 }
 
 /**
@@ -291,7 +292,7 @@ function placeLinks(text) {
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
 function addFromPlaceLinks(text, env, severalLinks) {
-  const { entries, appleIds, links, skipped } = placeLinks(text);
+  const { entries, appleIds, links, skipped, distinct } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
   const pending = appleIds.length && !entries.length && !skipped ? loadPendingGuide() : null;
@@ -301,11 +302,13 @@ function addFromPlaceLinks(text, env, severalLinks) {
     env.inputDone?.();
     return true;
   }
-  if (links < 2) return false;
   if (!severalLinks) {
+    // The input bar: any two different links, not just place links.
+    if (distinct < 2) return false;
     env.toast('Several links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
     return true;
   }
+  if (links < 2) return false;
   const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
   env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
   if (skipped) {
