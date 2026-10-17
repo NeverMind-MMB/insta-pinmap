@@ -22,7 +22,8 @@ import {
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
-import { siteOf, sourceOf } from './sources.js';
+import { siteOf, sourceOf, sourceColor } from './sources.js';
+import { colorPicker, pickedColor } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -483,6 +484,9 @@ export async function openConfirm(cfg) {
   $('confirm-when-hint').hidden = !cfg.whenSuggestion;
   $('confirm-search').value = '';
   setStatus('wishlist');
+  // Colour: Auto, drawn in the colour of where the place comes from.
+  state.colorChoice = colorPicker('confirm-color-choice', { auto: sourceColor(cfg.source) });
+  $('confirm-color').replaceChildren(state.colorChoice);
   drawTags();
   drawTagSuggestions(cfg.tagSuggestions || []);
   fillTagDatalist();
@@ -746,6 +750,7 @@ async function save(env) {
     tags: state.tags,
     post,
     source: state.source,
+    color: pickedColor(state.colorChoice),
   });
 
   // Remember that these pins are meant to stay separate

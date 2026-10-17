@@ -491,13 +491,20 @@ test('Settings → Import: the copied place links with another link: their own l
 
 /** A document just big enough for the confirm dialog; without #confirm-map the preview map stays off. */
 function confirmDocument() {
-  const make = () => {
+  const descendants = (n) => (n.children || []).flatMap((c) => [c, ...descendants(c)]);
+  const make = (tag = '') => {
     const on = {};
     return {
-      hidden: false, open: false, disabled: false, value: '', textContent: '', innerHTML: '', scrollTop: 0,
-      style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} },
-      setAttribute() {}, appendChild() {}, append() {}, focus() {}, select() {},
-      querySelector: () => make(), querySelectorAll: () => [],
+      tag, hidden: false, open: false, disabled: false, checked: false, value: '', textContent: '', innerHTML: '', scrollTop: 0,
+      style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, children: [],
+      setAttribute() {}, focus() {}, select() {},
+      appendChild(kid) { this.children.push(kid); return kid; },
+      append(...kids) { this.children.push(...kids); },
+      replaceChildren(...kids) { this.children = kids; },
+      querySelector(sel) {
+        return sel === 'input:checked' ? descendants(this).find((n) => n.tag === 'input' && n.checked) || null : make();
+      },
+      querySelectorAll: () => [],
       addEventListener(type, fn) { (on[type] ??= []).push(fn); },
       fire(type) { for (const fn of on[type] || []) fn({ preventDefault() {} }); },
       showModal() { this.open = true; },
@@ -507,7 +514,7 @@ function confirmDocument() {
   const els = new Map();
   return {
     getElementById: (id) => (id === 'confirm-map' ? null : els.get(id) ?? els.set(id, make()).get(id)),
-    createElement: () => make(), createTextNode: () => ({}), querySelectorAll: () => [],
+    createElement: (tag) => make(tag), createTextNode: () => ({}), querySelectorAll: () => [],
   };
 }
 
@@ -607,5 +614,34 @@ test('the input bar: lookalike links are no Instagram or Apple Maps links: the u
     const { ui } = fakeUi();
     await startAdd(link, { ...ui, showUnsupported: (l) => shown.push(l) });
     assert.deepEqual(shown, [link]);
+  }
+});
+
+test('Confirm place: colour "Auto" (in the source\'s colour) by default; a picked colour goes to the new pin', async () => {
+  const { wireConfirm } = await import('../web/js/addflow.js');
+  const { store, normalizeDb } = await import('../web/js/store.js');
+  for (const [pick, want] of [[null, undefined], ['#7a4b8f', '#7a4b8f']]) {
+    const doc = confirmDocument();
+    globalThis.document = doc;
+    store.db = normalizeDb({});
+    try {
+      const { ui } = fakeUi();
+      const appEnv = { ...ui, redraw() {}, inputDone() {} };
+      wireConfirm(appEnv);
+      await startAdd(LL_LINK, appEnv);
+      const picker = doc.getElementById('confirm-color').children[0];
+      assert.ok(picker, 'a colour picker in the confirm dialog');
+      const radios = picker.children.map((label) => label.children[0]);
+      assert.equal(radios.find((r) => r.checked)?.value, '', 'Auto');
+      assert.equal(picker.children[0].children[1].style.background, '#3a6ea5', 'Auto shows the Apple Maps colour');
+      if (pick) for (const r of radios) r.checked = r.value === pick;
+      doc.getElementById('confirm-save').fire('click');
+      assert.equal(store.db.pins.length, 1);
+      assert.equal(store.db.pins[0].color, want, String(pick));
+    } finally {
+      delete globalThis.document;
+      clearTimeout(store._saveTimer);
+      store._saveTimer = null;
+    }
   }
 });
