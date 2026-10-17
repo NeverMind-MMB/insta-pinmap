@@ -35,8 +35,10 @@ let state = null;   // the operation in progress
 /**
  * @param {string} input   Instagram link, maps link or free search text
  * @param {object} env  { toast, map, redraw }
+ * @param {{severalLinks?: boolean}} [options]  severalLinks: from Settings → Import, where
+ *   several place links open one import dialog (the input bar takes one link at a time)
  */
-export async function startAdd(input, env) {
+export async function startAdd(input, env, { severalLinks = false } = {}) {
   const text = String(input || '').trim();
   if (!text) return;
 
@@ -48,8 +50,9 @@ export async function startAdd(input, env) {
   if (text.includes('@@') && addFromResultLines(text, env)) return;
   // The Shortcut's place pages, likewise, for a waiting guide.
   if (/<html/i.test(text) && addFromPlacePages(text, env)) return;
-  // Two or more map place links, one per line: one import dialog for all of them.
-  if (!/<html/i.test(text) && addFromPlaceLinks(text, env)) return;
+  // Two or more map place links, one per line: one import dialog for all of them
+  // from Settings, a hint there from the input bar.
+  if (!/<html/i.test(text) && addFromPlaceLinks(text, env, severalLinks)) return;
 
   // Fish the link out of shared text: Android often sends
   // "Check this out: https://... " instead of just the URL.
@@ -75,16 +78,17 @@ export async function startAdd(input, env) {
 }
 
 /**
- * Settings → Import → "Read": the pasted text goes the input bar's way. Settings
- * closes first, so the dialog startAdd opens is on top; like the input bar, the
- * field empties once a dialog has the text.
+ * Settings → Import → "Read": the pasted text goes the input bar's way, and
+ * several place links open one import dialog. Settings closes first, so the
+ * dialog startAdd opens is on top; like the input bar, the field empties once
+ * a dialog has the text.
  * @param {{value: string}} field  the paste box
  */
 export async function addFromSettings(field, env, closeSettings) {
   const text = field.value.trim();
   if (!text) return;
   closeSettings();
-  await startAdd(text, { ...env, inputDone: () => { field.value = ''; } });
+  await startAdd(text, { ...env, inputDone: () => { field.value = ''; } }, { severalLinks: true });
 }
 
 /* ================================================================== *
@@ -212,8 +216,9 @@ function guideWithResults(text) {
 
 /**
  * True for the Shortcut's output (a guide page, place pages, "@@" lines, or a
- * guide link with results below it) and for two or more map place links: it
- * goes straight to startAdd, since a text field would drop its line breaks.
+ * guide link with results below it) and for two or more map place links (which
+ * startAdd sends to Settings → Import): it goes straight to startAdd, since a
+ * text field would drop its line breaks.
  */
 export function isShortcutPaste(text) {
   const s = String(text ?? '').trim();
@@ -278,12 +283,14 @@ function placeLinks(text) {
 }
 
 /**
- * Two or more map place links in one paste: one import dialog, one row per
- * place. Rows with coordinates are checked; Apple places named only by ID get
- * the dialog's Shortcut lookup, as a guide's do.
+ * Two or more map place links in one paste, from Settings → Import
+ * (`severalLinks`): one import dialog, one row per place. Rows with coordinates
+ * are checked; Apple places named only by ID get the dialog's Shortcut lookup,
+ * as a guide's do. The input bar takes one link at a time: it imports nothing
+ * and points to Settings instead.
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
-function addFromPlaceLinks(text, env) {
+function addFromPlaceLinks(text, env, severalLinks) {
   const { entries, appleIds, links, skipped } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
@@ -295,6 +302,10 @@ function addFromPlaceLinks(text, env) {
     return true;
   }
   if (links < 2) return false;
+  if (!severalLinks) {
+    env.toast('Several links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
+    return true;
+  }
   const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
   env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
   if (skipped) {
