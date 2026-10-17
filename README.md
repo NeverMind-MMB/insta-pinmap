@@ -16,8 +16,12 @@ what it found before anything is saved.
 | My Maps (KML/KMZ), GPX, GeoJSON | The file itself. |
 | Instagram posts | The post's text, read by the app's helper (see below). |
 
-Paste links into the input bar; files go in through **Settings → Import →
-Choose files**.
+Paste links into the input bar or **Settings → Import**; several place links at
+once (one per line) open one import list. Files go in through **Settings →
+Import → Choose files**. The import list puts a tag with the guide's, list's or
+file's name on every place it imports; change or clear it before you tap
+**Import selected**. With the tag filter you then show or hide a whole guide
+at once.
 
 **Instagram posts:** paste or share a link. The app reads the post's text,
 suggests where the place is, you confirm, and the pin is on your map. Hashtags
@@ -102,7 +106,9 @@ guide link straight into the app and the import dialog lists them as unchecked
 One Shortcut does it all: **Fetch Apple Guide**. Open
 <https://www.icloud.com/shortcuts/6aeae7fdbdc94bffb0273030edffdd92> on your
 iPhone and tap **Add Shortcut**. Keep the name: the app's **Look up with iPhone
-Shortcut** button starts it by that name.
+Shortcut** button starts it by that name. The app has the same link, plus the
+tips below, under **Shortcut help** in the import dialog and in **Settings →
+Import**.
 
 Set up once:
 
