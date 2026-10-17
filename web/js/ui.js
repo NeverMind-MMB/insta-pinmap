@@ -562,6 +562,12 @@ export function showImport(entries, sourceName, env, guide = null) {
   const list = $('import-list');
   $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
   $('import-tag').value = importTag(sourceName);
+  // One colour for the new pins; Auto shows the rows' source colour when they share one.
+  const rowColors = new Set(entries.map((e) => sourceColor(e.source)));
+  const colorChoice = colorPicker('import-color-choice', {
+    label: 'Colour for these places', auto: rowColors.size === 1 ? [...rowColors][0] : UNKNOWN_SOURCE_COLOR,
+  });
+  $('import-color').replaceChildren(colorChoice);
 
   const checked = entries.map((e) => e.checked !== false);
   const noCoords = (e) => !Number.isFinite(e.lat) || !Number.isFinite(e.lon);
@@ -656,8 +662,9 @@ export function showImport(entries, sourceName, env, guide = null) {
   $('import-apply').onclick = async () => {
     const selected = entries.filter((_, i) => checked[i]);
     const tag = $('import-tag').value;
+    const color = pickedColor(colorChoice);
     dlg.close();
-    await applyImport(selected, sourceName, env, tag);
+    await applyImport(selected, sourceName, env, tag, color);
   };
 
   dlg.showModal();
@@ -834,8 +841,9 @@ function wireAppleLookup(guide, entries, onResults) {
 /**
  * Imports the rows. Each new pin gets the tag from the dialog's tag field
  * (`tag`, normalized here); a pin already at a row's spot gets it added.
+ * `color`: the colour picked for the new pins, '' (Auto) for each its source's.
  */
-export async function applyImport(entries, sourceName, env, tag = '') {
+export async function applyImport(entries, sourceName, env, tag = '', color = '') {
   let created = 0;
   let skipped = 0;
   const failed = [];
@@ -900,6 +908,7 @@ export async function applyImport(entries, sourceName, env, tag = '') {
       note: e.note || '',
       tags,
       source: e.source || 'import',
+      color,
     });
     created++;
   }

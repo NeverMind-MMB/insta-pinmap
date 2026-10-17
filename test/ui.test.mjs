@@ -75,11 +75,11 @@ const row = (name, lat, lon, extra = {}) => ({ name, address: '', lat, lon, url:
 const OLD_PIN = { id: 'old', lat: 48.1, lon: 11.5, title: 'Old place', tags: ['coffee'], updatedAt: '2026-01-01T00:00:00.000Z' };
 
 /** "Import selected" with the tag field holding `tag`; returns a lookup of the pins by title. */
-async function importRows(rows, sourceName, tag, pins = [OLD_PIN]) {
+async function importRows(rows, sourceName, tag, pins = [OLD_PIN], color = '') {
   globalThis.document = fakeDocument();
   store.db = normalizeDb({ pins: structuredClone(pins) });
   try {
-    await applyImport(rows, sourceName, { redraw() {} }, tag);
+    await applyImport(rows, sourceName, { redraw() {} }, tag, color);
   } finally {
     delete globalThis.document;
   }
@@ -288,4 +288,15 @@ test('colour picker: the pin\'s colour starts checked; a colour outside the pale
   } finally {
     delete globalThis.document;
   }
+});
+
+test('Import selected with a colour: every new pin gets it, a pin already there keeps its own; Auto leaves each its source colour', async () => {
+  const oldPin = { ...OLD_PIN, color: '#2f7d7a' };
+  let pin = await importRows([row('New place', 47.1, 11.1), row('Old place again', 48.1, 11.5)], 'Synthetic Guide', '', [oldPin], '#8f4b6b');
+  assert.equal(pin('New place').color, '#8f4b6b');
+  assert.equal(pin('Old place').color, '#2f7d7a');
+  pin = await importRows([row('New place', 47.1, 11.1), row('Track start', 47.2, 11.2, { source: 'gpx' })], 'Mixed', '', [], '');
+  assert.equal('color' in pin('New place'), false);
+  assert.equal(store.pinColor(pin('New place')), '#3a6ea5', 'Apple Maps');
+  assert.equal(store.pinColor(pin('Track start')), '#a3762b', 'GPS file');
 });
