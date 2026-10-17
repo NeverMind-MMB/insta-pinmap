@@ -29,7 +29,7 @@ from Apple Guides, Apple and Google Maps links, Google Takeout, My Maps
 
 ## Install
 
-Open the app's address in the browser once, then:
+Open your copy's address (see "Run your own copy") in the browser once, then:
 
 - **iPhone (Safari):** Share button → **Add to Home Screen**. Always open the app
   from that icon — iPhone keeps the home-screen app's data separately and safely.
@@ -65,62 +65,67 @@ Your pins are stored in the app on your phone. Nothing is uploaded.
 
 An Apple Guide link carries the name and coordinates of places you added as an
 address or a pin. Places Apple Maps itself knows (shops, cafés, sights) are in
-the link only as an ID. Apple doesn't share them with the app's helper, so the
-import dialog shows them as unchecked "Apple Maps place" rows and offers two ways
-to look them up.
+the link only as an ID, and Apple doesn't share them with the app's helper, so
+they are looked up from your iPhone (Option A) or a computer (Option B). Paste a
+guide link straight into the app and the import dialog lists them as unchecked
+"Apple Maps place" rows until they are looked up.
 
 ### Option A — iPhone Shortcut
 
-Build it once in the Shortcuts app (action names as in the English Shortcuts app).
-Shortcuts app → **+** → name the shortcut exactly **Fetch Apple Guide**, then add
-these actions:
+One Shortcut does it all: **Fetch Apple Guide**. Open
+<https://www.icloud.com/shortcuts/6aeae7fdbdc94bffb0273030edffdd92> on your
+iPhone and tap **Add Shortcut**. Keep the name: the app's **Look up with iPhone
+Shortcut** button starts it by that name.
 
-```
-1  Get Clipboard
-2  Split Text [Clipboard] by New Lines
-3  Repeat with Each item in [Split Text]
-4    URL [Repeat Item]
-5    Get Contents of URL [URL]
-6    Set Name of [Contents of URL] to [page.txt]
-7    Get Text from [Renamed Item]
-8  End Repeat
-9  Combine [Repeat Results] with New Lines
-10 Copy [Combined Text] to Clipboard
-```
+Set up once:
 
-The app copies one place link per Apple Maps place of the guide, one per line.
-The Shortcut fetches one page per place, so a big guide takes a while (about a
-minute for 50 places). Step 4 matters: without the URL action, Shortcuts (seen
-on iOS 16) may cut links short. Step 6 makes the Shortcut hand over the raw page
-source instead of the rendered text; step 7 turns it into plain text, not a
-file. The app reads names, addresses and coordinates out of the pages itself.
+- Not in the Share menu after adding it? Restart the iPhone.
+- For Safari: **Settings → Shortcuts → Advanced** (iOS 18 and later:
+  **Settings → Apps → Shortcuts → Advanced**), turn on **Allow Running Scripts**
+  and **Allow Sharing Large Amounts of Data**.
+- On the first run, tap **Always Allow** whenever it asks "Allow … to send …?"
+  (once for the app's address, once for maps.apple.com).
+- Running your own copy? Point the Shortcut at it first (see "Point the Shortcut
+  at your copy").
 
-On the first run, tap **Always Allow** when the Shortcut asks to connect to
-maps.apple.com, and **Allow Paste** (to stop being asked: Settings → Apps →
-Shortcuts → Paste from Other Apps → Allow).
+Then share to it (Share → **Fetch Apple Guide**) from:
 
-Then:
+- **Safari, on an Apple Maps guide page** (`maps.apple.com/guides?user=…`): a
+  script on the page reads the guide and fetches the remaining places. About 5
+  seconds.
+- **The Maps app, a guide:** the Shortcut asks the app's helper for the guide's
+  place links (`/api/guide`; the helper reads them out of the link itself and
+  never contacts Apple), then fetches each place page from your phone. Big
+  guides take 10–30 seconds.
+- **Maps or Safari, a single place:** the Shortcut hands over the place link.
+
+In every case the result goes to the clipboard. Open Insta Pinmap, tap the paste
+button next to the input field and confirm iPhone's "Paste" bubble (or, with the
+import dialog open, tap **Paste results**). A guide opens the import dialog with
+its places: tap **Import selected**. A single place opens **Confirm place**, as
+any map link does.
+
+Why the clipboard: iOS can't open a home-screen web app from a Shortcut, and the
+home-screen app keeps its data apart from Safari.
+
+A place Apple Maps no longer knows can't be found. In a test with a 49-place
+guide, 47 places came back; the other 2 no longer exist at Apple. The import
+dialog says how many are missing and keeps them unchecked; its button (**Look up
+with iPhone Shortcut**, later **Try the … places again**) runs the Shortcut for
+just those, in case Apple only refused a few pages.
+
+You can still start in the app:
 
 1. Paste the guide link in the app (input field or **Settings → Import**); the
    import dialog opens.
 2. Tap **Look up with iPhone Shortcut**: the app copies the place links and
    starts the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts** below
-   the buttons.
+   the buttons. If iPhone asks whether Shortcuts may paste, tap **Allow Paste**.
 3. Go back to the app and tap **Paste results** (or just paste into the app's
    input bar), then **Import selected**.
 
-A place Apple Maps no longer knows can't be found; the app says how many and
-keeps them unchecked. **Try the … places again** runs the Shortcut for just
-those, in case Apple only refused a few pages on the first run.
-
 If the app was closed meanwhile, it offers **Continue the Apple Guide import**
-(for 24 hours), with the places already found. The Shortcut fetches the pages
-from your phone's own connection.
-
-**Paste results** still reads the output of older Shortcuts (the guide page, or
-`<place link>@@<name>@@<lat>@@<lon>@@<address>` lines). The **Look up with iPhone
-Shortcut** button, however, needs the Shortcut named exactly **Fetch Apple Guide**:
-rebuild it as the actions above.
+(for 24 hours), with the places already found.
 
 ### Option B — computer
 
@@ -150,13 +155,14 @@ version exists. **Settings → App → Check for updates → Install.**
   it sees the short link, where it points to, and your IP address.
 - Apple Maps places of an Apple Guide are looked up by the iPhone Shortcut or the
   computer script (see "Apple Guides"), straight from your own connection to Apple Maps.
-- A guide shared from Apple Maps to the Shortcut goes to the app's helper once: it reads
-  the place IDs out of the link and answers with the place links. It sees the guide link
-  (title, your pins' names, addresses and coordinates) and your IP address, and stores
-  and logs neither.
+- A guide shared from the Maps app to the Shortcut goes to the app's helper once: it
+  reads the place IDs out of the link and answers with the place links. It sees the
+  guide link (title, your pins' names, addresses and coordinates) and your IP address,
+  and stores and logs neither; it only counts requests per address for a minute,
+  against misuse.
 - Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
-- Map images come from OpenStreetMap.
+- Map images come from OpenStreetMap (or OpenTopoMap, if you pick that map style).
 - Search engines are asked not to list the app (robots.txt and noindex).
 
 ## When something doesn't work
@@ -173,8 +179,10 @@ says what is wrong.
 
 ## Run your own copy
 
-Insta Pinmap is meant for personal use: everyone runs their **own** copy on
-their **own** free Cloudflare account. It takes about 15 minutes.
+The public copy is the author's personal one, not a service, and Instagram
+(Meta) can block a Worker's address at any time. So everyone runs their **own**
+copy on their **own** free Cloudflare account: your Worker, your limits. It
+takes about 15 minutes.
 
 1. Install Node.js (the LTS version) from <https://nodejs.org>.
 2. Create a free account at <https://dash.cloudflare.com>. Open **Workers & Pages**
@@ -187,17 +195,63 @@ their **own** free Cloudflare account. It takes about 15 minutes.
    `CLOUDFLARE_ACCOUNT_ID`. Keep the token private and never put it in a file
    that goes into git.
 5. Optional: change `name = "insta-pinmap"` in `wrangler.toml` — the name is part
-   of your address.
+   of your address. If another Worker on your account already uses rate-limit
+   namespace `1001` or `1002`, change those numbers too (see "Rate limits").
 6. Deploy: `npx --yes wrangler@4 deploy`. At the end it prints your address,
    `https://<name>.<your-subdomain>.workers.dev`.
 7. Open that address on your phone and install the app (see "Install").
+8. Using the iPhone Shortcut for Apple Guides? Point it at your copy (next section).
 
-Good to know:
-- Cloudflare's free plan allows 100,000 requests a day; one added post, short link or
-  Shortcut run from a guide link is one request.
+### Point the Shortcut at your copy
+
+As installed, the Shortcut **Fetch Apple Guide** (see "Apple Guides") asks the
+author's copy for a guide's place links when you share a guide from the Maps
+app. Change that once:
+
+1. In the Shortcuts app, tap **•••** on **Fetch Apple Guide** to edit it.
+2. Find the **URL** action with `workers.dev/api/guide?link=` in it.
+3. Replace the address in front of `/api/guide` with yours, so it starts with
+   `https://<name>.<your-subdomain>.workers.dev/api/guide?link=`. Leave the rest
+   of the action as it is.
+
+On the next run from Maps, tap **Always Allow** for your address. If you add the
+Shortcut again later (say, a newer version), change the URL again.
+
+### Rate limits
+
+`wrangler.toml` limits how often one IP address may call your helper:
+
+| Binding | `namespace_id` | Limit per address | For |
+|---|---|---|---|
+| `IG_LIMIT` | `1001` | 20 a minute | reading posts (`/api/ig`), and separately short links (`/api/resolve`) |
+| `GUIDE_LIMIT` | `1002` | 30 a minute | guide place links (`/api/guide`) |
+
+Over the limit, the helper answers "Too many requests. Wait a minute and try again."
+
+- `namespace_id` must be unique within your Cloudflare account: bindings with the
+  same number share their counters. If another Worker of yours already uses
+  `1001` or `1002`, pick other numbers (any positive whole number, in quotes).
+- If `wrangler deploy` rejects the `[[ratelimits]]` blocks, delete them. The
+  Worker then counts in its own memory, with the same limits; that is rougher,
+  but it works.
+
+### Good to know
+
+- Cloudflare's free plan allows 100,000 requests a day; one added post, short link
+  or guide shared from the Maps app is one request.
 - `WORK_DIFFICULTY` in `wrangler.toml` sets how much work a phone does per post
   (about 1 second at 18 on a phone; raise it only if your phone is fast).
-- To update your copy later: download the new version and run the deploy again.
+- Search engines are already asked to stay away: `web/robots.txt` disallows
+  everything, and every page and answer says "noindex" (`web/_headers`, the
+  page's robots tag, the Worker). Nothing to set up. Your address still isn't a
+  secret: anyone who has it can open the app.
+
+### Updating your copy
+
+1. Download the new version (or `git pull`). Keep your changes to `wrangler.toml`
+   (name, `namespace_id`s).
+2. Deploy again: `npx --yes wrangler@4 deploy`.
+3. On your phone: **Settings → App → Check for updates → Install** (see "Updates").
 
 ## Disclaimer
 
@@ -217,12 +271,22 @@ Good to know:
 
 - `web/` — the app: plain HTML, CSS and ES modules, no build step.
 - `worker/` — the Cloudflare Worker: `/api/ig`, `/api/resolve` and `/api/guide`.
-- Server endpoint for the iPhone Shortcut: `GET /api/guide?link=<guide link>` (URL-encoded;
-  a raw link as the last parameter works too) answers one
-  `https://maps.apple.com/place?auid=<id>` line per Apple Maps place, read from the link itself.
+- `GET /api/guide?link=<guide link>` (the Shortcut's Maps-app path; URL-encoded,
+  or raw as the last parameter) answers, as plain text, one
+  `https://maps.apple.com/place?auid=<id>` line per Apple Maps place, read from the
+  link itself; 400 for a link without any, 429 over the rate limit.
+- What the app reads back from the Shortcut (`web/js/appleplace.js`): Apple Maps
+  place pages, whole or cut after `</head>` (a place link line above each page ties
+  it to its place); a guide page; or `<place link>@@<name>@@<lat>@@<lon>@@<address>`
+  lines. A guide link as the first line names the guide they belong to.
+- The app version is in `web/version.json` and `web/js/version.js` (a test checks
+  they match); `version.json` also lists every file the app keeps offline.
+  `web/sw.js` must stay byte-for-byte the same between versions, so phones update
+  only through **Settings → App**.
 - `tools/apple-guide.mjs` — Apple Guide → GeoJSON on a computer (see "Apple Guides").
 - Tests: `node --test "test/*.test.mjs" "worker/*.test.mjs"` (Node 24, no install).
-- Local run: `npx --yes wrangler@4 dev`, then open `http://127.0.0.1:8787`.
+- Local run: `npx --yes wrangler@4 dev`, then open the address it prints
+  (`http://localhost:8787`).
 
 Third-party libraries in `web/vendor/` (Leaflet, Leaflet.markercluster, fflate,
 @tmcw/togeojson) keep their own license files next to them.
