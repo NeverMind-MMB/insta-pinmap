@@ -78,8 +78,26 @@ function linkParts(link) {
   } catch {
     return null;
   }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.username || u.password) return null;
   return { host: u.hostname.toLowerCase().replace(/^(www|m)\./, ''), path: u.pathname.toLowerCase() };
+}
+
+/**
+ * The links in a text, in order: every http(s) link (also glued to a word
+ * before it), and every word that starts with a registered prefix but lacks
+ * the scheme ("instagram.com/p/…" becomes "https://instagram.com/p/…").
+ * Trailing ")", "," and "." are dropped.
+ */
+export function findLinks(text) {
+  const links = [];
+  for (const word of String(text ?? '').split(/\s+/)) {
+    const at = word.search(/https?:\/\//i);
+    const token = (at === -1 ? word : word.slice(at)).replace(/[),.]+$/, '');
+    if (!token) continue;
+    if (at !== -1) links.push(token);
+    else if (sourceOf(token)) links.push(`https://${token}`);
+  }
+  return links;
 }
 
 function prefixMatches(prefix, { host, path }) {

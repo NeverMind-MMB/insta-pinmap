@@ -24,7 +24,7 @@ import {
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
-import { siteOf, sourceOf, sourceColor } from './sources.js';
+import { siteOf, sourceOf, sourceColor, findLinks } from './sources.js';
 import { colorPicker, pickedColor } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -59,9 +59,10 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   if (!/<html/i.test(text) && addFromPlaceLinks(text, env, severalLinks)) return;
 
   // Fish the link out of shared text: Android often sends
-  // "Check this out: https://... " instead of just the URL.
-  const linkInText = text.match(/https?:\/\/\S+/);
-  const candidateLink = linkInText ? linkInText[0].replace(/[),.]+$/, '') : text;
+  // "Check this out: https://... " instead of just the URL, and a link may
+  // lack its scheme ("see instagram.com/p/…").
+  const linkInText = findLinks(text)[0] || '';
+  const candidateLink = linkInText || text;
 
   // The link's source, by its prefix (sources.js), picks the reader.
   if (isInstagramLink(candidateLink)) {
@@ -282,8 +283,7 @@ function placeLinks(text) {
   let links = 0;
   let skipped = 0;
   let instagram = 0;
-  for (const [match] of String(text ?? '').matchAll(/https?:\/\/\S+/g)) {
-    const link = match.replace(/[),.]+$/, '');
+  for (const link of findLinks(text)) {
     if (seen.has(link)) continue;
     seen.add(link);
     if (isInstagramLink(link)) instagram++;

@@ -212,3 +212,13 @@ test('"*" stands for a country or com ending only: google.co.uk and google.com.b
     assert.equal(sourceOf(link), null, link);
   }
 });
+
+test('findLinks: every http(s) link, and words that start with a registered prefix but lack the scheme', async () => {
+  const { findLinks } = await import('../web/js/sources.js');
+  assert.deepEqual(findLinks('see instagram.com/p/ABC123/, nice'), ['https://instagram.com/p/ABC123/']);
+  assert.deepEqual(findLinks('check maps.app.goo.gl/xyz123.'), ['https://maps.app.goo.gl/xyz123']);
+  assert.deepEqual(findLinks('Look:https://pin.it/AbC and www.google.de/maps/place/X'), ['https://pin.it/AbC', 'https://www.google.de/maps/place/X']);
+  for (const text of ['Cafe Luitpold', 'pinterest.com/pin/1', 'me@instagram.com', 'instagram is great.', '']) {
+    assert.deepEqual(findLinks(text), [], text);
+  }
+});

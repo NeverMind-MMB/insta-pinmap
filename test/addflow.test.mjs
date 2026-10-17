@@ -686,3 +686,22 @@ test('Settings → Import: a Google Maps list link is left out of a list of plac
   assert.equal(imports[0].e.length, 2);
   assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read.", 'info']]);
 });
+
+test('the input bar: a link without its scheme inside text is still found (instagram.com/p/…, maps.app.goo.gl/…)', async () => {
+  const { store, normalizeDb } = await import('../web/js/store.js');
+  store.db = normalizeDb({ pins: [{ id: 'saved', lat: 1, lon: 2, title: 'Saved place', posts: [{ url: 'https://www.instagram.com/p/ABC123xyz/' }] }] });
+  const { toasts, ui } = fakeUi();
+  const detail = [];
+  await startAdd('see instagram.com/p/ABC123xyz/ - nice', { ...ui, showDetail: (id) => detail.push(id), showUnsupported: () => assert.fail('a supported link') });
+  assert.match(toasts[0][0], /already saved this post/, 'the Instagram way: this post is known');
+  assert.deepEqual(detail, ['saved']);
+  const calls = stubResolve(() => ({ ok: false, message: "This short link doesn't lead anywhere." }));
+  await startAdd('check maps.app.goo.gl/xyz123', { ...ui, showUnsupported: () => assert.fail('a supported link') });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /url=https%3A%2F%2Fmaps\.app\.goo\.gl%2Fxyz123$/);
+});
+
+test('Settings → Import: place links without their scheme count too', async () => {
+  const { imports } = await readInSettings('maps.apple.com/?ll=48.1371,11.5754&q=Synthetic%20Cafe\nmaps.apple.com/place?auid=987654321');
+  assert.deepEqual(imports[0]?.e.map((r) => r.name), ['Synthetic Cafe', 'Apple Maps place']);
+});
