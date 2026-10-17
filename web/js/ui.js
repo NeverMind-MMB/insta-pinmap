@@ -671,6 +671,15 @@ export function showImport(entries, sourceName, env, guide = null) {
 }
 
 /**
+ * True for a field where Enter must not submit its dialog's form (whose first
+ * button is the ✕, so Enter would cancel): every input, colour swatches and
+ * checkboxes included, but not a file picker or a button.
+ */
+export function keepsEnter(target) {
+  return target?.tagName === 'INPUT' && !['file', 'button', 'submit', 'reset', 'image'].includes(target.type);
+}
+
+/**
  * A pin colour choice as native radios (arrow keys move between them, each
  * named for screen readers): "Auto" first, drawn in the source's colour
  * (`auto`), then the palette. `value`: the pin's colour, '' for Auto.

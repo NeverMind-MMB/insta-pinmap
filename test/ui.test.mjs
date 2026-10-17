@@ -322,3 +322,14 @@ test('the unsupported-link dialog can name a kind of link instead of a site (Goo
     delete globalThis.document;
   }
 });
+
+/* ---------- 2.0.11 review fixes ---------- */
+
+test('Enter in a dialog is held back in every input (text, colour swatches, checkboxes), not on file pickers or buttons', async () => {
+  const { keepsEnter } = await import('../web/js/ui.js');
+  for (const type of ['text', 'search', 'radio', 'checkbox', 'range']) assert.equal(keepsEnter({ tagName: 'INPUT', type }), true, type);
+  for (const target of [{ tagName: 'INPUT', type: 'file' }, { tagName: 'INPUT', type: 'button' }, { tagName: 'BUTTON', type: 'submit' },
+    { tagName: 'TEXTAREA', type: 'textarea' }, null]) {
+    assert.equal(keepsEnter(target), false, JSON.stringify(target));
+  }
+});

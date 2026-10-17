@@ -8,7 +8,7 @@ import { startAdd, addFromSettings, wireConfirm, guideImportEntries, isShortcutP
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
-  exportBackup, showRestore, backupAgeLabel, linkShortcutInstall, showUnsupported,
+  exportBackup, showRestore, backupAgeLabel, linkShortcutInstall, showUnsupported, keepsEnter,
 } from './ui.js';
 import { readFile } from './importers.js';
 import { isInstagramLink, shortcode } from './dedupe.js';
@@ -399,13 +399,11 @@ function wireGuideReminder() {
  * Shared content
  * ================================================================== */
 
-/** Enter in a text field of a dialog form would submit it and close the dialog. */
+/** Enter in a field of a dialog form (text, colour swatch, checkbox) would submit it and close the dialog. */
 function guardDialogEnter() {
   for (const form of document.querySelectorAll('dialog form')) {
     form.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && e.target.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=button])')) {
-        e.preventDefault();
-      }
+      if (e.key === 'Enter' && keepsEnter(e.target)) e.preventDefault();
     });
   }
 }
