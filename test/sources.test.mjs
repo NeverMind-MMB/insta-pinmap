@@ -203,3 +203,12 @@ test('a Google link without a /place/ name takes its search text as the name; a 
   assert.equal(name('https://maps.google.com/?q=45.4719,9.1721'), 'Google place', 'coordinates are no name');
   assert.throws(() => readLink('https://www.google.com/maps/placelists/list/AbCdEf123'), /lists/);
 });
+
+test('"*" stands for a country or com ending only: google.co.uk and google.com.br yes, google.evl.de and maps.google.ab.io no', () => {
+  for (const link of ['https://www.google.com.br/maps/place/X', 'https://www.google.co.uk/maps/place/X', 'https://maps.google.de/?q=1,2']) {
+    assert.equal(sourceOf(link), 'google', link);
+  }
+  for (const link of ['https://google.evl.de/maps/place/X', 'https://maps.google.ab.io/?q=1,2', 'https://google.example.com/maps']) {
+    assert.equal(sourceOf(link), null, link);
+  }
+});

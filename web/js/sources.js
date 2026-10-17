@@ -64,8 +64,8 @@ export function sourceColor(pinSource) {
   return SOURCE_GROUPS.find((g) => g.sources.includes(pinSource))?.color ?? UNKNOWN_SOURCE_COLOR;
 }
 
-/** What "*" in a prefix's host stands for: a domain ending such as "com", "de", "co.uk", "com.au". */
-const DOMAIN_ENDING = /^[a-z]{2,3}(\.[a-z]{2})?$/;
+/** What "*" in a prefix's host stands for: a country or com ending such as "com", "de", "co.uk", "com.au". */
+const DOMAIN_ENDING = /^(?:com?\.)?[a-z]{2,3}$/;
 
 /** Host (lowercase, without "www." or "m.") and path of an http(s) link, also without its scheme; null otherwise. */
 function linkParts(link) {
