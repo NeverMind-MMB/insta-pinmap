@@ -8,7 +8,7 @@ import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, isAppleIdLink } from './importers.js';
 import {
-  SHORTCUT_RUN_URL, applyPasteToGuide, appleIdOf,
+  SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
   lookupState, lookupNotice, lookupButton, rememberRequested, copiedNotice,
 } from './appleplace.js';
@@ -625,6 +625,11 @@ export function showImport(entries, sourceName, env, guide = null) {
   dlg.showModal();
 }
 
+/** Points the "Shortcut help" install links (import dialog, Settings) at the shared Shortcut. */
+export function linkShortcutInstall(root) {
+  for (const a of root.querySelectorAll('a[data-shortcut-install]')) a.href = SHORTCUT_INSTALL_URL;
+}
+
 /** Opens an app link such as shortcuts://… the way a tapped link would. */
 function openExternal(url) {
   const a = document.createElement('a');
@@ -670,6 +675,7 @@ function wireAppleLookup(guide, entries, onResults) {
         "Apple doesn't share them with this app's helper. Look them up from your phone or a computer:";
     $('import-apple-shortcut').textContent = pasted ? lookupButton(state) : 'Look up with iPhone Shortcut';
     $('import-apple-shortcut').hidden = pasted && !state.missing.length;
+    $('import-apple-time').hidden = $('import-apple-shortcut').hidden;
   };
   drawNotice();
 

@@ -8,7 +8,7 @@ import { startAdd, addFromSettings, wireConfirm, guideImportEntries, isShortcutP
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
-  exportBackup, showRestore, backupAgeLabel,
+  exportBackup, showRestore, backupAgeLabel, linkShortcutInstall,
 } from './ui.js';
 import { readFile } from './importers.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
@@ -86,6 +86,7 @@ async function start() {
   wireSettings();
   wireShared();
   guardDialogEnter();
+  linkShortcutInstall(document);
 
   redraw();
   if (store.db.pins.length && !store.settings.lastView) {

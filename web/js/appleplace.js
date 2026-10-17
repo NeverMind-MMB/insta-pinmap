@@ -90,6 +90,8 @@ export function parseApplePlaceHtml(html) {
 
 /** The Shortcut's name in the Shortcuts app; the README tells the user to use exactly this. */
 export const SHORTCUT_NAME = 'Fetch Apple Guide';
+/** Where to install the shared Shortcut (the app's "Shortcut help"); change it here when it is shared again. */
+export const SHORTCUT_INSTALL_URL = 'https://www.icloud.com/shortcuts/6aeae7fdbdc94bffb0273030edffdd92';
 export const SHORTCUT_RUN_URL = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}&input=clipboard`;
 
 const PLACE_URL_ID = /^https:\/\/maps\.apple\.com\/place\?auid=(\d{1,20})$/;
