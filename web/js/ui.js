@@ -516,6 +516,19 @@ function linkButton(text, href) {
  * Import dialog
  * ================================================================== */
 
+/** Source names the callers of showImport use when there is no real one: no tag from them. */
+const STAND_IN_NAMES = new Set(['', 'apple guide', 'places found', 'apple maps places']);
+const IMPORT_FILE_EXTENSION = /\.(csv|tsv|json|geojson|kml|kmz|gpx|zip)(?=,|$)/gi;
+
+/**
+ * The tag an import starts with: the guide or list name (file names without
+ * their extension), normalized; '' for a stand-in name.
+ */
+export function importTag(sourceName) {
+  const name = String(sourceName ?? '').replace(IMPORT_FILE_EXTENSION, '').trim();
+  return STAND_IN_NAMES.has(name.toLowerCase()) ? '' : normTag(name);
+}
+
 /**
  * @param {Array} entries  import rows; `checked: false` starts a row unchecked
  * @param {{title, link, entries, appleIds} | null} guide  an Apple Guide with Apple Maps
@@ -525,6 +538,7 @@ export function showImport(entries, sourceName, env, guide = null) {
   const dlg = $('dlg-import');
   const list = $('import-list');
   $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
+  $('import-tag').value = importTag(sourceName);
 
   const checked = entries.map((e) => e.checked !== false);
   const noCoords = (e) => !Number.isFinite(e.lat) || !Number.isFinite(e.lon);
@@ -618,8 +632,9 @@ export function showImport(entries, sourceName, env, guide = null) {
 
   $('import-apply').onclick = async () => {
     const selected = entries.filter((_, i) => checked[i]);
+    const tag = $('import-tag').value;
     dlg.close();
-    await applyImport(selected, sourceName, env);
+    await applyImport(selected, sourceName, env, tag);
   };
 
   dlg.showModal();
@@ -733,11 +748,19 @@ function wireAppleLookup(guide, entries, onResults) {
   };
 }
 
-async function applyImport(entries, sourceName, env) {
+/**
+ * Imports the rows. Each new pin gets the tag from the dialog's tag field
+ * (`tag`, normalized here); a pin already at a row's spot gets it added.
+ */
+export async function applyImport(entries, sourceName, env, tag = '') {
   let created = 0;
   let skipped = 0;
   const failed = [];
   const radius = store.settings.radiusM;
+  const fieldTag = normTag(tag);
+  // A Google list row carries its list's name. For one list the field started
+  // with that name and decides; rows of other lists (several files) keep theirs.
+  const startTag = importTag(sourceName);
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
@@ -769,15 +792,21 @@ async function applyImport(entries, sourceName, env) {
       continue;
     }
 
+    const tags = fieldTag ? [fieldTag] : [];
+    const listTag = importTag(e.tagSuggestion);
+    if (listTag && listTag !== startTag) tags.push(listTag);
+
     // Is there already something at this spot? During a batch import, don't ask;
-    // silently skip very close duplicates instead.
+    // silently skip very close duplicates instead, but add the tags to them.
     const nearby = store.db.pins.find(
       (p) => distanceM(lat, lon, p.lat, p.lon) < Math.min(radius, 60)
     );
-    if (nearby) { skipped++; continue; }
-
-    const tags = [];
-    if (e.tagSuggestion) { const t = normTag(e.tagSuggestion); if (t) tags.push(t); }
+    if (nearby) {
+      const united = [...new Set([...(nearby.tags || []), ...tags])];
+      if (united.length > (nearby.tags || []).length) store.updatePin(nearby.id, { tags: united });
+      skipped++;
+      continue;
+    }
 
     store.addPin({
       lat, lon,
