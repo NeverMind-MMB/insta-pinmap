@@ -470,6 +470,8 @@ function fromGeoJSON(j, source) {
       [lon, lat] = g.coordinates || [];
     } else if (g.type === 'LineString' && g.coordinates?.length) {
       [lon, lat] = g.coordinates[0];                 // start point of a track
+    } else if (g.type === 'MultiLineString' && g.coordinates?.[0]?.length) {
+      [lon, lat] = g.coordinates[0][0];              // a track in several parts (GPX pauses): its start
     } else if (g.type === 'Polygon' && g.coordinates?.[0]?.length) {
       // centroid of the outer ring
       const ring = g.coordinates[0];

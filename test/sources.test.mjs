@@ -91,3 +91,10 @@ test('siteOf: the host a dialog names, without "www."', () => {
   assert.equal(siteOf('https://www.youtube.com/watch?v=abc'), 'youtube.com');
   assert.equal(siteOf('https://maps.apple/p/AbCdEf1234'), 'maps.apple');
 });
+
+test('a track in several parts (what togeojson makes of a GPX track with pauses) gives its start point, like a route', async () => {
+  const track = geojson({ type: 'MultiLineString', coordinates: [[[11.1, 47.1], [11.2, 47.2]], [[11.3, 47.3], [11.4, 47.4]]] },
+    { name: 'Synthetic Tour' });
+  const read = await readFile(file('track.geojson', track));
+  assert.deepEqual(read.entries.map((e) => [e.name, e.lat, e.lon]), [['Synthetic Tour', 47.1, 11.1]]);
+});
