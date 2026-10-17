@@ -300,3 +300,25 @@ test('Import selected with a colour: every new pin gets it, a pin already there 
   assert.equal(store.pinColor(pin('New place')), '#3a6ea5', 'Apple Maps');
   assert.equal(store.pinColor(pin('Track start')), '#a3762b', 'GPS file');
 });
+
+test('a Google short link resolving to a search link: named and searched by its search text', async () => {
+  const calls = stubNetwork({ resolved: 'https://www.google.com/maps?q=Synthetic+Bar+Milan', hit: { name: 'Synthetic Bar', lat: 45.5, lon: 9.3 } });
+  const pin = await importRows([shortLinkRow('https://maps.app.goo.gl/synthetic4')], '', '', []);
+  assert.equal(pin('Synthetic Bar Milan')?.lat, 45.5);
+  assert.ok(calls.some((u) => u.includes('photon') && u.includes('q=Synthetic+Bar+Milan')), calls.join('\n'));
+});
+
+test('the unsupported-link dialog can name a kind of link instead of a site (Google Maps lists)', async () => {
+  const { showUnsupported } = await import('../web/js/ui.js');
+  const doc = dialogDocument();
+  globalThis.document = doc;
+  try {
+    showUnsupported('https://www.google.com/maps/placelists/list/AbCdEf123', 'Google Maps lists');
+    assert.equal(doc.getElementById('unsupported-text').textContent,
+      "Google Maps lists don't work in this version of the app. If nobody has asked for it yet, open an issue on GitHub.");
+    assert.equal(doc.getElementById('unsupported-issues').href,
+      'https://github.com/NeverMind-MMB/insta-pinmap/issues?q=is%3Aissue%20Google%20Maps%20lists');
+  } finally {
+    delete globalThis.document;
+  }
+});

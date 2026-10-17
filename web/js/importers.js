@@ -305,6 +305,40 @@ export function googleName(link) {
   }
 }
 
+/** The name readLink gives a Google Maps place whose link names none. */
+export const UNNAMED_GOOGLE_PLACE = 'Google place';
+
+/**
+ * The place a Google Maps link names: /maps/place/<name>, else its search text
+ * (q=, query=, /maps/search/<text>) unless that is just coordinates; '' for none.
+ */
+export function googlePlaceName(link) {
+  const named = googleName(link);
+  if (named) return named;
+  let u;
+  try {
+    u = new URL(String(link || ''));
+  } catch {
+    return '';
+  }
+  let search = u.searchParams.get('q') || u.searchParams.get('query') || '';
+  if (!search) {
+    const path = (u.pathname.match(/\/maps\/search\/([^/@]+)/) || [])[1] || '';
+    try {
+      search = decodeURIComponent(path.replace(/\+/g, ' '));
+    } catch {
+      search = path.replace(/\+/g, ' ');
+    }
+  }
+  search = search.trim();
+  return /^-?\d+(\.\d+)?[,\s]+-?\d+(\.\d+)?$/.test(search) ? '' : search;
+}
+
+/** True for a Google Maps list (google.com/maps/placelists/… and country domains), by its prefix (sources.js). */
+export function isGoogleListLink(link) {
+  return linkIs(link, 'lists');
+}
+
 /** True for a Google Maps short link (maps.app.goo.gl/…, goo.gl/maps/…), by its prefix (sources.js). */
 export function isGoogleShortLink(link) {
   return linkIs(link, 'short');
@@ -579,11 +613,13 @@ export function readLink(link) {
   if (apple) return { name: apple.name, entries: [apple], appleIds: [] };
 
   if (source === 'google') {
+    if (isGoogleListLink(s)) throw new Error("Google Maps lists can't be read yet.");
     const k = googleCoordinates(s);
+    const name = googlePlaceName(s) || UNNAMED_GOOGLE_PLACE;
     return {
-      name: googleName(s) || 'Google place',
+      name,
       entries: [{
-        name: googleName(s) || 'Google place',
+        name,
         address: '',
         lat: k?.lat ?? null,
         lon: k?.lon ?? null,

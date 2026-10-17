@@ -21,7 +21,8 @@ export function issuesSearchUrl(site) {
  * source's reader. A new source is one more entry.
  *   color: the default colour of its pins (store.pinColor), from the palette in store.js;
  *   sources: the pin `source` values the readers write for it;
- *   guides: the prefixes of Apple guide links; short: those of short links the helper expands.
+ *   guides: the prefixes of Apple guide links; short: those of short links the helper expands;
+ *   lists: those of Google Maps lists (not read yet).
  */
 export const SOURCE_GROUPS = [
   {
@@ -46,8 +47,9 @@ export const SOURCE_GROUPS = [
     id: 'google',
     color: '#2f7d5d',
     sources: ['google-link', 'google-takeout', 'google-csv'],
-    prefixes: ['google.*/maps', 'maps.google.*/', 'maps.app.goo.gl/', 'goo.gl/maps/'],
+    prefixes: ['google.*/maps', 'google.*/maps/placelists/', 'maps.google.*/', 'maps.app.goo.gl/', 'goo.gl/maps/'],
     short: ['maps.app.goo.gl/', 'goo.gl/maps/'],
+    lists: ['google.*/maps/placelists/'],
   },
   { id: 'gps', color: '#a3762b', sources: ['gpx'] },
   { id: 'files', color: '#7a4b8f', sources: ['kml', 'geojson'] },
@@ -110,7 +112,7 @@ export function sourceOf(link) {
   return matchPrefix(link)?.group.id ?? null;
 }
 
-/** True when the longest prefix `link` starts with is one of its source's `kind` prefixes ("guides", "short"). */
+/** True when the longest prefix `link` starts with is one of its source's `kind` prefixes ("guides", "short", "lists"). */
 export function linkIs(link, kind) {
   const m = matchPrefix(link);
   return Boolean(m?.group[kind]?.includes(m.prefix));

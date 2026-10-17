@@ -645,3 +645,44 @@ test('Confirm place: colour "Auto" (in the source\'s colour) by default; a picke
     }
   }
 });
+
+/* ---------- Google links without a place name, and Google Maps lists ---------- */
+
+test('the input bar: a Google link with search text searches for that text; without any, nothing is searched', async () => {
+  for (const [link, query] of [['https://www.google.com/maps?q=Cafe+Luitpold', 'q=Cafe+Luitpold'], ['https://www.google.com/maps', null]]) {
+    const doc = confirmDocument();
+    globalThis.document = doc;
+    const calls = [];
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify(String(url).includes('photon') ? { features: [] } : []), { headers: { 'content-type': 'application/json' } });
+    };
+    try {
+      const { ui } = fakeUi();
+      await startAdd(link, { ...ui, showUnsupported: () => assert.fail('a supported link') });
+      assert.equal(doc.getElementById('dlg-confirm').open, true, link);
+      const searched = calls.filter((u) => /photon|nominatim/.test(u));
+      if (query) assert.ok(searched.length && searched.every((u) => u.includes(query)), searched.join(' '));
+      else assert.deepEqual(searched, [], 'no search for "Google place"');
+    } finally {
+      delete globalThis.document;
+    }
+  }
+});
+
+test('the input bar: a Google Maps list link, also behind a short link, opens the unsupported-link dialog', async () => {
+  const list = 'https://www.google.com/maps/placelists/list/AbCdEf123';
+  const shown = [];
+  const { ui } = fakeUi();
+  await startAdd(list, { ...ui, showUnsupported: (l, what) => shown.push([l, what]) });
+  const calls = stubResolve(() => ({ ok: true, url: list }));
+  await startAdd('https://maps.app.goo.gl/synthList', { ...ui, showUnsupported: (l, what) => shown.push([l, what]) });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(shown, [[list, 'Google Maps lists'], [list, 'Google Maps lists']]);
+});
+
+test('Settings → Import: a Google Maps list link is left out of a list of place links', async () => {
+  const { imports, toasts } = await readInSettings([LL_LINK, PLACE_ID_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n'));
+  assert.equal(imports[0].e.length, 2);
+  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read.", 'info']]);
+});

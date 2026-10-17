@@ -183,3 +183,13 @@ test('source colours: one per group, all different, all from the pin colour pale
   assert.equal(new Set(colors).size, colors.length);
   for (const c of colors) assert.ok(PIN_COLORS.some((p) => p.color === c), c);
 });
+
+test('a Google link without a /place/ name takes its search text as the name; a list link is no place', () => {
+  const name = (link) => readLink(link).entries[0].name;
+  assert.equal(name('https://www.google.com/maps?q=Cafe+Luitpold'), 'Cafe Luitpold');
+  assert.equal(name('https://www.google.com/maps/search/?api=1&query=Cafe%20Luitpold%20Munich'), 'Cafe Luitpold Munich');
+  assert.equal(name('https://www.google.com/maps/search/Cafe+Luitpold/@48.14,11.57,17z'), 'Cafe Luitpold');
+  assert.equal(name('https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z'), 'Synthetic Bar');
+  assert.equal(name('https://maps.google.com/?q=45.4719,9.1721'), 'Google place', 'coordinates are no name');
+  assert.throws(() => readLink('https://www.google.com/maps/placelists/list/AbCdEf123'), /lists/);
+});

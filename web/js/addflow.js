@@ -15,7 +15,9 @@ import {
   findPost, nearbyPins, markApart, distanceText,
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, eventDate } from './extract.js';
-import { readLink, appleIdEntries, isAppleGuideLink, isGoogleShortLink } from './importers.js';
+import {
+  readLink, appleIdEntries, isAppleGuideLink, isGoogleShortLink, isGoogleListLink, UNNAMED_GOOGLE_PLACE,
+} from './importers.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
   loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
@@ -384,6 +386,11 @@ function addFromResultLines(text, env) {
 
 /** `resolved`: the link is already the answer of /api/resolve. */
 async function addFromMapLink(link, env, resolved = false) {
+  // Lists get their own way later; for now the dialog says so.
+  if (isGoogleListLink(link)) {
+    env.showUnsupported?.(link, 'Google Maps lists');
+    return;
+  }
   let parsed;
   try {
     parsed = readLink(link);
@@ -424,7 +431,8 @@ async function addFromMapLink(link, env, resolved = false) {
     readyPlace: Number.isFinite(e0.lat)
       ? { lat: e0.lat, lon: e0.lon, name: e0.name, address: e0.address, source: e0.source }
       : null,
-    candidates: Number.isFinite(e0.lat) ? [] : [{ text: e0.name, points: 70, source: 'link' }],
+    // No search for a name the link doesn't have ("Google place"): the dialog asks for one.
+    candidates: Number.isFinite(e0.lat) || e0.name === UNNAMED_GOOGLE_PLACE ? [] : [{ text: e0.name, points: 70, source: 'link' }],
     countries: [],
     note: e0.note || '',
     env,

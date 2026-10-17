@@ -6,7 +6,7 @@ import { store, normTag, PIN_COLORS, pinColorValue } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
-import { googleCoordinates, googleName, isAppleIdLink, isGoogleShortLink } from './importers.js';
+import { googleCoordinates, googlePlaceName, isAppleIdLink, isGoogleShortLink } from './importers.js';
 import {
   SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
@@ -711,14 +711,15 @@ export function pickedColor(box) {
 }
 
 /**
- * The dialog for a link to a site this version doesn't read: which site, a
- * GitHub issue search for it, and (collapsed) every supported link and file.
+ * The dialog for a link to a site this version doesn't read: which site (or
+ * `what`, a kind of link such as "Google Maps lists"), a GitHub issue search
+ * for it, and (collapsed) every supported link and file.
  */
-export function showUnsupported(link) {
+export function showUnsupported(link, what = '') {
   const site = siteOf(link);
   $('unsupported-text').textContent =
-    `${site} links don't work in this version of the app. If nobody has asked for it yet, open an issue on GitHub.`;
-  $('unsupported-issues').href = issuesSearchUrl(site);
+    `${what || `${site} links`} don't work in this version of the app. If nobody has asked for it yet, open an issue on GitHub.`;
+  $('unsupported-issues').href = issuesSearchUrl(what || site);
   $('unsupported-list').replaceChildren(...SUPPORTED_SOURCES.map((group) => {
     const p = document.createElement('p');
     const title = document.createElement('strong');
@@ -867,7 +868,7 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
         const k = googleCoordinates(j.url);
         if (k) { lat = k.lat; lon = k.lon; }
         // A short link carries no name; the resolved one often does.
-        if (STAND_IN_PLACE_NAMES.has(e.name)) e.name = googleName(j.url) || e.name;
+        if (STAND_IN_PLACE_NAMES.has(e.name)) e.name = googlePlaceName(j.url) || e.name;
       }
     }
 
