@@ -245,3 +245,95 @@ test('guide page without places: error toast, no import dialog', async () => {
   assert.equal(toasts.at(-1)[1], 'error');
   assert.match(toasts.at(-1)[0], /lists no places/);
 });
+
+/* ---------- Several map place links in one paste (2.0.10) ---------- */
+
+const LL_LINK = 'https://maps.apple.com/?ll=48.1371,11.5754&q=Synthetic%20Cafe';
+const ADDRESS_AUID_LINK = 'https://maps.apple.com/?address=Teststrasse%201,%2080331%20Testtown,%20Germany&auid=1234567890123&ll=48.2,11.6&lsp=9902&q=Synthetic%20Museum&t=m';
+const AUID_LINK = 'https://maps.apple.com/place?auid=987654321';
+const PLACE_ID_LINK = 'https://maps.apple.com/place?address=Testweg%202&coordinate=47.5,11.1&name=Synthetic%20Lake&place-id=I1A2B3C4D5E6F';
+// 987654321 is 0x3ADE68B1: Apple's place-id is "I" + the ID in hexadecimal.
+const PLACE_ID_ONLY_LINK = 'https://maps.apple.com/place?place-id=I3ADE68B1&_provider=9902';
+
+test('three place links (ll=, address+auid, auid only): one import dialog, one row each, the auid-only one unchecked for the Shortcut', async () => {
+  const { imports, toasts, cleared } = await pasteIntoBar([LL_LINK, ADDRESS_AUID_LINK, AUID_LINK].join('\n'));
+  assert.equal(imports.length, 1);
+  const { e, n, g } = imports[0];
+  assert.deepEqual(e.map((r) => [r.name, r.lat, r.lon, r.checked !== false]), [
+    ['Synthetic Cafe', 48.1371, 11.5754, true],
+    ['Synthetic Museum', 48.2, 11.6, true],
+    ['Apple Maps place', null, null, false],
+  ]);
+  assert.equal(e[1].address, 'Teststrasse 1, 80331 Testtown, Germany');
+  assert.equal(e[2].url, 'https://maps.apple.com/place?auid=987654321');
+  assert.deepEqual(g.appleIds, ['987654321'], 'the dialog offers the Shortcut lookup for it');
+  assert.equal(g.entries.length, 2, 'the other rows wait with it, so a trip to the Shortcuts app keeps them');
+  assert.equal(n, '', 'no guide name: the dialog says "Places found"');
+  assert.equal(cleared, 1);
+  assert.deepEqual(toasts, []);
+});
+
+test('place links with repeats and other lines: one row per place, the other lines ignored', async () => {
+  const text = ['My places:', LL_LINK, '', AUID_LINK, `${LL_LINK} `, PLACE_ID_ONLY_LINK, 'see you there', PLACE_ID_LINK, AUID_LINK].join('\n');
+  const { imports } = await pasteIntoBar(text);
+  assert.equal(imports.length, 1);
+  const { e, g } = imports[0];
+  assert.deepEqual(e.map((r) => r.name), ['Synthetic Cafe', 'Synthetic Lake', 'Apple Maps place']);
+  assert.deepEqual(g.appleIds, ['987654321'], 'the auid and the place-id link name the same place');
+});
+
+test('Google Maps links in one paste: one import dialog without the Apple lookup, nothing fetched yet', async () => {
+  const calls = [];
+  globalThis.fetch = async (url) => { calls.push(String(url)); return new Response('{}'); };
+  const { imports } = await pasteIntoBar([
+    'https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721',
+    'https://maps.app.goo.gl/synthetic1',
+  ].join('\n'));
+  assert.equal(imports.length, 1);
+  const { e, g } = imports[0];
+  assert.equal(g, null);
+  assert.deepEqual(e.map((r) => [r.name, r.lat, r.checked !== false]), [['Synthetic Bar', 45.4719, true], ['Google place', null, true]]);
+  assert.match(e[1].warning, /resolved on import/);
+  assert.deepEqual(calls, [], 'the short link is resolved on import, as in a list import');
+});
+
+test('one place link alone still opens the confirm dialog, not the import', async () => {
+  const opened = [];
+  globalThis.document = { getElementById: (id) => { opened.push(id); throw new Error('confirm dialog reached'); } };
+  try {
+    for (const text of [LL_LINK, `Look at this:\n${ADDRESS_AUID_LINK}\nnice, isn't it`, `${LL_LINK}\n${LL_LINK}`]) {
+      opened.length = 0;
+      const imports = [];
+      const { ui } = fakeUi();
+      await assert.rejects(startAdd(text, { ...ui, showImport: () => imports.push(1) }), /confirm dialog reached/, text);
+      assert.deepEqual(opened, ['dlg-confirm'], text);
+      assert.equal(imports.length, 0, text);
+    }
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('isShortcutPaste: two or more place links go straight to the add flow too (the field would join the lines)', async () => {
+  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  assert.equal(isShortcutPaste(`${LL_LINK}\n${AUID_LINK}`), true);
+  assert.equal(isShortcutPaste(`${LL_LINK}\r\n${ADDRESS_AUID_LINK}\r\n`), true);
+  for (const t of [LL_LINK, AUID_LINK, `${LL_LINK}\n${LL_LINK}`, `Look at this:\n${LL_LINK}`]) {
+    assert.equal(isShortcutPaste(t), false, t);
+  }
+});
+
+test('an Apple link with only a place-id is an Apple ID row too', async () => {
+  const { imports } = await pasteIntoBar(`${LL_LINK}\n${PLACE_ID_ONLY_LINK}`);
+  const { e, g } = imports[0];
+  assert.deepEqual(g.appleIds, ['987654321']);
+  assert.equal(e[1].url, 'https://maps.apple.com/place?auid=987654321');
+  assert.equal(e[1].checked, false);
+});
+
+test('raw HTML without a waiting guide never turns into a list of place links', async () => {
+  const page = (id) => `<!DOCTYPE html><html><head><link rel="canonical" href="https://maps.apple.com/place?auid=${id}"></head>` +
+    `<body><a href="https://maps.apple.com/?ll=48.1,11.5&q=Spot${id}">x</a></body></html>`;
+  const { imports } = await pasteIntoBar(`${page(101)}\n${page(202)}`);
+  assert.equal(imports.length, 0);
+});

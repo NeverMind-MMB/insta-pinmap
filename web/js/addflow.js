@@ -48,6 +48,8 @@ export async function startAdd(input, env) {
   if (text.includes('@@') && addFromResultLines(text, env)) return;
   // The Shortcut's place pages, likewise, for a waiting guide.
   if (/<html/i.test(text) && addFromPlacePages(text, env)) return;
+  // Two or more map place links, one per line: one import dialog for all of them.
+  if (!/<html/i.test(text) && addFromPlaceLinks(text, env)) return;
 
   // Fish the link out of shared text: Android often sends
   // "Check this out: https://... " instead of just the URL.
@@ -197,13 +199,81 @@ function guideWithResults(text) {
 
 /**
  * True for the Shortcut's output (a guide page, place pages, "@@" lines, or a
- * guide link with results below it): it goes straight to startAdd, since a
- * text field would drop its line breaks.
+ * guide link with results below it) and for two or more map place links: it
+ * goes straight to startAdd, since a text field would drop its line breaks.
  */
 export function isShortcutPaste(text) {
   const s = String(text ?? '').trim();
   return looksLikeGuidePage(s) || /<html/i.test(s) || guideWithResults(s) !== null ||
-    (s.includes('@@') && parseShortcutResults(s).size > 0);
+    (s.includes('@@') && parseShortcutResults(s).size > 0) || placeLinks(s).links >= 2;
+}
+
+/**
+ * The Apple place ID of an Apple Maps link that names its place by ID only:
+ * auid=<id>, or place-id=I<hex> (Apple's Place ID is the ID in hexadecimal).
+ * '' for anything else.
+ */
+function appleIdOnly(link) {
+  let u;
+  try {
+    u = new URL(link);
+  } catch {
+    return '';
+  }
+  if (!/(^|\.)maps\.apple(\.com)?$/i.test(u.hostname)) return '';
+  const auid = u.searchParams.get('auid') || '';
+  if (/^\d{1,20}$/.test(auid)) return auid;
+  const hex = /^I([0-9A-Fa-f]{1,16})$/.exec(u.searchParams.get('place-id') || '');
+  return hex ? BigInt(`0x${hex[1]}`).toString() : '';
+}
+
+/**
+ * The map links in a paste (text around them is ignored), each link once:
+ * their places as import rows, and the Apple IDs of Apple links without
+ * coordinates that name their place by ID (each ID once).
+ * @returns {{entries: Array, appleIds: string[], links: number}} links: how many brought a place
+ */
+function placeLinks(text) {
+  const entries = [];
+  const appleIds = [];
+  const seen = new Set();
+  let links = 0;
+  for (const [match] of String(text ?? '').matchAll(/https?:\/\/\S+/g)) {
+    const link = match.replace(/[),.]+$/, '');
+    if (seen.has(link)) continue;
+    seen.add(link);
+    let parsed = null;
+    try {
+      parsed = readLink(link);
+    } catch { /* no link readLink knows; perhaps an Apple link with only an ID */ }
+    const id = parsed?.entries.some((e) => Number.isFinite(e.lat)) ? '' : appleIdOnly(link);
+    if (id) {
+      if (appleIds.includes(id)) continue;
+      appleIds.push(id);
+    } else if (parsed && (parsed.entries.length || parsed.appleIds.length)) {
+      entries.push(...parsed.entries);
+      for (const x of parsed.appleIds) if (!appleIds.includes(x)) appleIds.push(x);
+    } else {
+      continue;
+    }
+    links++;
+  }
+  return { entries, appleIds, links };
+}
+
+/**
+ * Two or more map place links in one paste: one import dialog, one row per
+ * place. Rows with coordinates are checked; Apple places named only by ID get
+ * the dialog's Shortcut lookup, as a guide's do.
+ * @returns {boolean} false for fewer than two (one link goes on as before)
+ */
+function addFromPlaceLinks(text, env) {
+  const { entries, appleIds, links } = placeLinks(text);
+  if (links < 2) return false;
+  const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
+  env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
+  env.inputDone?.();
+  return true;
 }
 
 /**
