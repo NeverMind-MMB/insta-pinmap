@@ -523,11 +523,14 @@ const STAND_IN_PLACE_NAMES = new Set(['Google place', 'Untitled']);
 const IMPORT_FILE_EXTENSION = /\.(csv|tsv|json|geojson|kml|kmz|gpx|zip)(?=,|$)/gi;
 
 /**
- * The tag an import starts with: the guide or list name (file names without
- * their extension), normalized; '' for a stand-in name.
+ * The tag an import starts with: the guide or list name (a file name without
+ * its extension), normalized; '' for a stand-in name and for several files
+ * (app.js joins their names with ", "), whose lists each keep their own tag.
  */
 export function importTag(sourceName) {
-  const name = String(sourceName ?? '').replace(IMPORT_FILE_EXTENSION, '').trim();
+  const s = String(sourceName ?? '');
+  if ((s.match(IMPORT_FILE_EXTENSION) || []).length > 1) return '';
+  const name = s.replace(IMPORT_FILE_EXTENSION, '').trim();
   return STAND_IN_NAMES.has(name.toLowerCase()) ? '' : normTag(name);
 }
 

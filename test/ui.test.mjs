@@ -52,7 +52,7 @@ test('import tag: the guide or list name as a tag, file names without their exte
   assert.equal(importTag('Want to go.csv'), 'want-to-go');
   assert.equal(importTag('Trip #2 Rome.kml'), 'trip-2-rome');
   assert.equal(importTag('Saved Places.json'), 'saved-places');
-  assert.equal(importTag('Mailand.csv, Rom.csv'), 'mailand-rom');
+  assert.equal(importTag('Rome, Italy.csv'), 'rome-italy', 'one file with a comma in its name');
 });
 
 test('import tag: empty when the name only stands in for a missing one', () => {
@@ -154,4 +154,14 @@ test('a Google short link resolving to neither name nor spot: no place search fo
   await importRows([shortLinkRow('https://maps.app.goo.gl/synthetic3')], '', '', []);
   assert.equal(store.db.pins.length, 0, 'left without coordinates');
   assert.deepEqual(calls.filter((u) => !u.startsWith('/api/resolve')), [], 'nothing searched');
+});
+
+test('import from several files: the tag field starts empty and each list keeps its own tag, as in 2.0.9', async () => {
+  for (const names of ['Want to go.csv, Favorite places.csv', 'Rome, Italy.csv, Paris.csv', 'Trip.kml, Mailand.csv']) {
+    assert.equal(importTag(names), '', names);
+  }
+  const listRow = (name, lat, list) => row(name, lat, 11, { source: 'google-csv', tagSuggestion: list });
+  const pin = await importRows([listRow('A', 40, 'want to go'), listRow('B', 41, 'favorite places')],
+    'Want to go.csv, Favorite places.csv', '', []);
+  assert.deepEqual([pin('A').tags, pin('B').tags], [['want-to-go'], ['favorite-places']]);
 });
