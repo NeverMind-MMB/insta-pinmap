@@ -24,6 +24,10 @@ guide's, list's or file's name on every place it imports; change or clear it
 before you tap **Import selected**. With the tag filter you then show or hide a
 whole guide at once.
 
+A pin takes the colour of where it came from (Instagram, Apple Maps, Google Maps,
+GPS files, other map files, a typed search); pick another one in **Confirm
+place**, the import list or the pin's details (**Auto** goes back to it).
+
 A link to a site the app doesn't read yet (Pinterest or YouTube, say) opens a
 dialog that says so, offers a search of the project's GitHub issues for that
 site, and lists every supported link and file.
