@@ -534,3 +534,15 @@ test('Settings → Import → Read with one place link: once the confirm dialog 
     store._saveTimer = null;
   }
 });
+
+test('the input bar: a paste whose first line is a guide link never brings the hint; the guide opens as in 2.0.9', async () => {
+  for (const text of [
+    `${SYN_GUIDE}\nhttps://maps.apple.com/place?auid=1001\nhttps://maps.apple.com/place?auid=1002`, // a Maps-route output without its pages
+    `${SYN_GUIDE}\n${LL_LINK}`,
+  ]) {
+    const { imports, toasts } = await pasteIntoBar(text);
+    assert.equal(imports[0]?.n, 'Synthetic Guide', text);
+    assert.deepEqual(imports[0].g.appleIds, ['1001', '1002'], text);
+    assert.ok(!toasts.some(([t]) => t === SEVERAL_LINKS_HINT || t === INSTAGRAM_HINT), text);
+  }
+});

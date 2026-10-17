@@ -312,8 +312,9 @@ function addFromPlaceLinks(text, env, severalLinks) {
     return true;
   }
   if (!severalLinks) {
-    // The input bar: any two different links, not just place links.
-    if (distinct < 2) return false;
+    // The input bar: any two different links, not just place links. A guide link on
+    // the first line is the Shortcut's output (or what is left of it): the guide's way.
+    if (distinct < 2 || isAppleGuideLink(text.split(/\r?\n/, 1)[0].trim())) return false;
     env.toast(instagram
       ? 'One Instagram post at a time: paste each link on its own.'
       : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
