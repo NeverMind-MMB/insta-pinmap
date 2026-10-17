@@ -2,7 +2,7 @@
  * ui.js — list view, tag filter, pin details, settings, import, notifications.
  */
 
-import { store, normTag } from './store.js';
+import { store, normTag, PIN_COLORS, pinColorValue } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
@@ -13,7 +13,7 @@ import {
   lookupState, lookupNotice, lookupButton, rememberRequested, copiedNotice,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
-import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf } from './sources.js';
+import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR } from './sources.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -318,6 +318,16 @@ export function showDetail(pinId, env) {
   statusField.append(statusLabel, statusGroup);
   body.appendChild(statusField);
 
+  // --- Colour: Auto (the source's) or one of the palette ---
+  const colorField = document.createElement('div');
+  colorField.className = 'field';
+  const colorLabel = document.createElement('span');
+  colorLabel.className = 'field__label';
+  colorLabel.textContent = 'Colour';
+  const colorChoice = colorPicker('detail-color', { auto: sourceColor(pin.source), value: pinColorValue(pin.color) });
+  colorField.append(colorLabel, colorChoice);
+  body.appendChild(colorField);
+
   // --- Note ---
   body.appendChild(field('Note', () => {
     const t = document.createElement('textarea');
@@ -447,6 +457,7 @@ export function showDetail(pinId, env) {
       note: $('detail-note').value.trim(),
       status: active?.dataset.status || pin.status,
       tags,
+      color: pickedColor(colorChoice),
     };
   }
 
@@ -481,6 +492,7 @@ export function showDetail(pinId, env) {
     note: $('detail-note').value.trim(),
     status: statusGroup.querySelector('[aria-checked="true"]')?.dataset.status,
     tags,
+    color: pickedColor(colorChoice),
   });
   const initial = snapshot();
   const warnUnsaved = () => { $('detail-unsaved').hidden = false; };
@@ -649,6 +661,46 @@ export function showImport(entries, sourceName, env, guide = null) {
   };
 
   dlg.showModal();
+}
+
+/**
+ * A pin colour choice as native radios (arrow keys move between them, each
+ * named for screen readers): "Auto" first, drawn in the source's colour
+ * (`auto`), then the palette. `value`: the pin's colour, '' for Auto.
+ * Read it with pickedColor.
+ */
+export function colorPicker(name, { label = 'Colour', auto = UNKNOWN_SOURCE_COLOR, value = '' } = {}) {
+  const box = document.createElement('div');
+  box.className = 'swatches';
+  box.setAttribute('role', 'radiogroup');
+  box.setAttribute('aria-label', label);
+  box.dataset.value = value;
+  for (const option of [{ name: 'Auto (source colour)', color: '' }, ...PIN_COLORS]) {
+    const swatch = document.createElement('label');
+    swatch.className = 'swatch';
+    swatch.title = option.name;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = option.color;
+    input.checked = option.color === value;
+    const dot = document.createElement('span');
+    dot.className = option.color ? 'swatch__dot' : 'swatch__dot swatch__dot--auto';
+    dot.style.background = option.color || auto;
+    if (!option.color) dot.textContent = 'A';
+    const text = document.createElement('span');
+    text.className = 'visually-hidden';
+    text.textContent = option.name;
+    swatch.append(input, dot, text);
+    box.appendChild(swatch);
+  }
+  return box;
+}
+
+/** The colour picked in a colorPicker: '' for Auto; a colour outside the palette stays until another is picked. */
+export function pickedColor(box) {
+  const checked = box.querySelector('input:checked');
+  return checked ? checked.value : box.dataset.value || '';
 }
 
 /**

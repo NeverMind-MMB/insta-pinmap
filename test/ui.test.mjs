@@ -227,3 +227,65 @@ test('showUnsupported: names the site, searches GitHub issues for it, lists what
     delete globalThis.document;
   }
 });
+
+/* ---------- The pin colour picker (2.0.10) ---------- */
+
+/** Just enough document for colorPicker: elements with children, attributes and "input:checked". */
+function pickerDocument() {
+  const node = (tag) => ({
+    tag, className: '', title: '', type: '', name: '', value: '', checked: false, textContent: '', style: {}, attrs: {}, dataset: {}, children: [],
+    setAttribute(k, v) { this.attrs[k] = String(v); },
+    append(...kids) { this.children.push(...kids); },
+    appendChild(kid) { this.children.push(kid); return kid; },
+    querySelectorAll(sel) {
+      const all = [];
+      const walk = (n) => { for (const c of n.children || []) { all.push(c); walk(c); } };
+      walk(this);
+      return sel === 'input' ? all.filter((n) => n.tag === 'input') : [];
+    },
+    querySelector(sel) {
+      return sel === 'input:checked' ? this.querySelectorAll('input').find((n) => n.checked) || null : null;
+    },
+  });
+  return { createElement: node };
+}
+
+test('colour picker: "Auto" in the source colour first, then the eight palette colours, each a named radio', async () => {
+  const { colorPicker, pickedColor } = await import('../web/js/ui.js');
+  globalThis.document = pickerDocument();
+  try {
+    const box = colorPicker('detail-color', { label: 'Colour', auto: '#a3762b', value: '' });
+    assert.equal(box.attrs.role, 'radiogroup');
+    assert.equal(box.attrs['aria-label'], 'Colour');
+    const options = box.children.map((label) => {
+      const [input, dot, name] = label.children;
+      return { type: input.type, group: input.name, value: input.value, checked: input.checked, dot: dot.style.background, name: name.textContent };
+    });
+    assert.equal(options.length, 9);
+    assert.deepEqual(options[0], { type: 'radio', group: 'detail-color', value: '', checked: true, dot: '#a3762b', name: 'Auto (source colour)' });
+    assert.deepEqual(options.slice(1).map((o) => [o.name, o.value]), [
+      ['Rust', '#b8543f'], ['Amber', '#a3762b'], ['Olive', '#4f7a2b'], ['Green', '#2f7d5d'],
+      ['Teal', '#2f7d7a'], ['Blue', '#3a6ea5'], ['Purple', '#7a4b8f'], ['Plum', '#8f4b6b'],
+    ]);
+    assert.equal(pickedColor(box), '', 'Auto');
+    box.children[0].children[0].checked = false;
+    box.children[6].children[0].checked = true;
+    assert.equal(pickedColor(box), '#3a6ea5');
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('colour picker: the pin\'s colour starts checked; a colour outside the palette stays unless another is picked', async () => {
+  const { colorPicker, pickedColor } = await import('../web/js/ui.js');
+  globalThis.document = pickerDocument();
+  try {
+    const plum = colorPicker('c', { auto: '#3a6ea5', value: '#8f4b6b' });
+    assert.deepEqual(plum.children.filter((l) => l.children[0].checked).map((l) => l.children[0].value), ['#8f4b6b']);
+    const custom = colorPicker('c', { auto: '#3a6ea5', value: '#123456' });
+    assert.equal(custom.children.some((l) => l.children[0].checked), false);
+    assert.equal(pickedColor(custom), '#123456');
+  } finally {
+    delete globalThis.document;
+  }
+});
