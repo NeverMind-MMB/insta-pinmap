@@ -12,8 +12,8 @@ what it found before anything is saved.
 |---|---|
 | Apple Guides and Apple Maps places | The link itself. Places a guide names only by an Apple Maps ID are looked up from your phone or computer (see "Apple Guides"). |
 | Google Maps links | The link itself; short links are expanded by the app's helper. |
-| Google Takeout (GeoJSON, list CSV) | The file itself; places without coordinates are searched by name on import. |
-| My Maps (KML/KMZ), GPX, GeoJSON | The file itself. |
+| Google Maps saved places and lists (the GeoJSON and CSV files from the Google Takeout zip, not the zip itself) | The file itself; places without coordinates are searched by name on import. |
+| My Maps (KML/KMZ), GPS files (GPX), GeoJSON | The file itself. |
 | Instagram posts | The post's text, read by the app's helper (see below). |
 
 The input bar takes one link at a time: an Instagram post, an Apple or Google

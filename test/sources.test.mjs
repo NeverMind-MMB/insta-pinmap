@@ -57,27 +57,37 @@ const geojson = (geometry, properties = { name: 'Synthetic' }) => JSON.stringify
 
 /** Real-shaped files for the listed file kinds Node can read; KML, KMZ and GPX need the browser's DOMParser. */
 const FILE_SAMPLES = {
-  'Google Maps saved places (Google Takeout)': file('Saved Places.json', JSON.stringify({ type: 'FeatureCollection', features: [{
-    type: 'Feature', geometry: { type: 'Point', coordinates: [11.5, 48.1] },
-    properties: { Title: 'Synthetic Cafe', 'Google Maps URL': 'http://maps.google.com/?cid=1', Location: { Address: 'Testtown' } } }] })),
-  'Google Maps lists (Google Takeout)': file('Want to go.csv',
-    'Title,Note,URL\nSynthetic Bar,,https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721\n'),
-  'Other map files (GeoJSON)': file('places.geojson', geojson({ type: 'Point', coordinates: [11.5, 48.1] })),
-  'Backups from this app': file('backup.json', JSON.stringify({ version: 1, pins: [], tags: [], deleted: [] })),
+  'Google Maps saved places and lists (files from the Google Takeout zip)': [
+    file('Saved Places.json', JSON.stringify({ type: 'FeatureCollection', features: [{
+      type: 'Feature', geometry: { type: 'Point', coordinates: [11.5, 48.1] },
+      properties: { Title: 'Synthetic Cafe', 'Google Maps URL': 'http://maps.google.com/?cid=1', Location: { Address: 'Testtown' } } }] })),
+    file('Want to go.csv',
+      'Title,Note,URL\nSynthetic Bar,,https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721\n'),
+  ],
+  'Other map files (GeoJSON)': [file('places.geojson', geojson({ type: 'Point', coordinates: [11.5, 48.1] }))],
+  'Backups from this app': [file('backup.json', JSON.stringify({ version: 1, pins: [], tags: [], deleted: [] }))],
 };
 const BROWSER_ONLY_FILES = new Set([
   'Google My Maps and Google Earth maps',
-  "GPS files from Komoot, Strava, Garmin and other outdoor apps (their waypoints and a route's start point)",
+  "GPS files (GPX) from Komoot, Strava, Garmin and other outdoor apps (their waypoints and a route's start point)",
 ]);
 
 test('every file kind listed is one readFile reads (KML, KMZ and GPX only in the browser)', async () => {
   for (const item of group('files').items) {
     if (BROWSER_ONLY_FILES.has(item)) continue;
-    const sample = FILE_SAMPLES[item];
-    assert.ok(sample, `${item}: add a sample file to this test`);
-    const read = await readFile(sample);
-    assert.ok(read.backup || read.entries.length === 1, item);
+    const samples = FILE_SAMPLES[item];
+    assert.ok(samples, `${item}: add a sample file to this test`);
+    for (const sample of samples) {
+      const read = await readFile(sample);
+      assert.ok(read.backup || read.entries.length === 1, `${item}: ${sample.name}`);
+    }
   }
+});
+
+test('a Takeout zip itself is not read (only the files in it), so the list names the files', async () => {
+  const { zipSync, strToU8 } = await import('../web/vendor/fflate.js');
+  const zip = zipSync({ 'Takeout/Maps (your places)/Saved Places.json': strToU8('{"type":"FeatureCollection","features":[]}') });
+  await assert.rejects(readFile({ name: 'takeout-20261017.zip', arrayBuffer: async () => zip.buffer }), /no KML file/);
 });
 
 test('the GitHub issues search for a site', () => {

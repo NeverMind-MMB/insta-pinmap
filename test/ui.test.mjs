@@ -220,7 +220,7 @@ test('showUnsupported: names the site, searches GitHub issues for it, lists what
     assert.match(lines[0], /^One link at a time \(input bar\): instagram\.com\/p\/… · instagram\.com\/reel\/… · /);
     assert.match(lines[0], / — or type a place name to search$/);
     assert.match(lines[1], /^Several links at once \(Settings → Import\): maps\.apple\.com\/… place links · /);
-    assert.match(lines[2], /^Files \(Settings → Import → Choose files\): Google Maps saved places \(Google Takeout\) · /);
+    assert.match(lines[2], /^Files \(Settings → Import → Choose files\): Google Maps saved places and lists \(files from the Google Takeout zip\) · /);
     assert.equal(doc.getElementById('unsupported-sources').open, false);
     assert.equal(doc.getElementById('dlg-unsupported').shown, true);
   } finally {

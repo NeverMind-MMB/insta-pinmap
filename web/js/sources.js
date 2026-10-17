@@ -150,10 +150,9 @@ export const SUPPORTED_SOURCES = [
     id: 'files',
     title: 'Files (Settings → Import → Choose files)',
     items: [
-      'Google Maps saved places (Google Takeout)',
-      'Google Maps lists (Google Takeout)',
+      'Google Maps saved places and lists (files from the Google Takeout zip)',
       'Google My Maps and Google Earth maps',
-      "GPS files from Komoot, Strava, Garmin and other outdoor apps (their waypoints and a route's start point)",
+      "GPS files (GPX) from Komoot, Strava, Garmin and other outdoor apps (their waypoints and a route's start point)",
       'Other map files (GeoJSON)',
       'Backups from this app',
     ],
