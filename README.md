@@ -24,6 +24,10 @@ guide's, list's or file's name on every place it imports; change or clear it
 before you tap **Import selected**. With the tag filter you then show or hide a
 whole guide at once.
 
+A link to a site the app doesn't read yet (Pinterest or YouTube, say) opens a
+dialog that says so, offers a search of the project's GitHub issues for that
+site, and lists every supported link and file.
+
 **Instagram posts:** paste or share a link. The app reads the post's text,
 suggests where the place is, you confirm, and the pin is on your map. Hashtags
 can become tags with one tap. It also reads country flags and country/region
