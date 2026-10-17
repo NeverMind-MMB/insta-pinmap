@@ -16,12 +16,13 @@ what it found before anything is saved.
 | My Maps (KML/KMZ), GPX, GeoJSON | The file itself. |
 | Instagram posts | The post's text, read by the app's helper (see below). |
 
-Paste links into the input bar or **Settings → Import**; several place links at
-once (one per line) open one import list. Files go in through **Settings →
-Import → Choose files**. The import list puts a tag with the guide's, list's or
-file's name on every place it imports; change or clear it before you tap
-**Import selected**. With the tag filter you then show or hide a whole guide
-at once.
+The input bar takes one link at a time: an Instagram post, an Apple or Google
+Maps place, or an Apple Guide link. Several links at once go in through
+**Settings → Import** (one per line; they open one import list), files through
+**Settings → Import → Choose files**. The import list puts a tag with the
+guide's, list's or file's name on every place it imports; change or clear it
+before you tap **Import selected**. With the tag filter you then show or hide a
+whole guide at once.
 
 **Instagram posts:** paste or share a link. The app reads the post's text,
 suggests where the place is, you confirm, and the pin is on your map. Hashtags
@@ -75,7 +76,8 @@ place search and reading Instagram posts.
   use the iPhone way.
 - **iPhone:** in Instagram tap Share → **Copy link**, open Insta Pinmap, tap the
   paste button next to the input field and confirm iPhone's "Paste" bubble.
-- You can also type a place name, or paste an Apple or Google Maps link.
+- You can also type a place name, or paste one Apple or Google Maps link (an
+  Apple Guide link too).
 
 If the app can't read a post, it shows the post and you search for the place
 yourself. Everything else keeps working.
@@ -149,8 +151,7 @@ just those, in case Apple only refused a few pages.
 
 You can still start in the app:
 
-1. Paste the guide link in the app (input field or **Settings → Import**); the
-   import dialog opens.
+1. Paste the guide link into the app's input bar; the import dialog opens.
 2. Tap **Look up with iPhone Shortcut**: the app copies the place links and
    starts the Shortcut. If Shortcuts doesn't open, tap **Open Shortcuts** below
    the buttons. If iPhone asks whether Shortcuts may paste, tap **Allow Paste**.
