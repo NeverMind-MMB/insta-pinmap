@@ -762,7 +762,8 @@ function askNearby(neighbors, place, title) {
  * ================================================================== */
 
 export function wireConfirm(env) {
-  $('confirm-save').addEventListener('click', () => save(env));
+  // Saved with the env the add started with: from Settings, it empties Settings' paste box.
+  $('confirm-save').addEventListener('click', () => save(state?.env || env));
 
   // The "from the post" hint goes once the suggestion is cleared.
   $('confirm-when').addEventListener('input', () => {

@@ -437,3 +437,49 @@ test('the copied place links with another link in the paste: their own list, not
   assert.equal(imports[0].n, '');
   assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read.", 'info']]);
 });
+
+/** A document just big enough for the confirm dialog; without #confirm-map the preview map stays off. */
+function confirmDocument() {
+  const make = () => {
+    const on = {};
+    return {
+      hidden: false, open: false, disabled: false, value: '', textContent: '', innerHTML: '', scrollTop: 0,
+      style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} },
+      setAttribute() {}, appendChild() {}, append() {}, focus() {}, select() {},
+      querySelector: () => make(), querySelectorAll: () => [],
+      addEventListener(type, fn) { (on[type] ??= []).push(fn); },
+      fire(type) { for (const fn of on[type] || []) fn({ preventDefault() {} }); },
+      showModal() { this.open = true; },
+      close() { this.open = false; this.fire('close'); },
+    };
+  };
+  const els = new Map();
+  return {
+    getElementById: (id) => (id === 'confirm-map' ? null : els.get(id) ?? els.set(id, make()).get(id)),
+    createElement: () => make(), createTextNode: () => ({}), querySelectorAll: () => [],
+  };
+}
+
+test('Settings → Import → Read with one place link: once the confirm dialog saves its pin, the field empties', async () => {
+  const { wireConfirm, addFromSettings } = await import('../web/js/addflow.js');
+  const { store, normalizeDb } = await import('../web/js/store.js');
+  const doc = confirmDocument();
+  globalThis.document = doc;
+  store.db = normalizeDb({});
+  try {
+    const { ui } = fakeUi();
+    const appEnv = { ...ui, redraw() {}, inputDone() {} };
+    wireConfirm(appEnv);
+    const field = { value: LL_LINK };
+    await addFromSettings(field, appEnv, () => {});
+    assert.equal(doc.getElementById('dlg-confirm').open, true, 'the confirm dialog is open');
+    assert.equal(field.value, LL_LINK, 'kept while the dialog is open, like the input bar');
+    doc.getElementById('confirm-save').fire('click');
+    assert.deepEqual(store.db.pins.map((p) => p.title), ['Synthetic Cafe']);
+    assert.equal(field.value, '');
+  } finally {
+    delete globalThis.document;
+    clearTimeout(store._saveTimer);
+    store._saveTimer = null;
+  }
+});
