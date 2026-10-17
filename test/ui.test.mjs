@@ -165,3 +165,11 @@ test('import from several files: the tag field starts empty and each list keeps 
     'Want to go.csv, Favorite places.csv', '', []);
   assert.deepEqual([pin('A').tags, pin('B').tags], [['want-to-go'], ['favorite-places']]);
 });
+
+test('import tag: no stray hyphens where emoji or "&" were, in the prefill and in a typed tag', async () => {
+  assert.equal(importTag('☕ Coffee in Vienna'), 'coffee-in-vienna');
+  assert.equal(importTag('Rome 🇮🇹'), 'rome');
+  assert.equal(importTag('A & B'), 'a-b');
+  const pin = await importRows([row('New place', 47.1, 11.1)], 'Synthetic Guide', ' Bars & Cafés 🍸', []);
+  assert.deepEqual(pin('New place').tags, ['bars-cafés']);
+});

@@ -531,7 +531,12 @@ export function importTag(sourceName) {
   const s = String(sourceName ?? '');
   if ((s.match(IMPORT_FILE_EXTENSION) || []).length > 1) return '';
   const name = s.replace(IMPORT_FILE_EXTENSION, '').trim();
-  return STAND_IN_NAMES.has(name.toLowerCase()) ? '' : normTag(name);
+  return STAND_IN_NAMES.has(name.toLowerCase()) ? '' : cleanTag(name);
+}
+
+/** normTag without the stray hyphens emoji or "&" leave: runs collapsed, none at the ends. */
+function cleanTag(text) {
+  return normTag(text).replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
 }
 
 /**
@@ -762,7 +767,7 @@ export async function applyImport(entries, sourceName, env, tag = '') {
   let skipped = 0;
   const failed = [];
   const radius = store.settings.radiusM;
-  const fieldTag = normTag(tag);
+  const fieldTag = cleanTag(tag);
   // A Google list row carries its list's name. For one list the field started
   // with that name and decides; rows of other lists (several files) keep theirs.
   const startTag = importTag(sourceName);
