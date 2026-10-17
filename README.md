@@ -1,31 +1,58 @@
 # Insta Pinmap
 
-Your own world map of places from Instagram posts. Free, no account, and your
-pins stay on your phone.
+One map for places from many sources: Apple Maps, Google Maps, map files and
+Instagram posts. Free, no account, and your pins stay on your phone.
 
 ## What it does
 
-Paste or share an Instagram link. The app reads the post's text, suggests where
-the place is, you confirm, and the pin is on your map. Hashtags can become tags
-with one tap. It also reads country flags and country/region words in the caption to put
-the right place first, and shows each match's country flag.
-If a post mentions a date, the app suggests it; you can edit it. Each post also
-keeps the date it was published.
+The app brings places from map apps and map files onto one map, and you check
+what it found before anything is saved.
+
+| Import from | Where the places come from |
+|---|---|
+| Apple Guides and Apple Maps places | The link itself. Places a guide names only by an Apple Maps ID are looked up from your phone or computer (see "Apple Guides"). |
+| Google Maps links | The link itself; short links are expanded by the app's helper. |
+| Google Takeout (GeoJSON, list CSV) | The file itself; places without coordinates are searched by name on import. |
+| My Maps (KML/KMZ), GPX, GeoJSON | The file itself. |
+| Instagram posts | The post's text, read by the app's helper (see below). |
+
+Paste links into the input bar; files go in through **Settings → Import →
+Choose files**.
+
+**Instagram posts:** paste or share a link. The app reads the post's text,
+suggests where the place is, you confirm, and the pin is on your map. Hashtags
+can become tags with one tap. It also reads country flags and country/region
+words in the caption to put the right place first, and shows each match's
+country flag. If a post mentions a date, the app suggests it; you can edit it.
+Each post also keeps the date it was published.
 
 - One post belongs to exactly one pin. Pasting the same link again jumps to it.
 - Several posts can share a pin. If a new place is close to pins you already
   have, the app asks whether to attach it to one of them.
 - You always confirm the place, even when there is only one match.
 
-Also: list with search, tag filter, notes, "want to go / been there", and import
-from Apple Guides, Apple and Google Maps links, Google Takeout, My Maps
-(KML/KMZ), GPX and GeoJSON.
+Also: list with search, tag filter, notes and "want to go / been there". The
+only export is the app's own backup: one HTML file that shows your pins on a
+map and, loaded in the app, brings them back (see "Your data and backups").
 
-| Import from | Where the places come from |
-|---|---|
-| Apple Guides | Names and coordinates come from the link; places Apple Maps knows are looked up from your phone or computer (see "Apple Guides"). |
-| Apple and Google Maps links | The link itself; short links are expanded by the app's helper. |
-| Google Takeout, Google list CSV, My Maps, GPX, GeoJSON | The file itself. |
+## What needs the helper
+
+The app runs on your phone. Its helper is the small server part on Cloudflare
+(a Worker, at the `/api/…` addresses of your copy). Only three things use it:
+
+- reading Instagram posts (`/api/ig`),
+- expanding short map links such as maps.app.goo.gl, pasted or in an imported
+  file (`/api/resolve`),
+- a guide shared from the Maps app to the iPhone Shortcut (`/api/guide`).
+
+Everything else works without it: file imports, long Apple and Google Maps
+links, Apple Guide links, the Shortcut from Safari or from the app's button, and
+backups. Place search and map images go straight from your phone to Photon,
+Nominatim and the map servers.
+
+So if Instagram blocks a Worker, only reading Instagram posts stops; everything
+else keeps working. Even then you can save a post: the app shows it, and you
+search for the place yourself.
 
 ## Install
 
@@ -179,10 +206,11 @@ says what is wrong.
 
 ## Run your own copy
 
-The public copy is the author's personal one, not a service, and Instagram
-(Meta) can block a Worker's address at any time. So everyone runs their **own**
-copy on their **own** free Cloudflare account: your Worker, your limits. It
-takes about 15 minutes.
+The public copy is the author's personal one, not a service. Your own copy
+matters most for Instagram: Instagram (Meta) can block a Worker's address at any
+time, and then reading posts stops for everyone who uses that copy (see "What
+needs the helper"). So everyone runs their **own** copy on their **own** free
+Cloudflare account: your Worker, your limits. It takes about 15 minutes.
 
 1. Install Node.js (the LTS version) from <https://nodejs.org>.
 2. Create a free account at <https://dash.cloudflare.com>. Open **Workers & Pages**
