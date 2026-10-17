@@ -255,7 +255,8 @@ const PLACE_ID_LINK = 'https://maps.apple.com/place?address=Testweg%202&coordina
 // 987654321 is 0x3ADE68B1: Apple's place-id is "I" + the ID in hexadecimal.
 const PLACE_ID_ONLY_LINK = 'https://maps.apple.com/place?place-id=I3ADE68B1&_provider=9902';
 
-const SEVERAL_LINKS_HINT = 'Several links? Paste them in Settings → Import (one per line), or import a file there.';
+const SEVERAL_LINKS_HINT = 'Several map links? Paste them in Settings → Import (one per line), or import a file there.';
+const INSTAGRAM_HINT = 'One Instagram post at a time: paste each link on its own.';
 
 test('the input bar takes one link at a time: several place links bring a hint to Settings → Import, no dialog', async () => {
   for (const text of [[LL_LINK, ADDRESS_AUID_LINK, AUID_LINK].join('\n'), `${AUID_LINK}\n${PLACE_ID_LINK}`]) {
@@ -444,27 +445,42 @@ test('Settings → Import: a guide link stays out of a list of place links', asy
   assert.equal(imports[0].g, null, 'none of the guide\'s Apple IDs');
 });
 
-test('the input bar: any two links bring the hint and import nothing (two posts, two guides, a guide and a place)', async () => {
+test('the input bar: any two links import nothing; with an Instagram post among them it says one post at a time', async () => {
   const { isShortcutPaste } = await import('../web/js/addflow.js');
-  for (const text of [
-    'https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/',
-    `${APPLE_UG}\n${SYN_GUIDE}`,
-    `${SYN_GUIDE}\n${LL_LINK}`,
-    `Look: https://www.instagram.com/p/AAA111/ and ${LL_LINK}`,
+  for (const [text, hint] of [
+    ['https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/', INSTAGRAM_HINT],
+    [`Look: https://www.instagram.com/p/AAA111/ and ${LL_LINK}`, INSTAGRAM_HINT],
+    [`Two guides:\n${APPLE_UG}\n${SYN_GUIDE}`, SEVERAL_LINKS_HINT],
+    [`${LL_LINK}\n${SYN_GUIDE}`, SEVERAL_LINKS_HINT],
   ]) {
     const { imports, toasts, cleared } = await pasteIntoBar(text);
     assert.deepEqual(imports, [], text);
-    assert.deepEqual(toasts, [[SEVERAL_LINKS_HINT, 'info']], text);
+    assert.deepEqual(toasts, [[hint, 'info']], text);
     assert.equal(cleared, 0, text);
     assert.equal(isShortcutPaste(text), true, `${text}: straight to the add flow, so the hint shows on paste`);
   }
 });
 
+const SKIPPED_WITH_INSTAGRAM = (n) => `Skipped ${n} ${n === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read. ` +
+  'Instagram posts go in the input bar, one at a time.';
+
 test('Settings → Import: a list of place links says in one toast how many other links it left out', async () => {
   const text = [LL_LINK, AUID_LINK, 'https://maps.apple/p/AbCdEf1234', 'https://www.instagram.com/p/ABC123/', SYN_GUIDE, LL_LINK].join('\n');
   const { imports, toasts } = await readInSettings(text);
   assert.equal(imports[0].e.length, 2);
-  assert.deepEqual(toasts, [["Skipped 3 links that aren't place links this app can read.", 'info']]);
+  assert.deepEqual(toasts, [[SKIPPED_WITH_INSTAGRAM(3), 'info']]);
+});
+
+test('Settings → Import: Instagram posts among several links never take over or go missing', async () => {
+  const two = await readInSettings('https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/');
+  assert.deepEqual(two.imports, [], 'not the first post');
+  assert.deepEqual(two.toasts, [[SKIPPED_WITH_INSTAGRAM(2), 'info']]);
+  assert.match(two.field.value, /AAA111/, 'kept, to paste each post in the input bar');
+  for (const text of [`${LL_LINK}\nhttps://www.instagram.com/p/AAA111/`, `https://www.instagram.com/p/AAA111/\n${LL_LINK}`]) {
+    const { imports, toasts } = await readInSettings(text);
+    assert.deepEqual(imports[0]?.e.map((r) => r.name), ['Synthetic Cafe'], text);
+    assert.deepEqual(toasts, [[SKIPPED_WITH_INSTAGRAM(1), 'info']], text);
+  }
 });
 
 test('Settings → Import: the copied place links with another link: their own list, not the waiting guide', async () => {

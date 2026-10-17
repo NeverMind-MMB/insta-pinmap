@@ -17,7 +17,7 @@ what it found before anything is saved.
 | Instagram posts | The post's text, read by the app's helper (see below). |
 
 The input bar takes one link at a time: an Instagram post, an Apple or Google
-Maps place, or an Apple Guide link. Several links at once go in through
+Maps place, or an Apple Guide link. Several map links at once go in through
 **Settings → Import** (one per line; they open one import list), files through
 **Settings → Import → Choose files**. The import list puts a tag with the
 guide's, list's or file's name on every place it imports; change or clear it

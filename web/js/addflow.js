@@ -250,9 +250,9 @@ function appleIdOnly(link) {
  * once: their places as import rows, and the Apple IDs of Apple links without
  * coordinates that name their place by ID (each ID once). Guide links stay out:
  * a guide goes its own way, with its title.
- * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number}}
+ * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number, instagram: number}}
  *   links: how many brought a place; skipped: how many other links (guides, links it can't read);
- *   distinct: how many different links the paste has
+ *   distinct: how many different links the paste has; instagram: how many of them are Instagram posts
  */
 function placeLinks(text) {
   const entries = [];
@@ -260,10 +260,12 @@ function placeLinks(text) {
   const seen = new Set();
   let links = 0;
   let skipped = 0;
+  let instagram = 0;
   for (const [match] of String(text ?? '').matchAll(/https?:\/\/\S+/g)) {
     const link = match.replace(/[),.]+$/, '');
     if (seen.has(link)) continue;
     seen.add(link);
+    if (isInstagramLink(link)) instagram++;
     let parsed = null;
     try {
       parsed = isAppleGuideLink(link) ? null : readLink(link);
@@ -280,19 +282,26 @@ function placeLinks(text) {
     }
     links++;
   }
-  return { entries, appleIds, links, skipped, distinct: seen.size };
+  return { entries, appleIds, links, skipped, distinct: seen.size, instagram };
+}
+
+/** The toast for the links a list of place links left out; Instagram posts go in the input bar. */
+function skippedNotice(skipped, instagram) {
+  const notice = `Skipped ${skipped} ${skipped === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read.`;
+  return instagram ? `${notice} Instagram posts go in the input bar, one at a time.` : notice;
 }
 
 /**
  * Two or more map place links in one paste, from Settings → Import
  * (`severalLinks`): one import dialog, one row per place. Rows with coordinates
  * are checked; Apple places named only by ID get the dialog's Shortcut lookup,
- * as a guide's do. The input bar takes one link at a time: it imports nothing
- * and points to Settings instead.
+ * as a guide's do. An Instagram post among several links never takes over: it
+ * is counted as left out, even next to just one place link or none. The input
+ * bar takes one link at a time: it imports nothing and says where to go instead.
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
 function addFromPlaceLinks(text, env, severalLinks) {
-  const { entries, appleIds, links, skipped, distinct } = placeLinks(text);
+  const { entries, appleIds, links, skipped, distinct, instagram } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
   const pending = appleIds.length && !entries.length && !skipped ? loadPendingGuide() : null;
@@ -305,16 +314,18 @@ function addFromPlaceLinks(text, env, severalLinks) {
   if (!severalLinks) {
     // The input bar: any two different links, not just place links.
     if (distinct < 2) return false;
-    env.toast('Several links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
+    env.toast(instagram
+      ? 'One Instagram post at a time: paste each link on its own.'
+      : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
     return true;
   }
-  if (links < 2) return false;
-  const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
-  env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
-  if (skipped) {
-    env.toast(`Skipped ${skipped} ${skipped === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read.`, 'info', 6000);
+  if (links < 2 && !(instagram && distinct >= 2)) return false;
+  if (links) {
+    const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
+    env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
   }
-  env.inputDone?.();
+  if (skipped) env.toast(skippedNotice(skipped, instagram), 'info', 6000);
+  if (links) env.inputDone?.();
   return true;
 }
 
