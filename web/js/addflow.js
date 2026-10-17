@@ -241,9 +241,10 @@ function appleIdOnly(link) {
 }
 
 /**
- * The map links in a paste (text around them is ignored), each link once:
- * their places as import rows, and the Apple IDs of Apple links without
- * coordinates that name their place by ID (each ID once).
+ * The map place links in a paste (text around them is ignored), each link
+ * once: their places as import rows, and the Apple IDs of Apple links without
+ * coordinates that name their place by ID (each ID once). Guide links stay out:
+ * a guide goes its own way, with its title.
  * @returns {{entries: Array, appleIds: string[], links: number}} links: how many brought a place
  */
 function placeLinks(text) {
@@ -255,6 +256,7 @@ function placeLinks(text) {
     const link = match.replace(/[),.]+$/, '');
     if (seen.has(link)) continue;
     seen.add(link);
+    if (isAppleGuideLink(link)) continue;
     let parsed = null;
     try {
       parsed = readLink(link);
@@ -263,9 +265,8 @@ function placeLinks(text) {
     if (id) {
       if (appleIds.includes(id)) continue;
       appleIds.push(id);
-    } else if (parsed && (parsed.entries.length || parsed.appleIds.length)) {
+    } else if (parsed?.entries.length) {
       entries.push(...parsed.entries);
-      for (const x of parsed.appleIds) if (!appleIds.includes(x)) appleIds.push(x);
     } else {
       continue;
     }

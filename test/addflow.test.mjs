@@ -416,3 +416,11 @@ test('place links that are not all the waiting guide\'s, or come with other plac
     assert.ok(!toasts.some(([t]) => /isn't done yet/.test(t)), text);
   }
 });
+
+test('a guide link stays out of a list of place links; with one place link it keeps its own path', async () => {
+  let { imports } = await pasteIntoBar([SYN_GUIDE, LL_LINK, PLACE_ID_LINK].join('\n'));
+  assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe', 'Synthetic Lake']);
+  assert.equal(imports[0].g, null, 'none of the guide\'s Apple IDs');
+  ({ imports } = await pasteIntoBar([SYN_GUIDE, LL_LINK].join('\n')));
+  assert.equal(imports[0].n, 'Synthetic Guide', 'the guide\'s import, with its title and tag');
+});
