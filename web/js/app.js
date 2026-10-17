@@ -4,13 +4,13 @@
 
 import { store, DEFAULT_SETTINGS, pruneTagFilter } from './store.js';
 import { MainMap, TILES } from './map.js';
-import { startAdd, wireConfirm, guideImportEntries, guideOf, isShortcutPaste } from './addflow.js';
+import { startAdd, addFromSettings, wireConfirm, guideImportEntries, isShortcutPaste } from './addflow.js';
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,
   exportBackup, showRestore, backupAgeLabel,
 } from './ui.js';
-import { readFile, readLink } from './importers.js';
+import { readFile } from './importers.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
@@ -334,29 +334,14 @@ function wireSettings() {
     showImport(all, names.join(', '), env);
   });
 
-  // --- Import from a link ---
-  const readImportLink = () => {
-    const link = $('settings-import-link').value.trim();
-    if (!link) return;
-    let parsed;
+  // --- Import from pasted links or Shortcut results: the input bar's way ---
+  $('settings-import-link-go').addEventListener('click', async () => {
     try {
-      parsed = readLink(link);
+      await addFromSettings($('settings-import-link'), env, () => dlg.close());
     } catch (err) {
-      $('settings-import-status').textContent = err.message;
-      return;
+      console.error(err);
+      toast('Something went wrong: ' + err.message, 'error', 6000);
     }
-    if (!parsed.entries.length && !parsed.appleIds.length) {
-      $('settings-import-status').textContent = 'This link contains no place.';
-      return;
-    }
-    $('settings-import-link').value = '';
-    $('settings-import-status').textContent = '';
-    dlg.close();
-    showImport(guideImportEntries(parsed), parsed.name, env, guideOf(parsed));
-  };
-  $('settings-import-link-go').addEventListener('click', readImportLink);
-  $('settings-import-link').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); readImportLink(); }
   });
 
   // --- Backup ---

@@ -74,6 +74,19 @@ export async function startAdd(input, env) {
   });
 }
 
+/**
+ * Settings → Import → "Read": the pasted text goes the input bar's way. Settings
+ * closes first, so the dialog startAdd opens is on top; like the input bar, the
+ * field empties once a dialog has the text.
+ * @param {{value: string}} field  the paste box
+ */
+export async function addFromSettings(field, env, closeSettings) {
+  const text = field.value.trim();
+  if (!text) return;
+  closeSettings();
+  await startAdd(text, { ...env, inputDone: () => { field.value = ''; } });
+}
+
 /* ================================================================== *
  * Instagram
  * ================================================================== */

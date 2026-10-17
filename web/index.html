@@ -270,12 +270,12 @@
           <input type="file" id="settings-import-file" accept=".json,.geojson,.csv,.kml,.kmz,.gpx,.zip,.html,.htm" multiple>
         </label>
         <label class="field">
-          <span class="field__label">Or paste a link (Apple Guide / place link)</span>
-          <span class="taginput">
-            <input type="text" id="settings-import-link" placeholder="https://guides.apple.com/?ug=…">
-            <button type="button" class="btn btn--small" id="settings-import-link-go">Read</button>
-          </span>
+          <span class="field__label">Or paste links (Apple Guide, place links, Shortcut results)</span>
+          <textarea id="settings-import-link" rows="3" placeholder="https://guides.apple.com/?ug=…" autocapitalize="off" spellcheck="false"></textarea>
         </label>
+        <div class="buttonrow">
+          <button type="button" class="btn btn--small" id="settings-import-link-go">Read</button>
+        </div>
         <p class="field__help" id="settings-import-status" role="status"></p>
       </fieldset>
 

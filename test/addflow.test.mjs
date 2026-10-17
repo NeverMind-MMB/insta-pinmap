@@ -337,3 +337,42 @@ test('raw HTML without a waiting guide never turns into a list of place links', 
   const { imports } = await pasteIntoBar(`${page(101)}\n${page(202)}`);
   assert.equal(imports.length, 0);
 });
+
+/* ---------- Settings → Import: pasted text goes the input bar's way (2.0.10) ---------- */
+
+/** Runs Settings' "Read" on `value`; records the order of closing Settings and opening dialogs. */
+async function readInSettings(value) {
+  globalThis.localStorage = memoryStorage();
+  const { addFromSettings } = await import('../web/js/addflow.js');
+  const { toasts, ui } = fakeUi();
+  const field = { value };
+  const order = [];
+  const imports = [];
+  await addFromSettings(field, { ...ui, showImport: (e, n, g) => { order.push('import'); imports.push({ e, n, g }); } },
+    () => order.push('close'));
+  return { field, order, imports, toasts };
+}
+
+test('Settings → Import → Read: three place links open one import dialog; Settings closes first, the field empties', async () => {
+  const { field, order, imports } = await readInSettings(`  ${[LL_LINK, ADDRESS_AUID_LINK, AUID_LINK].join('\n')}\n`);
+  assert.deepEqual(order, ['close', 'import']);
+  assert.equal(imports[0].e.length, 3);
+  assert.deepEqual(imports[0].g.appleIds, ['987654321']);
+  assert.equal(field.value, '');
+});
+
+test('Settings → Import → Read: a guide link with the Shortcut\'s results works there as in the input bar', async () => {
+  const { imports, field } = await readInSettings([SYN_GUIDE, 'https://maps.apple.com/place?auid=1001@@Museum@@48.1@@11.5@@Town'].join('\n'));
+  assert.equal(imports[0].n, 'Synthetic Guide');
+  assert.equal(rowOf(imports[0].e, '1001').name, 'Museum');
+  assert.equal(field.value, '');
+});
+
+test('Settings → Import → Read: an empty field does nothing; a link nothing could open stays in the field', async () => {
+  const empty = await readInSettings('  \n ');
+  assert.deepEqual(empty.order, []);
+  const failed = await readInSettings(AUID_LINK);
+  assert.deepEqual(failed.imports, []);
+  assert.equal(failed.toasts.at(-1)[1], 'error');
+  assert.equal(failed.field.value, AUID_LINK, 'kept, so it can be fixed');
+});
