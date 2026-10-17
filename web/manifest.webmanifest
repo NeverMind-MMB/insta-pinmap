@@ -1,7 +1,7 @@
 {
   "name": "Insta Pinmap",
   "short_name": "Insta Pinmap",
-  "description": "Your own map of places from Instagram posts.",
+  "description": "One map for your places from Apple Maps, Google Maps, Instagram, GPX, KML and more.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
