@@ -30,6 +30,7 @@ export const SOURCE_GROUPS = [
   {
     id: 'instagram',
     name: 'Instagram',
+    logo: '/icons/sources/instagram.png',
     color: '#8f4b6b',
     sources: ['instagram'],
     prefixes: [

@@ -225,15 +225,23 @@ test('findLinks: every http(s) link, and words that start with a registered pref
 
 /* ---------- 2.1.0: the add-pin animation's logo or caption ---------- */
 
-test('pinLook: Google and Apple Maps show their logo; other sources their name as a caption', async () => {
+test('pinLook: Google Maps, Apple Maps and Instagram show their logo; other sources their name as a caption', async () => {
   const { pinLook } = await import('../web/js/sources.js');
   assert.deepEqual(pinLook('google-csv'), { logo: '/icons/sources/google.png', caption: '' });
   assert.deepEqual(pinLook('google-link'), { logo: '/icons/sources/google.png', caption: '' });
   assert.deepEqual(pinLook('apple-guide'), { logo: '/icons/sources/apple.svg', caption: '' });
   assert.deepEqual(pinLook('apple-ort'), { logo: '/icons/sources/apple.svg', caption: '' });
-  assert.deepEqual(pinLook('instagram'), { logo: '', caption: 'Instagram' });
+  assert.deepEqual(pinLook('instagram'), { logo: '/icons/sources/instagram.png', caption: '' });
   assert.deepEqual(pinLook('gpx'), { logo: '', caption: 'GPS file' });
   assert.deepEqual(pinLook('kml'), { logo: '', caption: 'Map file' });
   assert.deepEqual(pinLook('manual'), { logo: '', caption: 'Place search' });
   assert.deepEqual(pinLook('somewhere-else'), { logo: '', caption: '' });
+});
+
+test('every source logo is a file in web/', async () => {
+  const { SOURCE_GROUPS } = await import('../web/js/sources.js');
+  const { existsSync } = await import('node:fs');
+  const logos = SOURCE_GROUPS.filter((group) => group.logo).map((group) => group.logo);
+  assert.ok(logos.length >= 3);
+  for (const logo of logos) assert.ok(existsSync(new URL(`../web${logo}`, import.meta.url)), logo);
 });
