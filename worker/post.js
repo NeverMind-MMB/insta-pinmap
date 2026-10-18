@@ -9,7 +9,8 @@
  *
  * Only these hosts are ever fetched: www.youtube.com (the watch page, built
  * from the video ID), www.google.com (one Maps place page, built from the
- * Place ID) and facebook.com / fb.watch (redirects are followed only there).
+ * Place ID) and facebook.com / fb.watch (redirects are followed only there),
+ * plus a post's thumbnail when imageAsDataUrl's hosts allow it (fbcdn.net).
  * Links are never logged. Pages are read with indexOf, not parsed whole: the
  * free plan allows 10 ms of CPU per request.
  */
