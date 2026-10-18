@@ -11,6 +11,7 @@
     "/js/address.js",
     "/js/app.js",
     "/js/backup.js",
+    "/js/coords.js",
     "/js/dedupe.js",
     "/js/extract.js",
     "/js/geocode.js",
