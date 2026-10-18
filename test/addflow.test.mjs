@@ -670,17 +670,6 @@ test('the input bar: a Google link with search text searches for that text; with
   }
 });
 
-test('the input bar: a Google Maps list link, also behind a short link, opens the unsupported-link dialog', async () => {
-  const list = 'https://www.google.com/maps/placelists/list/AbCdEf123';
-  const shown = [];
-  const { ui } = fakeUi();
-  await startAdd(list, { ...ui, showUnsupported: (l, what) => shown.push([l, what]) });
-  const calls = stubResolve(() => ({ ok: true, url: list }));
-  await startAdd('https://maps.app.goo.gl/synthList', { ...ui, showUnsupported: (l, what) => shown.push([l, what]) });
-  assert.equal(calls.length, 1);
-  assert.deepEqual(shown, [[list, 'Google Maps lists'], [list, 'Google Maps lists']]);
-});
-
 test('Settings → Import: a Google Maps list link is left out of a list of place links', async () => {
   const { imports, toasts } = await readInSettings([LL_LINK, PLACE_ID_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n'));
   assert.equal(imports[0].e.length, 2);

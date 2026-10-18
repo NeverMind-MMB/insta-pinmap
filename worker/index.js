@@ -7,6 +7,7 @@
  *   /api/resolve  where a short map link points to
  *   /api/guide    the place links of an Apple guide link, read from the link
  *                 itself (for the iPhone Shortcut; Apple is never contacted)
+ *   /api/list     the places of a shared Google Maps list (worker/googlelist.js)
  *
  * Apple Maps places of Apple Guides are not looked up here: maps.apple.com
  * refuses Cloudflare's servers (see web/js/appleplace.js).
@@ -17,6 +18,8 @@ import { verifyTicket } from './ticket.js';
 import { ticketMinute } from '../web/js/ticket.js';
 import versionInfo from '../web/version.json' with { type: 'json' };
 import { readAppleGuide, isAppleGuideLink, appleIdLink } from '../web/js/importers.js';
+import { googleListId } from '../web/js/googlelist.js';
+import { getlistUrl, parseGoogleList, isMissingList } from './googlelist.js';
 
 /** Short-link hosts the Worker follows. Any other host ends the walk. */
 const SHORT_LINK_HOSTS = [
@@ -190,6 +193,44 @@ async function handleGuide(url, request, bindings) {
   return plainText(appleIds.map(appleIdLink).join('\n'));
 }
 
+/**
+ * The places of a shared Google Maps list. The link only gives the list ID: the
+ * one request goes to Google's getlist on www.google.com, never where the link
+ * points, and no redirect is followed. Own limit (LIST_LIMIT); links are never logged.
+ */
+async function handleList(url, request, bindings, deps) {
+  if (await overLimit(bindings.LIST_LIMIT, `list:${clientAddress(request)}`)) return tooMany();
+  const listId = googleListId(url.searchParams.get('link') || '');
+  if (!listId) return json({ ok: false, reason: 'not-a-list', message: 'Not a Google Maps list link.' }, 400);
+  const failed = () => json({
+    ok: false, reason: 'upstream',
+    message: "Google didn't send this list. Try again later, or import the list's file from Google Takeout in Settings → Import.",
+  }, 502);
+  let answer;
+  try {
+    const res = await deps.fetch(getlistUrl(listId), {
+      redirect: 'manual',
+      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.8' },
+    });
+    if (res.status !== 200) {
+      res.body?.cancel().catch(() => {});
+      return failed();
+    }
+    answer = await res.text();
+  } catch {
+    return failed();
+  }
+  const list = parseGoogleList(answer);
+  if (list) return json({ ok: true, ...list });
+  if (isMissingList(answer)) {
+    return json({
+      ok: false, reason: 'not-found',
+      message: `This Google Maps list can't be read. Only lists shared with "Anyone with the link" can be imported.`,
+    }, 404);
+  }
+  return failed();
+}
+
 /** All routes. Tests replace `deps.fetch`; the default calls the global fetch. */
 export async function handleRequest(request, bindings, deps = { fetch: (...args) => fetch(...args) }) {
   const url = new URL(request.url);
@@ -199,6 +240,7 @@ export async function handleRequest(request, bindings, deps = { fetch: (...args)
   if (url.pathname === '/api/ig') return handleInstagram(url, request, bindings, deps);
   if (url.pathname === '/api/resolve') return handleResolve(url, request, bindings, deps);
   if (url.pathname === '/api/guide') return handleGuide(url, request, bindings);
+  if (url.pathname === '/api/list') return handleList(url, request, bindings, deps);
   return json({ ok: false, message: 'Not found.' }, 404);
 }
 

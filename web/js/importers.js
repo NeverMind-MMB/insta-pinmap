@@ -613,7 +613,7 @@ export function readLink(link) {
   if (apple) return { name: apple.name, entries: [apple], appleIds: [] };
 
   if (source === 'google') {
-    if (isGoogleListLink(s)) throw new Error("Google Maps lists can't be read yet.");
+    if (isGoogleListLink(s)) throw new Error('Google Maps lists are imported whole (googlelist.js), not as one place.');
     const k = googleCoordinates(s);
     const name = googlePlaceName(s) || UNNAMED_GOOGLE_PLACE;
     return {

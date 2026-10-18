@@ -5,6 +5,7 @@ import { SUPPORTED_SOURCES, ISSUES_URL, issuesSearchUrl, siteOf } from '../web/j
 import { isMapLink } from '../web/js/addflow.js';
 import { isInstagramLink } from '../web/js/dedupe.js';
 import { readLink, readFile } from '../web/js/importers.js';
+import { googleListId } from '../web/js/googlelist.js';
 import { ugLink, pbText, pbIdRef, pbPin } from './ug.mjs';
 
 const GUIDE = ugLink([pbText(1, 'Synthetic Guide'), pbIdRef(9902, '1001'), pbPin('Pin?', 'Street 1, Town', 47.1, 11.1)]);
@@ -22,6 +23,7 @@ const LINK_SAMPLES = {
   'maps.google.com/…': ['https://maps.google.com/?q=45.4719,9.1721'],
   'maps.app.goo.gl/…': ['https://maps.app.goo.gl/synthetic1'],
   'goo.gl/maps/…': ['https://goo.gl/maps/synthetic2'],
+  'google.com/maps/placelists/… (shared lists)': ['https://www.google.com/maps/placelists/list/SyntheticListId_0123456789'],
 };
 
 const group = (id) => SUPPORTED_SOURCES.find((g) => g.id === id);
@@ -37,6 +39,7 @@ test('every link form listed for the input bar is one the input bar reads', () =
     assert.ok(samples, `${item}: add a sample link to this test`);
     for (const link of samples) {
       if (isInstagramLink(link)) continue;
+      if (googleListId(link)) { assert.ok(isMapLink(link), `${item}: ${link}`); continue; } // read whole: /api/list
       assert.ok(isMapLink(link), `${item}: ${link} goes the map-link way`);
       assert.doesNotThrow(() => readLink(link), `${item}: ${link}`);
     }
