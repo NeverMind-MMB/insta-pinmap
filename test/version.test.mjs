@@ -113,3 +113,22 @@ test('index.html has the startup guard before the app module, and app.js reports
   const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8');
   assert.ok(app.includes('window.__instaPinmapStarted = true'));
 });
+
+/* ---------- 2.1.0 oPin ---------- */
+
+test('version.json lists every icon, the source logos and /favicon.ico', () => {
+  const walk = (dir) => readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })
+    .flatMap((d) => (d.isDirectory() ? walk(`${dir}${d.name}/`) : [`${dir}${d.name}`]));
+  const files = [...walk('../web/icons/').map((f) => f.replace('../web', '')), '/favicon.ico'];
+  assert.ok(files.includes('/icons/sources/google.png') && files.includes('/icons/settings.png'));
+  for (const f of files) assert.ok(info.files.includes(f), `${f} not in version.json`);
+});
+
+test('index.html: the pinwheel as favicon, touch icon and top-bar logo, the settings drawing on its button', () => {
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="any">/);
+  assert.match(html, /<link rel="icon" href="\/icons\/icon\.svg" type="image\/svg\+xml">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
+  assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
+  assert.match(html, /id="btn-settings"[^>]*>\s*<img src="\/icons\/settings\.png" alt="" width="24" height="24">\s*<\/button>/);
+});

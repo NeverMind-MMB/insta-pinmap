@@ -121,8 +121,7 @@ body {
   display: flex; align-items: center; gap: 8px;
   margin: 0; font-size: 1.0625rem; font-weight: 650; letter-spacing: -.01em;
 }
-.topbar__logo { width: 22px; height: 22px; fill: var(--accent); flex: none; }
-.topbar__logo-dot { fill: var(--surface); }
+.topbar__logo { width: 26px; height: 26px; flex: none; }
 
 .topbar__actions { display: flex; align-items: center; gap: 8px; }
 
@@ -135,6 +134,7 @@ body {
 }
 .iconbtn:hover { background: var(--surface-2); color: var(--text); }
 .iconbtn svg { width: 21px; height: 21px; fill: currentColor; }
+.iconbtn img { width: 24px; height: 24px; }
 
 /* ---------- Toggle ---------- */
 

@@ -1,18 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Insta Pinmap">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#d4674c"/>
-      <stop offset="1" stop-color="#a8452f"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#1b1d22"/>
-  <!-- Breitengrade als angedeuteter Globus -->
-  <g stroke="#3a3f47" stroke-width="9" fill="none" stroke-linecap="round">
-    <circle cx="256" cy="272" r="150"/>
-    <ellipse cx="256" cy="272" rx="150" ry="60"/>
-    <ellipse cx="256" cy="272" rx="62" ry="150"/>
-  </g>
-  <!-- Pin -->
-  <path d="M256 96c-53 0-96 43-96 96 0 66 96 176 96 176s96-110 96-176c0-53-43-96-96-96Z" fill="url(#g)"/>
-  <circle cx="256" cy="190" r="35" fill="#1b1d22"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" role="img" aria-label="oPin"><defs><path id="p" fill-rule="evenodd" d="M190.52 138.78A71 71 0 1 1 309.48 138.78L250 230ZM206 100a44 44 0 1 0 88 0a44 44 0 1 0 -88 0Z"/></defs><g fill="#e22222"><use href="#p" transform="rotate(0 250 250)"/><use href="#p" transform="rotate(60 250 250)"/><use href="#p" transform="rotate(120 250 250)"/><use href="#p" transform="rotate(180 250 250)"/><use href="#p" transform="rotate(240 250 250)"/><use href="#p" transform="rotate(300 250 250)"/></g></svg>

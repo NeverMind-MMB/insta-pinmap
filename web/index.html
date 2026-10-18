@@ -9,8 +9,9 @@
 <meta name="description" content="One map for your places from Apple Maps, Google Maps, Instagram, GPX, KML and more.">
 <title>Insta Pinmap</title>
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/vendor/markercluster/MarkerCluster.css">
 <link rel="stylesheet" href="/vendor/markercluster/MarkerCluster.Default.css">
@@ -22,10 +23,7 @@
 
 <header class="topbar">
   <h1 class="topbar__title">
-    <svg class="topbar__logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Z"/>
-      <circle cx="12" cy="9" r="2.6" class="topbar__logo-dot"/>
-    </svg>
+    <img class="topbar__logo" src="/icons/icon.svg" alt="">
     <span>Insta Pinmap</span>
   </h1>
 
@@ -35,7 +33,7 @@
       <button type="button" role="tab" id="tab-list" aria-controls="view-list" aria-selected="false" class="segmented__btn" data-view="list">List</button>
     </div>
     <button type="button" class="iconbtn" id="btn-settings" aria-label="Open settings" title="Settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.8 1.7 1l.4 2.5h4l.4-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <img src="/icons/settings.png" alt="" width="24" height="24">
     </button>
   </div>
 </header>
