@@ -138,13 +138,6 @@ Your pins are stored in the app on your phone. Nothing is uploaded.
 - If your last backup is older than 30 days, the app reminds you.
 - Removing the app from the home screen deletes its pins. Save a backup first.
 
-### Moving from the old address
-
-oPin used to be Insta Pinmap at `insta-pinmap.<subdomain>.workers.dev`; it now lives at
-`opin.<subdomain>.workers.dev`. Pins are stored per address, so the old address keeps working
-and shows a banner: **Save backup** there, open the new address (**Open the new address**) and
-add it to your Home Screen, then there **Settings → Import → choose the backup**.
-
 ## Apple Guides
 
 An Apple Guide link carries the name and coordinates of places you added as an
@@ -369,9 +362,7 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
 ### Updating your copy
 
 1. Download the new version (or `git pull`). Keep your changes to `wrangler.toml`
-   (name, `namespace_id`s). Keeping the old `name = "insta-pinmap"`? Then set
-   `MOVED_TO_OPIN = false` in `web/js/sources.js`, or the app shows a move banner that points at an
-   `opin` address you don't have.
+   (name, `namespace_id`s).
 2. Deploy again: `npx --yes wrangler@4 deploy`.
 3. On your phone: **Settings → App → Check for updates → Install** (see "Updates").
 

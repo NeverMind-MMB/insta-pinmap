@@ -16,7 +16,6 @@ import {
 import { readFile, skippedPlacesNotice } from './importers.js';
 import { isInstagramLink, shortcode } from './dedupe.js';
 import { findLinks } from './sources.js';
-import { showsMoveBanner, newAddressUrl } from './address.js';
 import { playPinwheel } from './pinwheel.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
@@ -117,13 +116,6 @@ async function start() {
 
   // 4b) An Apple Guide import left for the Shortcuts app and the page was reloaded
   wireGuideReminder();
-
-  // 4c) The old address: oPin moved, and the pins stay here until a backup takes them along.
-  if (showsMoveBanner(location.hostname)) {
-    $('move-open').href = newAddressUrl(location.href);
-    $('move-reminder').hidden = false;
-  }
-  $('move-save').addEventListener('click', () => exportBackup());
 
   onServerVersion((v) => {
     if (compareVersions(v, APP_VERSION) > 0) $('btn-settings').classList.add('has-update');
