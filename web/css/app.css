@@ -133,7 +133,7 @@ body {
   flex: none;
 }
 .iconbtn:hover { background: var(--surface-2); color: var(--text); }
-.iconbtn svg { width: 21px; height: 21px; fill: currentColor; }
+.iconbtn svg { width: 22px; height: 22px; fill: currentColor; }
 .iconbtn img { width: 24px; height: 24px; }
 
 /* ---------- Toggle ---------- */

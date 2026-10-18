@@ -9,8 +9,8 @@ test('version.js and version.json agree', () => {
   assert.equal(APP_VERSION, info.version);
 });
 
-test('oPin starts at 1.0.0 on its own address (the update check works per address)', () => {
-  assert.equal(APP_VERSION, '1.0.0');
+test('oPin counts from 1.0.0 on its own address (the update check works per address)', () => {
+  assert.match(APP_VERSION, /^1\.\d+\.\d+$/);
 });
 
 test('compareVersions', () => {
@@ -124,11 +124,11 @@ test('version.json lists every icon, the source logos and /favicon.ico', () => {
   const walk = (dir) => readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })
     .flatMap((d) => (d.isDirectory() ? walk(`${dir}${d.name}/`) : [`${dir}${d.name}`]));
   const files = [...walk('../web/icons/').map((f) => f.replace('../web', '')), '/favicon.ico'];
-  assert.ok(files.includes('/icons/sources/google.png') && files.includes('/icons/settings.png'));
+  assert.ok(files.includes('/icons/sources/google.png'));
   for (const f of files) assert.ok(info.files.includes(f), `${f} not in version.json`);
 });
 
-test('index.html: the pinwheel as favicon, touch icon and top-bar logo, the settings drawing on its button', () => {
+test('index.html: the pinwheel as favicon, touch icon and top-bar logo, a six-tooth gear on the settings button', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="any">/);
   // Owner: the 16 px favicon.ico plus the web-app icons are enough (no SVG or 32 px favicon).
@@ -137,7 +137,10 @@ test('index.html: the pinwheel as favicon, touch icon and top-bar logo, the sett
   assert.deepEqual(manifest.icons.map((i) => i.src), ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png']);
   assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
   assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
-  assert.match(html, /id="btn-settings"[^>]*>\s*<img src="\/icons\/settings\.png" alt="" width="24" height="24">\s*<\/button>/);
+  // Owner: the settings drawing no longer read as a settings symbol; a plain gear (six teeth like the
+  // pinwheel's six pins) in the theme colour instead.
+  assert.match(html, /id="btn-settings"[^>]*>\s*<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9\.30 4\.58[^"]+"\/><\/svg>\s*<\/button>/);
+  assert.ok(!html.includes('/icons/settings.png'));
 });
 
 test('the app is called oPin: page title, top bar, manifest, self-test, and its cache', () => {
