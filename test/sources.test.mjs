@@ -266,7 +266,7 @@ test('source colours: each source value the app writes gets its group\'s colour;
     instagram: '#8f4b6b', 'apple-ort': '#3a6ea5', 'apple-guide': '#3a6ea5',
     'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d',
     gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f', tiktok: '#5a5f8f', coords: '#4f7a2b',
-    youtube: '#c0603f', facebook: '#2f7d7a',
+    youtube: '#a00830', facebook: '#2f7d7a',
     'osm-link': '#4f7a2b', 'organic-maps-link': '#4f7a2b', 'comaps-link': '#4f7a2b', 'waze-link': '#4f7a2b',
     'here-link': '#4f7a2b', 'mapy-link': '#4f7a2b', 'bing-link': '#4f7a2b',
   };
@@ -282,6 +282,28 @@ test('source colours: one per group, all different (coordinates share the map ap
   assert.equal(new Set(colors).size, colors.length);
   // Every source colour can also be picked by hand.
   for (const c of colors) assert.ok(PIN_COLORS.some((p) => p.color === c), c);
+});
+
+/** CIELAB (D65) of "#rrggbb". */
+function cieLab(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+  const x = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047);
+  const y = f(r * 0.2126 + g * 0.7152 + b * 0.0722);
+  const z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+const deltaE76 = (a, b) => Math.hypot(...cieLab(a).map((v, i) => v - cieLab(b)[i]));
+
+test('YouTube\'s colour is clearly apart from every other pin colour (CIE76 ΔE at least 15), and pickable as "Crimson"', () => {
+  const youtube = SOURCE_GROUPS.find((g) => g.id === 'youtube').color;
+  const others = new Set([...SOURCE_GROUPS.map((g) => g.color), ...PIN_COLORS.map((p) => p.color)]);
+  others.delete(youtube);
+  assert.ok(others.size >= 9);
+  for (const c of others) assert.ok(deltaE76(youtube, c) >= 15, `${youtube} vs ${c}: ${deltaE76(youtube, c).toFixed(1)}`);
+  assert.equal(PIN_COLORS.find((p) => p.color === youtube)?.name, 'Crimson');
+  assert.ok(!PIN_COLORS.some((p) => p.name === 'Orange'), 'the old Orange is gone');
 });
 
 test('a Google link without a /place/ name takes its search text as the name; a list link is no place', () => {

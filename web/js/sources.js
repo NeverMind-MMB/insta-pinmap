@@ -85,7 +85,7 @@ export const SOURCE_GROUPS = [
     id: 'youtube',
     name: 'YouTube',
     logo: '/icons/sources/youtube.png',
-    color: '#c0603f',
+    color: '#a00830',
     sources: ['youtube'],
     // Any other youtube.com link is YouTube's too: the post reader (postlinks.js) tells a video from the rest.
     prefixes: ['youtube.com/watch', 'youtube.com/shorts/', 'youtube.com/live/', 'youtube.com/embed/', 'youtube.com/', 'youtu.be/'],
