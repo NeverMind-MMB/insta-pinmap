@@ -23,6 +23,7 @@ import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
 import { onServerVersion } from './api.js';
 import { loadPendingGuide, clearPendingGuide } from './appleplace.js';
+import { linkGuideHelper } from './guidehelper.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -96,6 +97,7 @@ async function start() {
   wireShared();
   guardDialogEnter();
   linkShortcutInstall(document);
+  linkGuideHelper(document, toast);
 
   redraw();
   if (store.db.pins.length && !store.settings.lastView) {

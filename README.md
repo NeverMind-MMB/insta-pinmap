@@ -89,7 +89,8 @@ The app runs on your phone. Its helper is the small server part on Cloudflare
 
 Everything else runs on your phone alone: file imports, coordinates, `geo:` links
 and Plus Codes, long Apple and Google Maps links, other map apps' links, Apple
-Guide links, the Shortcut from Safari or from the app's button, and backups.
+Guide links, the Shortcut from Safari or from the app's button, the guide helper
+in a computer's browser, and backups.
 TikTok captions come straight from TikTok's oEmbed, and OpenStreetMap objects
 straight from OpenStreetMap (Nominatim). Place search and map images go straight
 from your phone to Photon, Nominatim and the map servers.
@@ -213,17 +214,28 @@ If the app was closed meanwhile, it offers **Continue the Apple Guide import**
 
 ### Option B — computer
 
-With Node.js installed, in this project's folder:
+**In the browser: the oPin guide helper.** The import dialog (and **Shortcut
+help** in **Settings → Import**) has an **oPin guide helper** button. Drag it to
+your browser's bookmarks bar, or tap **Copy helper code** and paste that as a new
+bookmark's address. Then open the guide on maps.apple.com in a desktop browser
+(tested in Firefox) and click the bookmark there: it does what the Shortcut's Safari
+script does — reads the guide's places from the page, fetches the others from
+maps.apple.com one by one while a small box shows how far it is — and copies the
+guide link with all places. Paste that into the app's input bar (or **Paste
+results**). Clicking the button inside the app only explains this; the helper runs
+on Apple's page, never in the app. Android Chrome can run it too, as a bookmark you
+pick from the address bar on the guide's page.
+
+**With Node.js**, in this project's folder:
 
 ```
 node tools/apple-guide.mjs "<guide link>"
 ```
 
-This stays the way without an iPhone. It fetches the guide page once (and looks
-up any place the page lacks, one per second) and writes `<guide title>.geojson`
-with all places of the guide (or give a file name as a second argument). Load
-that file in the app: **Settings → Import → Choose files**. To get it onto the
-phone, send it via AirDrop, iCloud Drive or mail.
+It fetches the guide page once (and looks up any place the page lacks, one per
+second) and writes `<guide title>.geojson` with all places of the guide (or give a
+file name as a second argument). Load that file in the app: **Settings → Import →
+Choose files**. To get it onto the phone, send it via AirDrop, iCloud Drive or mail.
 
 ## Updates
 
@@ -430,6 +442,9 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   `web/sw.js` must stay byte-for-byte the same between versions, so phones update
   only through **Settings → App**.
 - `tools/apple-guide.mjs` — Apple Guide → GeoJSON on a computer (see "Apple Guides").
+- `web/js/guidehelper.js` — the oPin guide helper, a bookmarklet for a guide page on
+  maps.apple.com (the Shortcut's Safari script without its 4-second limit); the app
+  hands it out as a link and as code, never runs it.
 - Tests: `node --test "test/*.test.mjs" "worker/*.test.mjs"` (Node 24, no install).
 - Local run: `npx --yes wrangler@4 dev`, then open the address it prints
   (`http://localhost:8787`).
