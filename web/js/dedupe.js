@@ -9,6 +9,7 @@
 
 import { sourceOf } from './sources.js';
 import { socialPostKey } from './postlinks.js';
+import { tiktokVideo } from './tiktok.js';
 
 /* ------------------------------------------------------------------ *
  * Instagram links
@@ -49,10 +50,13 @@ export function isInstagramLink(input) {
 /**
  * The key a saved post is known by (postIndex, a post's `shortcode` field):
  * an Instagram post's bare shortcode (old pins and backups keep working);
- * "yt:<id>" / "fb:<id>" for YouTube videos and Facebook posts (postlinks.js).
+ * "yt:<id>" / "fb:<id>" for YouTube videos and Facebook posts (postlinks.js);
+ * "tt:<id>" for TikTok videos and photo posts (tiktok.js). Posts saved without a
+ * key get it when the data is read (store.js normalizeDb).
  */
 export function postKey(input) {
-  return shortcode(input) || socialPostKey(input) || null;
+  const tiktok = tiktokVideo(input);
+  return shortcode(input) || socialPostKey(input) || (tiktok ? `tt:${tiktok.id}` : null);
 }
 
 /* ------------------------------------------------------------------ *

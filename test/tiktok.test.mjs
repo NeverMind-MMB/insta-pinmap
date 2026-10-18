@@ -391,3 +391,49 @@ test('Remove post on a TikTok post removes only that post', () => {
     store._saveTimer = null;
   }
 });
+
+/* ---------- The post key tt:<id> (dedupe.js, store.js) ---------- */
+
+const { postKey, findPost, buildIndex } = await import('../web/js/dedupe.js');
+const { mergeDb } = await import('../web/js/store.js');
+
+test('postKey: a TikTok video or photo is "tt:<id>", whatever link form; short links and profiles have none', () => {
+  assert.equal(postKey(VIDEO), `tt:${ID}`);
+  assert.equal(postKey(`https://m.tiktok.com/v/${ID}.html`), `tt:${ID}`);
+  assert.equal(postKey(`https://www.tiktok.com/@${USER}/photo/${ID}?is_from_webapp=1`), `tt:${ID}`);
+  assert.equal(postKey(`https://www.tiktok.com/embed/v2/${ID}`), `tt:${ID}`);
+  assert.equal(postKey('https://vm.tiktok.com/ZMsynth01/'), null);
+  assert.equal(postKey(`https://www.tiktok.com/@${USER}`), null);
+});
+
+test('findPost, buildIndex and attachPost know a TikTok video saved before, also from data without the key', () => {
+  // Pins saved before the key existed carry shortcode: '' (makePost had no key for TikTok).
+  const db = buildIndex(normalizeDb({ pins: [
+    { id: 'a', lat: 1, lon: 2, title: 'Old', posts: [{ url: `https://www.tiktok.com/@old.name/video/${ID}`, shortcode: '' }] },
+  ] }));
+  assert.equal(db.postIndex[`tt:${ID}`], 'a');
+  assert.equal(findPost(db, `https://www.tiktok.com/@${USER}/photo/${ID}`)?.pin.id, 'a');
+  assert.equal(db.pins[0].posts[0].shortcode, `tt:${ID}`, 'old data gets the key when it is read');
+  store.db = db;
+  try {
+    store.attachPost('a', { url: VIDEO });
+    assert.equal(store.pin('a').posts.length, 1, 'the same video in another link form is not added again');
+    store.attachPost('a', { url: `https://www.tiktok.com/@${USER}/video/${OTHER_ID}` });
+    assert.equal(store.pin('a').posts.length, 2);
+    assert.equal(store.pin('a').posts[1].shortcode, `tt:${OTHER_ID}`);
+    store.removePost('a', `https://m.tiktok.com/v/${ID}.html`);
+    assert.deepEqual(store.pin('a').posts.map((x) => x.shortcode), [`tt:${OTHER_ID}`], 'removed by its key');
+  } finally {
+    clearTimeout(store._saveTimer);
+    store._saveTimer = null;
+  }
+});
+
+test('mergeDb: a backup pin whose TikTok video is already saved elsewhere is skipped, old data included', () => {
+  const local = normalizeDb({ pins: [{ id: 'a', lat: 1, lon: 2, title: 'Here', posts: [{ url: VIDEO, shortcode: '' }] }] });
+  local.pins[0].posts[0].shortcode = ''; // as an app before the key kept it
+  const incoming = { pins: [{ id: 'b', lat: 5, lon: 6, title: 'There', posts: [{ url: `https://www.tiktok.com/@x/photo/${ID}`, shortcode: '' }] }] };
+  const { db, skipped } = mergeDb(local, incoming);
+  assert.equal(skipped, 1);
+  assert.deepEqual(db.pins.map((p) => p.id), ['a']);
+});

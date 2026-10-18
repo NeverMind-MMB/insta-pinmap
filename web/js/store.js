@@ -187,7 +187,7 @@ export const store = {
     this.change((db) => {
       const pin = db.pins.find((p) => p.id === pinId);
       if (!pin) return;
-      // A post without a key (TikTok, a link no reader knows) goes by its link.
+      // A post without a key (a Facebook share link, a link no reader knows) goes by its link.
       pin.posts = (pin.posts || []).filter((x) => (code ? postKey(x.url) !== code : x.url !== url));
       pin.updatedAt = new Date().toISOString();
     });
@@ -285,7 +285,7 @@ export function mergeDb(local, incoming) {
     else deleted.delete(id);
   }
 
-  const savedCodes = () => new Set([...pins.values()].flatMap((p) => p.posts.map((x) => x.shortcode)).filter(Boolean));
+  const savedCodes = () => new Set([...pins.values()].flatMap((p) => p.posts.map((x) => x.shortcode || postKey(x.url))).filter(Boolean));
 
   for (const pin of b.pins) {
     if (deleted.has(pin.id)) {
@@ -299,7 +299,7 @@ export function mergeDb(local, incoming) {
       continue;
     }
     const codes = savedCodes();
-    if (pin.posts.some((x) => x.shortcode && codes.has(x.shortcode))) { stats.skipped++; continue; }
+    if (pin.posts.some((x) => codes.has(x.shortcode || postKey(x.url)))) { stats.skipped++; continue; }
     pins.set(pin.id, pin);
     stats.added++;
   }
