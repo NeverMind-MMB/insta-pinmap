@@ -245,8 +245,12 @@ function stubTikTok({ caption = 'Lunch 📍 Harbour Cafe #foodtok', oembedOk = t
         ? json({ title: caption, author_unique_id: 'synthetic.user', embed_product_id: TT_ID, embed_type: 'video' })
         : json({ code: 400 }, 400);
     }
-    if (u.startsWith('/api/post')) return json(post);
-    if (u.includes('photon')) return json({ features: places(new URL(u).searchParams.get('q')) });
+    // 'hang': the Worker, or the place search, never answers.
+    if (u.startsWith('/api/post')) return post === 'hang' ? new Promise(() => {}) : json(post);
+    if (u.includes('photon')) {
+      const found = places(new URL(u).searchParams.get('q'));
+      return found === 'hang' ? new Promise(() => {}) : json({ features: found });
+    }
     if (u.includes('nominatim')) return json([]);
     return new Response('', { status: 404 });
   };
@@ -338,6 +342,28 @@ test('TikTok: oEmbed refusing the video, the Worker\'s caption and tag still fil
     assert.match(el('confirm-caption').textContent, /Dinner/);
     assert.equal(el('confirm-error').hidden, true, 'no "couldn\'t read" notice: the Worker read it');
   } finally {
+    cleanUp();
+  }
+});
+
+const { READ_TIMEOUT } = await import('../web/js/postflow.js');
+
+test('TikTok: a Worker that never answers, or a tag search that hangs, never blocks Confirm place: it opens with the caption', async () => {
+  const saved = READ_TIMEOUT.ms;
+  READ_TIMEOUT.ms = 30;
+  try {
+    let r = await addTikTok({ post: 'hang', places: () => [feature('Harbour Cafe', 48.2, 11.6)] });
+    assert.equal(r.el('dlg-confirm').open, true);
+    assert.ok(r.rows.every((row) => row.kind !== 'Tagged location'));
+    assert.equal(r.el('confirm-title').value, 'Harbour Cafe', 'the caption flow');
+    assert.equal(r.el('confirm-error').hidden, true, 'the caption came from oEmbed');
+    cleanUp();
+    r = await addTikTok({ post: { ok: true, location: TT_TAG }, places: (q) => (q.includes('Via Finta') ? 'hang' : [feature('Harbour Cafe', 48.2, 11.6)]) });
+    assert.equal(r.el('dlg-confirm').open, true);
+    assert.ok(r.rows.every((row) => row.kind !== 'Tagged location'), 'no tagged row without its place');
+    assert.equal(r.searched.find((q) => !q.includes('Via Finta')), 'Trattoria Sintetica', 'the tag\'s name is still the first candidate');
+  } finally {
+    READ_TIMEOUT.ms = saved;
     cleanUp();
   }
 });

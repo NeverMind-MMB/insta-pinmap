@@ -26,6 +26,22 @@ import {
 import { openConfirm } from './confirm.js';
 
 /**
+ * How long a read through the Worker's /api/post, or the place search for a tag, may take
+ * (ms): then the flow goes on with what it has (the caption), so a slow Worker never keeps
+ * Confirm place from opening. An object, so tests can shorten it.
+ */
+export const READ_TIMEOUT = { ms: 8000 };
+
+const TOO_SLOW = { ok: false, reason: 'timeout', message: "The app's helper took too long to answer. Try again later." };
+
+/** `promise`, or `fallback` once READ_TIMEOUT has passed without an answer. */
+function inTime(promise, fallback) {
+  let timer;
+  const late = new Promise((resolve) => { timer = setTimeout(() => resolve(fallback), READ_TIMEOUT.ms); });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
+/**
  * The post's location tag as a place for Confirm place, or null unless it has a
  * name and real coordinates (the Worker sends `{ name, lat, lon, address? }`).
  */
@@ -50,7 +66,8 @@ async function placeOfTikTokTag(tag) {
   if (exact || typeof tag?.name !== 'string' || !tag.name.trim()) return exact;
   const name = tag.name.trim();
   const address = typeof tag.address === 'string' ? tag.address.trim() : '';
-  const hit = (await searchPlaces([name, address].filter(Boolean).join(', '), { limit: 1 })).results?.[0];
+  const found = await inTime(searchPlaces([name, address].filter(Boolean).join(', '), { limit: 1 }), { ok: false, results: [] });
+  const hit = found.results?.[0];
   return hit ? { name, lat: hit.lat, lon: hit.lon, address: address || hit.address || '', countryCode: hit.countryCode || '', tagged: true } : null;
 }
 
@@ -137,7 +154,7 @@ const tiktok = {
     let page;
     let tagged = null;
     try {
-      page = await fetchSocialPost(tt.url, tiktokPostKey(tt.url));
+      page = await inTime(fetchSocialPost(tt.url, tiktokPostKey(tt.url)), TOO_SLOW);
       tagged = await placeOfTikTokTag(page?.ok ? page.location : null);
     } finally {
       done();
@@ -199,7 +216,7 @@ function social(site) {
       busy(words.reading);
       let info;
       try {
-        info = await fetchSocialPost(link, postRequestKey(link));
+        info = await inTime(fetchSocialPost(link, postRequestKey(link)), TOO_SLOW);
         // The Worker couldn't read the video: the title, at least, straight from YouTube.
         if (!info.ok && site === 'youtube') info = (await fetchYouTubeOembed(canonicalPostLink(link))) || info;
       } finally {

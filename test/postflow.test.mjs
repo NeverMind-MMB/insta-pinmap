@@ -117,7 +117,7 @@ function stubNetwork({ post = { ok: false, reason: 'not-found', message: "Couldn
     const u = String(url);
     calls.push(u);
     const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-    if (u.startsWith('/api/post?')) return json(post, postStatus);
+    if (u.startsWith('/api/post?')) return post === 'hang' ? new Promise(() => {}) : json(post, postStatus);
     if (u.startsWith('https://www.youtube.com/oembed?')) return oembed ? json(oembed) : new Response('Not Found', { status: 404 });
     if (u.startsWith('https://photon.komoot.io/')) return json({ features: places(new URL(u).searchParams.get('q')) });
     if (u.startsWith('https://nominatim.openstreetmap.org/')) return json([]);
@@ -289,4 +289,31 @@ test('a Facebook page the Worker can\'t read: an error toast, no dialog', async 
     assert.deepEqual(toasts.at(-1), ["Couldn't read this Facebook page.", 'error']);
     assert.equal(el('dlg-confirm').open, false);
   });
+});
+
+const { READ_TIMEOUT } = await import('../web/js/postflow.js');
+
+test('a Worker that never answers never blocks the flow: YouTube goes on with oEmbed, Facebook opens Confirm place with the notice', async () => {
+  const saved = READ_TIMEOUT.ms;
+  READ_TIMEOUT.ms = 30;
+  try {
+    await withConfirm(async ({ el, env }) => {
+      stubNetwork({ post: 'hang', oembed: { title: 'Gelato at Synthetic Square, Testopoli', author_name: 'Synthetic Channel' }, places: () => [feature('Synthetic Square', 40.8, 14.2)] });
+      await startAdd(`https://youtu.be/${YT}`, env);
+      assert.equal(el('dlg-confirm').open, true);
+      assert.equal(el('confirm-caption').textContent, 'Gelato at Synthetic Square, Testopoli');
+      assert.equal(el('confirm-error').hidden, true);
+    });
+    await withConfirm(async ({ el, env, toasts }) => {
+      stubNetwork({ post: 'hang' });
+      await startAdd(REEL, env);
+      assert.equal(el('dlg-confirm').open, true);
+      assert.equal(el('confirm-error').hidden, false);
+      assert.match(el('confirm-error-text').textContent, /too long/);
+      await startAdd('https://www.facebook.com/SyntheticCafe', env);
+      assert.deepEqual(toasts.at(-1)[1], 'error', 'a page without an answer: nothing to place');
+    });
+  } finally {
+    READ_TIMEOUT.ms = saved;
+  }
 });
