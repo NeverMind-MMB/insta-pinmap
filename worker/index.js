@@ -117,10 +117,12 @@ async function handleInstagram(url, request, bindings, deps) {
   const post = await fetchPost(code, deps.fetch);
   if (!post.ok) return json(post, 200, difficultyHeader);
   const thumb = await imageAsDataUrl(post.imageUrl, deps.fetch);
+  // The location tag: whole as `locationTag` (2.2.0 on); `location` stays its name as a string,
+  // which apps from before 2.2.0 (updated only by hand) search for first.
   return json({
     ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username,
     postedAt: post.postedAt || '', thumb,
-    ...(post.location ? { location: post.location } : {}),
+    ...(post.location ? { location: post.location.name, locationTag: post.location } : {}),
   }, 200, difficultyHeader);
 }
 

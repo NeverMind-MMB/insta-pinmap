@@ -140,8 +140,19 @@ test('/api/ig: the answer carries the location tag; nothing about the link is lo
     Object.assign(console, saved);
   }
   assert.equal(body.ok, true);
-  assert.deepEqual(body.location, { name: 'Synthetic Bistro', lat: 47.5012345678, lon: 9.7487654321 });
+  assert.deepEqual(body.locationTag, { name: 'Synthetic Bistro', lat: 47.5012345678, lon: 9.7487654321 });
+  assert.equal(body.location, 'Synthetic Bistro', "`location` stays the tag's name, as before 2.2.0");
   assert.deepEqual(logged, []);
+});
+
+test("/api/ig: apps from before 2.2.0 (which pass `location` on as a place name) get the tag's name as their top candidate", async () => {
+  const { placeCandidates } = await import('../web/js/extract.js');
+  const { body } = await askIg('SynthAbc123', postPage('SynthAbc123', { location: BISTRO }));
+  // 2.0.10 and 2.1.0 (installed apps update only by hand): placeCandidates(caption, { username, location: ig.location }).
+  const old = placeCandidates(body.caption, { username: body.username, location: body.location });
+  assert.equal(typeof body.location, 'string');
+  assert.equal(old.candidates[0].text, 'Synthetic Bistro');
+  assert.ok(old.candidates.every((c) => !c.text.includes('[object')), 'never "[object Object]"');
 });
 
 test('/api/ig: without a tag the answer is exactly the old one', async () => {
@@ -153,5 +164,6 @@ test('/api/ig: still no answer and no Instagram request without a work ticket', 
   const { res, body, calls } = await askIg('SynthAbc123', postPage('SynthAbc123', { location: BISTRO }), { noTicket: true });
   assert.equal(res.status, 403);
   assert.equal(body.location, undefined);
+  assert.equal(body.locationTag, undefined);
   assert.deepEqual(calls, []);
 });

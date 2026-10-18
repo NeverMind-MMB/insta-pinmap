@@ -389,7 +389,8 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   `maplinks.js` (other map apps), `csvcolumns.js` (CSV/TSV columns),
   `googlelist.js` (Google lists), `tiktok.js` (TikTok's oEmbed) and `postlinks.js`
   (YouTube and Facebook links, shared with the Worker); in the Worker
-  `iglocation.js` (an Instagram post's location tag, which `/api/ig` now returns),
+  `iglocation.js` (an Instagram post's location tag, which `/api/ig` now returns
+  as `locationTag`; `location` stays the tag's name, as older apps expect it),
   `googlelist.js` and `post.js`.
 - `GET /api/list?link=<list link>` answers the list's title and places as JSON
   (one request to Google by the list's ID); 400 for a link without a list ID, 404

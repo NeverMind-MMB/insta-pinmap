@@ -164,12 +164,15 @@ async function addFromInstagram(link, env) {
 
   const caption = ig.ok ? ig.caption || '' : '';
   const postedAt = ig.ok ? ig.postedAt || '' : '';
-  // The post's location tag: with coordinates it is offered first as it is;
-  // a tag without usable ones still counts as the best name to search for.
-  const tagged = ig.ok ? taggedPlace(ig.location) : null;
+  // The post's location tag (`locationTag`; `location` is only its name, for older apps):
+  // with coordinates it is offered first as it is; a tag without usable ones still
+  // counts as the best name to search for.
+  const tagged = ig.ok ? taggedPlace(ig.locationTag) : null;
+  const tagName = typeof ig.locationTag?.name === 'string' ? ig.locationTag.name
+    : typeof ig.location === 'string' ? ig.location : '';
   const { candidates, countries, hintedCountries } = placeCandidates(caption, {
     username: ig.username,
-    location: !tagged && typeof ig.location?.name === 'string' ? ig.location.name : undefined,
+    location: ig.ok && !tagged && tagName ? tagName : undefined,
   });
 
   return openConfirm({

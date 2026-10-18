@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 /*
- * Instagram posts with a location tag (2.2.0): /api/ig sends `location: { name, lat, lon, address? }`
+ * Instagram posts with a location tag (2.2.0): /api/ig sends `locationTag: { name, lat, lon, address? }`
+ * (and, for apps from before 2.2.0, the tag's name as `location`)
  * and Confirm place shows that place first, marked "Tagged location", with the caption's
  * places below. Nothing is saved before Drop pin. All names, codes and coordinates are made up.
  */
@@ -75,6 +76,8 @@ function stubNetwork(ig, places = []) {
 
 const POST = { ok: true, shortcode: 'SynthTag001', username: 'synthetic.user', postedAt: '2026-05-01', thumb: '' };
 const TAG = { name: 'Synthetic Bistro', lat: 47.5012345, lon: 9.7487654, address: 'Teststraße 1, 12345 Testtown' };
+/** What /api/ig sends for a tagged post: the whole tag as `locationTag`, its name as `location` (as before 2.2.0). */
+const withTag = (tag) => ({ location: tag.name, locationTag: tag });
 
 async function addPost(ig, places) {
   const doc = confirmDocument();
@@ -106,7 +109,7 @@ function cleanUp() {
 test('a post with a location tag: that place comes first as "Tagged location", chosen, the caption\'s places below', async () => {
   try {
     const places = [feature('Harbour Cafe', 48.2, 11.6), feature('Harbour Cafe Annex', 48.3, 11.7)];
-    const { el, rows, searched } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe\nGreat lunch', location: TAG }, places);
+    const { el, rows, searched } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe\nGreat lunch', ...withTag(TAG) }, places);
     assert.equal(el('dlg-confirm').open, true);
     assert.deepEqual(rows[0], { name: 'Synthetic Bistro', address: 'Teststraße 1, 12345 Testtown', kind: 'Tagged location', pressed: 'true' });
     assert.deepEqual(rows.slice(1).map((r) => r.name).sort(), ['Harbour Cafe', 'Harbour Cafe Annex'], 'caption places below');
@@ -131,7 +134,7 @@ test('a post with a location tag: that place comes first as "Tagged location", c
 
 test('a tagged post: picking a caption place instead saves that one', async () => {
   try {
-    const { el } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', location: TAG }, [feature('Harbour Cafe', 48.2, 11.6)]);
+    const { el } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', ...withTag(TAG) }, [feature('Harbour Cafe', 48.2, 11.6)]);
     const list = el('confirm-candidates').children;
     assert.equal(list.length, 2);
     list[1].children[0].fire('click');
@@ -147,7 +150,7 @@ test('a tagged post: picking a caption place instead saves that one', async () =
 test('a tagged post: the search finding the tagged spot again does not list it twice', async () => {
   try {
     const places = [feature('Bistro (map name)', 47.50124, 9.74876), feature('Harbour Cafe', 48.2, 11.6)];
-    const { rows } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', location: TAG }, places);
+    const { rows } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', ...withTag(TAG) }, places);
     assert.deepEqual(rows.map((r) => r.name), ['Synthetic Bistro', 'Harbour Cafe']);
   } finally {
     cleanUp();
@@ -156,7 +159,7 @@ test('a tagged post: the search finding the tagged spot again does not list it t
 
 test('a tagged post without places in its caption: only the tagged place, nothing searched', async () => {
   try {
-    const { el, rows, searched } = await addPost({ ...POST, caption: '', location: { name: 'Synthetic Bistro', lat: 47.5, lon: 9.75 } });
+    const { el, rows, searched } = await addPost({ ...POST, caption: '', ...withTag({ name: 'Synthetic Bistro', lat: 47.5, lon: 9.75 }) });
     assert.deepEqual(rows, [{ name: 'Synthetic Bistro', address: '', kind: 'Tagged location', pressed: 'true' }]);
     assert.deepEqual(searched, []);
     assert.match(el('confirm-status').textContent, /location tag/);
@@ -169,7 +172,7 @@ test('a tagged post without places in its caption: only the tagged place, nothin
 
 test('a tagged post whose caption places the search doesn\'t know: the tagged place stays, no error', async () => {
   try {
-    const { el, rows } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', location: TAG }, []);
+    const { el, rows } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', ...withTag(TAG) }, []);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].kind, 'Tagged location');
     assert.equal(el('confirm-name').textContent, 'Synthetic Bistro');
@@ -195,7 +198,7 @@ test('a post without a location tag works as before: the best caption match is c
 
 test('a tag the app can\'t place (bad coordinates) counts as no tag; its name is searched first', async () => {
   try {
-    const { rows, searched } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', location: { name: 'Synthetic Bistro', lat: 123, lon: 9 } },
+    const { rows, searched } = await addPost({ ...POST, caption: 'Ort: Harbour Cafe', ...withTag({ name: 'Synthetic Bistro', lat: 123, lon: 9 }) },
       [feature('Harbour Cafe', 48.2, 11.6)]);
     assert.ok(rows.every((r) => r.kind !== 'Tagged location'));
     assert.match(searched[0], /q=Synthetic\+Bistro/);
