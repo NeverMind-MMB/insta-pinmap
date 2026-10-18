@@ -285,6 +285,16 @@ test('the skipped count reads as a sentence', () => {
   assert.equal(skippedPlacesNotice(0), '');
 });
 
+test('the skipped count reaches the import dialog\'s notice (and the status when nothing is left)', () => {
+  const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('../web/js/ui.js', import.meta.url), 'utf8');
+  assert.match(app, /skipped: dropped = 0 \} = await readFile\(f\)/);
+  assert.match(app, /showImport\(all, names\.join\(', '\), env, null, skipped\)/);
+  assert.match(app, /'The files contained no places\.' \+ \(skipped \? ` \$\{skippedPlacesNotice\(skipped\)\}` : ''\)/);
+  assert.match(ui, /export function showImport\(entries, sourceName, env, guide = null, skipped = 0\)/);
+  assert.match(ui, /skippedPlacesNotice\(skipped\)/);
+});
+
 test('the file picker offers .tsv files', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   const accept = html.match(/id="settings-import-file" accept="([^"]+)"/)[1].split(',');
