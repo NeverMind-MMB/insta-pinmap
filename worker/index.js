@@ -1,9 +1,9 @@
 /**
- * index.js — Insta Pinmap Worker.
+ * index.js — oPin Worker.
  *
- * Serves web/ as static files (configured in wrangler.toml) and answers two
+ * Serves web/ as static files (configured in wrangler.toml) and answers five
  * routes the phone cannot do itself because of CORS:
- *   /api/ig       caption of an Instagram post (needs a work ticket)
+ *   /api/ig       caption and location tag of an Instagram post (needs a work ticket)
  *   /api/resolve  where a short map link (or a TikTok short link) points to
  *   /api/guide    the place links of an Apple guide link, read from the link
  *                 itself (for the iPhone Shortcut; Apple is never contacted)
