@@ -70,6 +70,58 @@ export async function fetchPost(code) {
   return { ok: false, reason: 'ticket', message: "Couldn't read this post." };
 }
 
+/**
+ * A YouTube video or Facebook post, reel or page through /api/post
+ * (worker/post.js), with a work ticket over its post key (postlinks.js).
+ * Same retry rules as fetchPost.
+ */
+export async function fetchSocialPost(link, key) {
+  const failed = { ok: false, reason: 'ticket', message: "Couldn't read this post." };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const minute = minuteWithOffset(Date.now(), minuteOffset);
+    let res;
+    try {
+      const nonce = await solveInWorker(key, minute, difficulty);
+      res = await fetch(`/api/post?url=${encodeURIComponent(link)}&m=${minute}&n=${nonce}`);
+    } catch (err) {
+      if (err instanceof SolveTimeout) return failed;
+      return { ok: false, reason: 'network', message: 'No internet. Try again later.' };
+    }
+    noteVersion(res);
+    difficulty = adoptDifficulty(res.headers.get('X-Work-Difficulty'), difficulty);
+    if (res.status === 403 && res.headers.has('X-Work-Difficulty')) {
+      const serverMinute = Number(res.headers.get('X-Server-Minute'));
+      if (Number.isFinite(serverMinute)) minuteOffset = serverMinute - Math.floor(Date.now() / 60000);
+      continue;
+    }
+    if (res.status === 429) return { ok: false, reason: 'rate-limit', message: 'Too many requests. Wait a minute and try again.' };
+    try {
+      return await res.json();
+    } catch {
+      return { ok: false, reason: 'bad-response', message: "Couldn't read this post." };
+    }
+  }
+  return failed;
+}
+
+/**
+ * Title, channel and thumbnail of a YouTube video straight from YouTube's
+ * oEmbed (CORS open, no Worker): the fallback when /api/post can't read the
+ * video. null when that fails too.
+ */
+export async function fetchYouTubeOembed(url) {
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j || typeof j.title !== 'string' || !j.title) return null;
+    const thumb = typeof j.thumbnail_url === 'string' && j.thumbnail_url.startsWith('https://i.ytimg.com/') ? j.thumbnail_url : '';
+    return { ok: true, kind: 'youtube', url, title: j.title, text: '', author: String(j.author_name || ''), thumb };
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveShortLink(url) {
   try {
     const res = await fetch(`/api/resolve?url=${encodeURIComponent(url)}`);

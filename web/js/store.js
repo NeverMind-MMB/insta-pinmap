@@ -6,7 +6,7 @@
  * that loading an older backup (and later sync) cannot bring them back.
  */
 
-import { buildIndex, newId, shortcode } from './dedupe.js';
+import { buildIndex, newId, postKey } from './dedupe.js';
 import { idbGet, idbSet } from './idb.js';
 import { sourceColor } from './sources.js';
 
@@ -150,8 +150,8 @@ export const store = {
     return this.change((db) => {
       const pin = db.pins.find((p) => p.id === pinId);
       if (!pin) return null;
-      const code = shortcode(post.url);
-      if (code && (pin.posts || []).some((x) => shortcode(x.url) === code)) return pin;
+      const code = postKey(post.url);
+      if (code && (pin.posts || []).some((x) => postKey(x.url) === code)) return pin;
       pin.posts = [...(pin.posts || []), makePost(post)];
       pin.updatedAt = new Date().toISOString();
       return pin;
@@ -181,11 +181,12 @@ export const store = {
   },
 
   removePost(pinId, url) {
-    const code = shortcode(url);
+    const code = postKey(url);
     this.change((db) => {
       const pin = db.pins.find((p) => p.id === pinId);
       if (!pin) return;
-      pin.posts = (pin.posts || []).filter((x) => shortcode(x.url) !== code);
+      // A post without a key (a link no reader knows) goes by its link.
+      pin.posts = (pin.posts || []).filter((x) => (code ? postKey(x.url) !== code : x.url !== url));
       pin.updatedAt = new Date().toISOString();
     });
   },
@@ -332,7 +333,7 @@ export function normTag(s) {
 function makePost(p) {
   return {
     url: p.url,
-    shortcode: shortcode(p.url) || '',
+    shortcode: postKey(p.url) || '',
     caption: String(p.caption || '').slice(0, 4000),
     username: p.username || '',
     thumb: p.thumb || '',
@@ -404,7 +405,7 @@ export function normalizeDb(raw) {
       updatedAt: p.updatedAt || p.createdAt || new Date().toISOString(),
       posts: (Array.isArray(p.posts) ? p.posts : []).filter((x) => x && typeof x === 'object' && /^https?:[/][/]/i.test(String(x.url || ''))).map((x) => ({
         url: x.url,
-        shortcode: x.shortcode || shortcode(x.url) || '',
+        shortcode: x.shortcode || postKey(x.url) || '',
         caption: String(x.caption || ''),
         username: x.username || '',
         thumb: x.thumb || '',

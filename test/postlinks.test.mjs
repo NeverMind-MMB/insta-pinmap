@@ -140,6 +140,19 @@ test('postSiteName and isSocialLink go by the link\'s source (sources.js)', () =
   assert.equal(isSocialLink('https://vimeo.com/123456'), false);
 });
 
+test('postAuthorLabel and postLinkText: channel and page names as they are; Instagram usernames with "@"', async () => {
+  const { postAuthorLabel, postLinkText } = await import('../web/js/postlinks.js');
+  assert.equal(postAuthorLabel(`https://www.youtube.com/watch?v=${YT}`, 'Synthetic Channel'), 'Synthetic Channel');
+  assert.equal(postAuthorLabel('https://www.facebook.com/reel/987654321098765/', 'Synthetic Page'), 'Synthetic Page');
+  assert.equal(postAuthorLabel('https://www.instagram.com/p/ABC123/', 'synthetic.user'), '@synthetic.user');
+  assert.equal(postAuthorLabel('https://www.instagram.com/p/ABC123/', ''), '');
+  assert.equal(postLinkText(`https://www.youtube.com/watch?v=${YT}`, 'Synthetic Channel'), 'Synthetic Channel on YouTube');
+  assert.equal(postLinkText(`https://www.youtube.com/watch?v=${YT}`, ''), 'Open on YouTube');
+  assert.equal(postLinkText('https://www.facebook.com/reel/987654321098765/', ''), 'Open on Facebook');
+  assert.equal(postLinkText('https://www.instagram.com/p/ABC123/', 'synthetic.user'), '@synthetic.user');
+  assert.equal(postLinkText('https://www.instagram.com/p/ABC123/', ''), 'Open on Instagram');
+});
+
 /* ---------- The text the place candidates come from ---------- */
 
 test('candidateText: the title plus the description up to the first boilerplate line', () => {

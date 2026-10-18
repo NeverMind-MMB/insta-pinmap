@@ -14,6 +14,7 @@ import {
 } from './appleplace.js';
 import { formatDay } from './extract.js';
 import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR, pinLook } from './sources.js';
+import { postLinkText } from './postlinks.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -386,7 +387,7 @@ export function showDetail(pinId, env) {
       a.href = post.url;
       a.target = '_blank';
       a.rel = 'noopener';
-      a.textContent = post.username ? `@${post.username}` : 'Open on Instagram';
+      a.textContent = postLinkText(post.url, post.username);
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'btn btn--small btn--danger';

@@ -153,6 +153,19 @@ export function isSocialLink(link) {
   return postSiteName(link) !== '';
 }
 
+/** Who posted it, as the confirm dialog shows it: YouTube channel and Facebook page names as they are, Instagram "@user". */
+export function postAuthorLabel(url, username) {
+  if (!username) return '';
+  return postSiteName(url) ? username : `@${username}`;
+}
+
+/** The text of a saved post's link (pin details). */
+export function postLinkText(url, username) {
+  const site = postSiteName(url);
+  if (!site) return username ? `@${username}` : 'Open on Instagram';
+  return username ? `${username} on ${site}` : `Open on ${site}`;
+}
+
 const BOILERPLATE = /^\s*(?:subscribe|follow|download|credits)\b/i;
 const KEEP_LATER = /\u{1F4CD}|\b(?:address|location)\s*:/iu;
 const HAS_LINK = /https?:\/\/\S/i;

@@ -23,8 +23,12 @@ import {
   loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
-import { fetchPost, resolveShortLink } from './api.js';
+import { fetchPost, resolveShortLink, fetchSocialPost, fetchYouTubeOembed } from './api.js';
 import { siteOf, sourceOf, sourceColor, findLinks, pinLook } from './sources.js';
+import {
+  isSocialLink, postRequestKey, socialPostKey, canonicalPostLink, facebookTarget, candidateText,
+  postEmbedLink, postSiteName, postAuthorLabel,
+} from './postlinks.js';
 import { colorPicker, pickedColor } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -67,6 +71,11 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   // The link's source, by its prefix (sources.js), picks the reader.
   if (isInstagramLink(candidateLink)) {
     return addFromInstagram(candidateLink, env);
+  }
+
+  // YouTube and Facebook: the Worker's /api/post reads the text and location tag.
+  if (isSocialLink(candidateLink)) {
+    return addFromSocialPost(candidateLink, env);
   }
 
   if (isMapLink(candidateLink)) {
@@ -160,6 +169,114 @@ async function addFromInstagram(link, env) {
     hintedCountries,
     searchPrefill: cleanedText(caption),
     tagSuggestions: tagSuggestions(caption, store.settings.customStopTags),
+    env,
+  });
+}
+
+/* ================================================================== *
+ * YouTube and Facebook
+ * ================================================================== */
+
+const SOCIAL_WORDS = {
+  youtube: {
+    reading: 'Reading the video …', notPost: "This YouTube link isn't a video.", failed: 'Could not read the YouTube video',
+  },
+  facebook: {
+    reading: 'Reading the post …', notPost: "This Facebook link isn't a public post, reel or page.",
+    failed: 'Could not read the Facebook post',
+  },
+};
+
+/** A video or post saved before: says so and shows its pin. */
+function showSavedPost(link, env) {
+  const existing = findPost(store.db, link);
+  if (!existing) return false;
+  env.toast(`You already saved this post: "${existing.pin.title}"`, 'info');
+  env.inputDone?.();
+  env.map?.goToPin(existing.pin.id);
+  env.showDetail?.(existing.pin.id);
+  return true;
+}
+
+/**
+ * A YouTube video or a Facebook post, reel or page, the Instagram way: the
+ * Worker reads its text (and location tag) → candidates → you confirm. A
+ * location tag comes first: with coordinates (Facebook pages) it is the place,
+ * with an address (YouTube) "<name>, <address>" is searched before anything
+ * from the text. The video or post stays on the pin like an Instagram post;
+ * a Facebook page's link goes in the note.
+ */
+async function addFromSocialPost(link, env) {
+  const site = sourceOf(link);
+  const words = SOCIAL_WORDS[site];
+  const key = postRequestKey(link);
+  if (!key) {
+    env.toast(words.notPost, 'error');
+    return;
+  }
+  if (showSavedPost(link, env)) return;
+
+  env.toast(words.reading, 'busy', 15000);
+  let info;
+  try {
+    info = await fetchSocialPost(link, key);
+    // The Worker couldn't read the video: the title, at least, straight from YouTube.
+    if (!info.ok && site === 'youtube') info = (await fetchYouTubeOembed(canonicalPostLink(link))) || info;
+  } finally {
+    env.hideToast?.();
+  }
+
+  if (info.ok && info.kind === 'facebook-page') return addFromFacebookPage(info, env);
+  if (!info.ok && facebookTarget(link)?.kind === 'page') {
+    env.toast(info.message || "Couldn't read this Facebook page.", 'error', 6000);
+    return;
+  }
+  // A share link is known as its post once the Worker followed it.
+  const url = (info.ok && socialPostKey(info.url) ? canonicalPostLink(info.url) : '') || canonicalPostLink(link) || link;
+  if (showSavedPost(url, env)) return;
+
+  const title = info.ok ? info.title || '' : '';
+  const body = info.ok ? info.text || '' : '';
+  const text = site === 'youtube' ? candidateText(title, body) : body;
+  const tag = info.ok ? info.location || null : null;
+  const exact = tag && Number.isFinite(tag.lat) && Number.isFinite(tag.lon);
+  const { candidates, countries, hintedCountries } = placeCandidates(text, { username: info.author, location: tag?.name });
+  if (tag?.name && tag.address) candidates.unshift({ text: `${tag.name}, ${tag.address}`, points: 140, source: 'location' });
+  const postedAt = info.ok ? info.publishedAt || '' : '';
+
+  return openConfirm({
+    source: site,
+    post: {
+      url, caption: [title, body].filter(Boolean).join('\n\n'),
+      username: info.ok ? info.author || '' : '', thumb: info.ok ? info.thumb || '' : '', postedAt,
+    },
+    igError: info.ok ? null : info,
+    errorTitle: words.failed,
+    titleSuggestion: tag?.name || candidates[0]?.text || '',
+    whenSuggestion: eventDate(text, { postedAt })?.text || '',
+    readyPlace: exact ? { lat: tag.lat, lon: tag.lon, name: tag.name, address: tag.address || '', source: site } : null,
+    candidates,
+    countries,
+    hintedCountries,
+    searchPrefill: cleanedText(text),
+    tagSuggestions: tagSuggestions(text, store.settings.customStopTags),
+    env,
+  });
+}
+
+/** A Facebook page: with its map pin the exact place, else a search for its name and address. */
+function addFromFacebookPage(info, env) {
+  const tag = info.location || {};
+  const name = tag.name || info.title || '';
+  const exact = Number.isFinite(tag.lat) && Number.isFinite(tag.lon);
+  const search = [name, tag.address].filter(Boolean).join(', ');
+  return openConfirm({
+    source: 'facebook',
+    titleSuggestion: name,
+    readyPlace: exact ? { lat: tag.lat, lon: tag.lon, name, address: tag.address || '', source: 'facebook' } : null,
+    candidates: !exact && search ? [{ text: search, points: 70, source: 'link' }] : [],
+    countries: [],
+    note: info.url || '',
     env,
   });
 }
@@ -463,7 +580,7 @@ export async function openConfirm(cfg) {
     const thumb = $('confirm-thumb');
     if (cfg.post.thumb) { thumb.src = cfg.post.thumb; thumb.hidden = false; thumb.alt = ''; }
     else thumb.hidden = true;
-    $('confirm-user').textContent = cfg.post.username ? `@${cfg.post.username}` : '';
+    $('confirm-user').textContent = postAuthorLabel(cfg.post.url, cfg.post.username);
     $('confirm-caption').textContent = cfg.post.caption || '(no text in the post)';
   } else {
     sourceBlock.hidden = true;
@@ -474,11 +591,12 @@ export async function openConfirm(cfg) {
   if (cfg.igError) {
     errorBox.hidden = false;
     errorBox.open = true;
+    $('confirm-error-title').textContent = cfg.errorTitle || 'Could not read the Instagram text';
     $('confirm-error-text').textContent =
       cfg.igError.message || 'Unknown reason.';
-    const embed = embedLink(cfg.post?.url);
+    const embed = embedLink(cfg.post?.url) || postEmbedLink(cfg.post?.url);
     $('confirm-embed').innerHTML = embed
-      ? `<iframe src="${embed}" loading="lazy" title="Instagram post"
+      ? `<iframe src="${embed}" loading="lazy" title="${postSiteName(cfg.post?.url) || 'Instagram'} post"
            referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>`
       : '';
   } else {
