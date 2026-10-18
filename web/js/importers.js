@@ -244,12 +244,13 @@ export function readApplePlace(link) {
   let lat = null;
   let lon = null;
 
-  const pair = q.get('coordinate') || q.get('ll') || q.get('sll') || q.get('daddr');
-  if (pair) {
-    const m = pair.match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
-    if (m) {
+  // The first parameter with a real point: 0,0 (Apple's "unknown") or one out of range is none.
+  for (const key of ['coordinate', 'll', 'sll', 'daddr']) {
+    const m = (q.get(key) || '').match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
+    if (m && knownPoint(parseFloat(m[1]), parseFloat(m[2]))) {
       lat = parseFloat(m[1]);
       lon = parseFloat(m[2]);
+      break;
     }
   }
   const name = q.get('name') || q.get('q') || '';
@@ -276,25 +277,28 @@ export function readApplePlace(link) {
  * Coordinates from a long Google Maps link.
  * The pattern !3d<lat>!4d<lon> is the place itself; @lat,lng is only the
  * map center at the time of sharing and therefore less precise. So !3d!4d first.
+ * 0,0 (Google's "unknown") or a point out of range counts as none, as in the file importers.
  */
 export function googleCoordinates(link) {
   const s = String(link || '');
+  const point = (lat, lon, precise) => (knownPoint(parseFloat(lat), parseFloat(lon))
+    ? { lat: parseFloat(lat), lon: parseFloat(lon), precise } : null);
   const precise = s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
-  if (precise) return { lat: parseFloat(precise[1]), lon: parseFloat(precise[2]), precise: true };
+  const fromPlace = precise && point(precise[1], precise[2], true);
+  if (fromPlace) return fromPlace;
 
   try {
     const u = new URL(s);
     const query = u.searchParams.get('query') || u.searchParams.get('q') || u.searchParams.get('center');
     if (query) {
       const m = query.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
-      if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), precise: true };
+      const fromQuery = m && point(m[1], m[2], true);
+      if (fromQuery) return fromQuery;
     }
   } catch { /* continue */ }
 
   const center = s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),/);
-  if (center) return { lat: parseFloat(center[1]), lon: parseFloat(center[2]), precise: false };
-
-  return null;
+  return (center && point(center[1], center[2], false)) || null;
 }
 
 export function googleName(link) {

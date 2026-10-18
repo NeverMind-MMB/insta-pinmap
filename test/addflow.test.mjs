@@ -959,3 +959,25 @@ test('the input bar: two real place links still bring the hint, also with a down
   assert.deepEqual(imports, []);
   assert.deepEqual(toasts, [[SEVERAL_LINKS_HINT, 'info']]);
 });
+
+/* ---------- Apple ll=0,0 and Google @0,0: no coordinates, never a pin at 0,0 ---------- */
+
+test('Apple ll=0,0 and Google @0,0 or !3d0!4d0 are no coordinates (as in the file importers); another point in the link still counts', async () => {
+  const { readLink } = await import('../web/js/importers.js');
+  const place = (link) => { const e = readLink(link).entries[0]; return [e.name, e.lat, e.lon]; };
+  assert.deepEqual(place('https://maps.apple.com/?ll=0,0&q=Synthetic%20Cafe'), ['Synthetic Cafe', null, null]);
+  assert.deepEqual(place('https://maps.apple.com/place?coordinate=0.0,-0.0&name=Synthetic%20Lake'), ['Synthetic Lake', null, null]);
+  assert.deepEqual(place('https://maps.apple.com/?ll=0,0&sll=48.1,11.5&q=Synthetic%20Cafe'), ['Synthetic Cafe', 48.1, 11.5]);
+  assert.deepEqual(place('https://maps.apple.com/?ll=95,200&q=Synthetic%20Cafe'), ['Synthetic Cafe', null, null], 'out of range');
+  assert.deepEqual(place('https://www.google.com/maps/place/Synthetic+Bar/@0,0,17z'), ['Synthetic Bar', null, null]);
+  assert.deepEqual(place('https://www.google.com/maps/place/Synthetic+Bar/@48.1,11.5,17z/data=!3d0!4d0'), ['Synthetic Bar', 48.1, 11.5]);
+  assert.deepEqual(place('https://www.google.com/maps?q=0,0'), ['Google place', null, null]);
+  assert.deepEqual(place('https://www.google.com/maps/place/Synthetic+Bar/@48.1,11.5,17z'), ['Synthetic Bar', 48.1, 11.5]);
+});
+
+test('the input bar: an Apple link with ll=0,0 searches for its name; nothing is placed at 0,0', async () => {
+  const r = await mapAppInBar('https://maps.apple.com/?ll=0,0&q=Synthetic%20Cafe', (url) => (url.includes('photon') ? { features: [] } : []));
+  assert.ok(r.calls.some((u) => /photon|nominatim/.test(u) && /Synthetic/.test(u)), JSON.stringify(r.calls));
+  assert.notEqual(r.coords, '0.00000, 0.00000');
+  assert.ok(r.pins.every((p) => !(p.lat === 0 && p.lon === 0)));
+});
