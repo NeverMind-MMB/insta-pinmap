@@ -745,5 +745,6 @@ export function readLink(link) {
     const entry = readMapAppLink(s);
     return { name: entry.name, entries: [entry], appleIds: [] };
   }
-  throw new Error('I don\'t recognize this link. Expected an Apple Guides, Apple Maps or Google Maps link.');
+  // Short and true: where a link gets this far, the unsupported-link dialog lists what works.
+  throw new Error('I don\'t recognize this link.');
 }

@@ -476,3 +476,9 @@ test('Bing short links (binged.it) are short links the helper expands, then read
   assert.deepEqual(sent, ['https://binged.it/3SynThX']);
   for (const link of ['https://binged.it.evil.example/3SynThX', 'https://notbinged.it/3SynThX']) assert.equal(sourceOf(link), null, link);
 });
+
+test('readLink: a link of no map source gets a short, true message (the unsupported dialog says what works)', () => {
+  for (const link of ['https://example.com/x', 'https://www.instagram.com/p/ABC123xyz/', '']) {
+    assert.throws(() => readLink(link), (e) => e.message === "I don't recognize this link.", link);
+  }
+});
