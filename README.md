@@ -44,9 +44,10 @@ Each post also keeps the date it was published.
   have, the app asks whether to attach it to one of them.
 - You always confirm the place, even when there is only one match.
 
-Also: list with search, tag filter, notes and "want to go / been there". The
-only export is the app's own backup: one HTML file that shows your pins on a
-map and, loaded in the app, brings them back (see "Your data and backups").
+Also: list with search, tag filter and notes (a new place without other tag
+suggestions offers the tag "want-to-go"). The only export is the app's own
+backup: one HTML file that shows your pins on a map and, loaded in the app,
+brings them back (see "Your data and backups").
 
 ## What needs the helper
 

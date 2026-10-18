@@ -705,3 +705,21 @@ test('Settings → Import: place links without their scheme count too', async ()
   const { imports } = await readInSettings('maps.apple.com/?ll=48.1371,11.5754&q=Synthetic%20Cafe\nmaps.apple.com/place?auid=987654321');
   assert.deepEqual(imports[0]?.e.map((r) => r.name), ['Synthetic Cafe', 'Apple Maps place']);
 });
+
+/* ---------- 2.1.0: no status; "want-to-go" as the fallback tag suggestion ---------- */
+
+test('Confirm place without any tag suggestion suggests want-to-go; with suggestions from a post it does not', async () => {
+  const { openConfirm } = await import('../web/js/addflow.js');
+  const suggested = async (cfg) => {
+    const doc = confirmDocument();
+    globalThis.document = doc;
+    try {
+      await openConfirm({ source: 'manual', titleSuggestion: 'X', readyPlace: { lat: 1, lon: 2, name: 'X', address: '' }, env: fakeUi().ui, ...cfg });
+      return doc.getElementById('confirm-tags-suggested').children.map((li) => li.children[0].textContent);
+    } finally {
+      delete globalThis.document;
+    }
+  };
+  assert.deepEqual(await suggested({}), ['#want-to-go']);
+  assert.deepEqual(await suggested({ tagSuggestions: ['coffee', 'rome'] }), ['#coffee', '#rome']);
+});

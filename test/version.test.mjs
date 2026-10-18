@@ -144,3 +144,8 @@ test('the app is called oPin: page title, top bar, manifest, self-test (internal
   assert.match(readFileSync(new URL('../web/selftest.html', import.meta.url), 'utf8'), /<title>Self-test — oPin<\/title>/);
   assert.match(html, /caches\.delete\('insta-pinmap-app'\)/, 'the cache keeps its name');
 });
+
+test('index.html has no status ("Want to go / Been there") any more', () => {
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.ok(!/Want to go|Been there|data-status=/i.test(html));
+});

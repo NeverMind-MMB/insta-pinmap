@@ -451,7 +451,8 @@ export async function openConfirm(cfg) {
     ...cfg,
     chosen: cfg.readyPlace || null,
     tags: [],
-    status: 'wishlist',
+    // Without any suggestion (a map link, a typed search) "want-to-go" is offered.
+    tagSuggestions: cfg.tagSuggestions?.length ? cfg.tagSuggestions : ['want-to-go'],
     titleTyped: false,
   };
 
@@ -491,12 +492,12 @@ export async function openConfirm(cfg) {
   $('confirm-when').value = cfg.whenSuggestion || '';
   $('confirm-when-hint').hidden = !cfg.whenSuggestion;
   $('confirm-search').value = '';
-  setStatus('wishlist');
   // Colour: Auto, drawn in the colour of where the place comes from.
   state.colorChoice = colorPicker('confirm-color-choice', { auto: sourceColor(cfg.source) });
   $('confirm-color').replaceChildren(state.colorChoice);
   drawTags();
-  drawTagSuggestions(cfg.tagSuggestions || []);
+  $('confirm-tags-hint').textContent = cfg.tagSuggestions?.length ? 'Suggested from the post — tap to add:' : 'Suggested — tap to add:';
+  drawTagSuggestions(state.tagSuggestions);
   fillTagDatalist();
 
   if (cfg.readyPlace) {
@@ -698,15 +699,6 @@ function fillTagDatalist() {
   }
 }
 
-function setStatus(value) {
-  state.status = value;
-  for (const b of document.querySelectorAll('#dlg-confirm [data-status]')) {
-    const isActive = b.dataset.status === value;
-    b.classList.toggle('is-active', isActive);
-    b.setAttribute('aria-checked', String(isActive));
-  }
-}
-
 /* ================================================================== *
  * Saving, including the proximity check
  * ================================================================== */
@@ -754,7 +746,6 @@ async function save(env) {
     address: place.address || '',
     note,
     when,
-    status: state.status,
     tags: state.tags,
     post,
     source: state.source,
@@ -831,10 +822,6 @@ export function wireConfirm(env) {
   $('confirm-title').addEventListener('input', () => {
     if (state) state.titleTyped = true;
   });
-
-  for (const b of document.querySelectorAll('#dlg-confirm [data-status]')) {
-    b.addEventListener('click', () => setStatus(b.dataset.status));
-  }
 
   // Add a tag by hand
   const tagAdd = () => {

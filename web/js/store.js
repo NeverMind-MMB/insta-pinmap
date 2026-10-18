@@ -124,13 +124,13 @@ export const store = {
 
   pin(id) { return this.db.pins.find((p) => p.id === id) || null; },
 
-  addPin({ lat, lon, title, address = '', note = '', when = '', status = 'wishlist', tags = [], post = null, source = 'manual', color = '' }) {
+  addPin({ lat, lon, title, address = '', note = '', when = '', tags = [], post = null, source = 'manual', color = '' }) {
     const now = new Date().toISOString();
     const pin = {
       id: newId('p'),
       lat: round7(lat), lon: round7(lon),
       title: String(title || 'Untitled').trim(),
-      address, note, when: cleanWhen(when), status,
+      address, note, when: cleanWhen(when),
       tags: [...new Set(tags.map(normTag).filter(Boolean))],
       source,
       createdAt: now, updatedAt: now,
@@ -397,7 +397,6 @@ export function normalizeDb(raw) {
       address: String(p.address || ''),
       note: String(p.note || ''),
       when: cleanWhen(p.when),
-      status: p.status === 'visited' ? 'visited' : 'wishlist',
       tags: [...new Set((Array.isArray(p.tags) ? p.tags : []).map(normTag).filter(Boolean))],
       source: p.source || p.quelle || 'manual',
       ...(pinColorValue(p.color) ? { color: pinColorValue(p.color) } : {}),

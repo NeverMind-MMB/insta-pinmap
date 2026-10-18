@@ -31,7 +31,7 @@ export function backupFileName(now = new Date()) {
 export function buildBackupHtml(db, { leafletJs, leafletCss, colorOf, now = new Date() }) {
   const pins = db.pins.map((p) => ({
     t: p.title, a: p.address, la: p.lat, lo: p.lon,
-    s: p.status, n: p.note, w: p.when || '', g: p.tags || [],
+    n: p.note, w: p.when || '', g: p.tags || [],
     f: safeColor(colorOf(p)),
     u: (p.posts || []).map((x) => x.url),
   }));
@@ -69,7 +69,6 @@ P.forEach(function(p){
   if(p.a)h+='<p>'+esc(p.a)+'</p>';
   if(p.n)h+='<p>'+esc(p.n)+'</p>';
   if(p.w)h+='<p>📅 '+esc(p.w)+'</p>';
-  h+='<p>'+(p.s==='visited'?'been there':'want to go')+'</p>';
   p.g.forEach(function(g){h+='<span class="g">'+esc(g)+'</span>'});
   p.u.forEach(function(u){if(/^https?:[/][/]/i.test(u))h+='<div><a href="'+esc(u)+'" target="_blank" rel="noopener">View post</a></div>'});
   L.marker([p.la,p.lo],{icon:ic}).addTo(m).bindPopup(h);

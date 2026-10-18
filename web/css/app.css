@@ -242,7 +242,7 @@ body {
 }
 .entry:hover { border-color: var(--accent); }
 
-/* Here too: without explicit placement the status badge ends up on the left. */
+/* Here too: without explicit placement the distance ends up on the left. */
 .entry__dot {
   grid-column: 1; grid-row: 1 / span 3;
   width: 11px; height: 11px; border-radius: 50%;
@@ -260,11 +260,6 @@ body {
   display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
   font-size: .75rem; color: var(--text-muted); white-space: nowrap;
 }
-.entry__status {
-  font-size: .6875rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
-  background: var(--surface-2);
-}
-.entry__status[data-status="visited"] { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
 
 .list__empty { padding: 40px 20px; text-align: center; color: var(--text-muted); }
 

@@ -80,3 +80,7 @@ test('oPin backups: file name opin-backup-<date>.html, viewer title and restore 
   assert.ok(!/Insta Pinmap/.test(h));
   assert.match(h, /id="pinmap-backup"/, 'old and new backups keep the same script id');
 });
+
+test('the backup viewer shows no "want to go / been there" any more', () => {
+  assert.ok(!/been there|want to go/i.test(html()));
+});

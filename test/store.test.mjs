@@ -187,3 +187,15 @@ test('a pin colour survives the backup (and its viewer draws it) and the merge',
   assert.equal(back.pins[0].color, '#7a4b8f');
   assert.equal(mergeDb(normalizeDb({}), back).db.pins[0].color, '#7a4b8f');
 });
+
+/* ---------- 2.1.0: no status any more ---------- */
+
+test('pins have no status: normalizeDb drops it (old backups load), addPin sets none', () => {
+  const db = normalizeDb({ pins: [pin('a', T, { status: 'visited' }), pin('b', T, { status: 'wishlist' })] });
+  assert.equal(db.pins.length, 2);
+  for (const p of db.pins) assert.equal('status' in p, false, p.id);
+  store.db = normalizeDb({});
+  assert.equal('status' in store.addPin({ lat: 1, lon: 2, title: 'T', status: 'visited' }), false);
+  clearTimeout(store._saveTimer);
+  store._saveTimer = null;
+});

@@ -202,11 +202,6 @@ export function drawList(pins, onClick) {
 
     const right = document.createElement('span');
     right.className = 'entry__right';
-    const st = document.createElement('span');
-    st.className = 'entry__status';
-    st.dataset.status = pin.status;
-    st.textContent = pin.status === 'visited' ? 'been there' : 'want to go';
-    right.appendChild(st);
     if (filter.sort === 'nearest' && filter.location) {
       const d = document.createElement('span');
       d.textContent = distanceText(distanceM(filter.location.lat, filter.location.lon, pin.lat, pin.lon));
@@ -287,36 +282,6 @@ export function showDetail(pinId, env) {
   );
   addr.append(a1, a2, row);
   body.appendChild(addr);
-
-  // --- Status ---
-  const statusField = document.createElement('div');
-  statusField.className = 'field';
-  const statusLabel = document.createElement('span');
-  statusLabel.className = 'field__label';
-  statusLabel.textContent = 'Status';
-  const statusGroup = document.createElement('div');
-  statusGroup.className = 'segmented segmented--full';
-  statusGroup.setAttribute('role', 'radiogroup');
-  statusGroup.setAttribute('aria-label', 'Status');
-  for (const [value, text] of [['wishlist', 'Want to go'], ['visited', 'Been there']]) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('role', 'radio');
-    b.className = 'segmented__btn' + (pin.status === value ? ' is-active' : '');
-    b.setAttribute('aria-checked', String(pin.status === value));
-    b.dataset.status = value;
-    b.textContent = text;
-    b.addEventListener('click', () => {
-      for (const x of statusGroup.children) {
-        const isActive = x === b;
-        x.classList.toggle('is-active', isActive);
-        x.setAttribute('aria-checked', String(isActive));
-      }
-    });
-    statusGroup.appendChild(b);
-  }
-  statusField.append(statusLabel, statusGroup);
-  body.appendChild(statusField);
 
   // --- Colour: Auto (the source's) or one of the palette ---
   const colorField = document.createElement('div');
@@ -427,7 +392,7 @@ export function showDetail(pinId, env) {
       del.className = 'btn btn--small btn--danger';
       del.textContent = 'Remove post';
       del.addEventListener('click', () => {
-        // The dialog is drawn again below: keep title, when, note, status and tag edits first.
+        // The dialog is drawn again below: keep title, when, note, tag and colour edits first.
         if (snapshot() !== initial) store.updatePin(pin.id, formValues());
         store.removePost(pin.id, post.url);
         env.redraw();
@@ -450,12 +415,10 @@ export function showDetail(pinId, env) {
 
   // --- Footer buttons ---
   function formValues() {
-    const active = statusGroup.querySelector('[aria-checked="true"]');
     return {
       title: $('detail-title').value.trim() || pin.title,
       when: $('detail-when').value.trim().slice(0, 100),
       note: $('detail-note').value.trim(),
-      status: active?.dataset.status || pin.status,
       tags,
       color: pickedColor(colorChoice),
     };
@@ -490,7 +453,6 @@ export function showDetail(pinId, env) {
     title: $('detail-title').value.trim(),
     when: $('detail-when').value.trim(),
     note: $('detail-note').value.trim(),
-    status: statusGroup.querySelector('[aria-checked="true"]')?.dataset.status,
     tags,
     color: pickedColor(colorChoice),
   });
