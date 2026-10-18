@@ -6,10 +6,13 @@
  * What it shows comes from sources.js (pinLook) or ui.js (importLook).
  */
 
-/** Plays the animation once: `logo` is an image URL; without one, `caption` shows under the wheel. */
+/**
+ * Plays the animation once: `logo` is an image URL; without one, `caption` shows under the wheel.
+ * Skipped while the map view is hidden (List tab on a phone), so it doesn't play later when Map opens.
+ */
 export function playPinwheel({ logo = '', caption = '' } = {}) {
   const box = document.getElementById('pinwheel');
-  if (!box) return;
+  if (!box || !box.parentElement?.getClientRects().length) return;
   const image = box.querySelector('.pinwheel__logo');
   if (logo) image.setAttribute('href', logo);
   else image.removeAttribute('href');
