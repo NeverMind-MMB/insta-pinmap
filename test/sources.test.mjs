@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SUPPORTED_SOURCES, ISSUES_URL, issuesSearchUrl, siteOf, linkIs } from '../web/js/sources.js';
-import { isMapLink } from '../web/js/addflow.js';
+import { isMapLink } from '../web/js/mapflow.js';
 import { isInstagramLink } from '../web/js/dedupe.js';
 import { isTikTokLink, tiktokVideo } from '../web/js/tiktok.js';
 import { readLink, readFile } from '../web/js/importers.js';

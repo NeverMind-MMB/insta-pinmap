@@ -9,7 +9,9 @@ import assert from 'node:assert/strict';
  * At the end: a TikTok video's tag, which /api/post reads from the video page (name and address).
  */
 
-const { startAdd, wireConfirm, taggedPlace } = await import('../web/js/addflow.js');
+const { startAdd } = await import('../web/js/router.js');
+const { wireConfirm } = await import('../web/js/confirm.js');
+const { taggedPlace } = await import('../web/js/postflow.js');
 const { store, normalizeDb } = await import('../web/js/store.js');
 
 /** A document for the confirm dialog that also finds `.class` children, so the candidate list can be read. */

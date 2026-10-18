@@ -296,9 +296,10 @@ test('placeShortCode: a town the search doesn\'t know, a search that is down, or
   assert.deepEqual(queries, [], 'nothing searched');
 });
 
-/* ---------- The input bar (addflow.startAdd) ---------- */
+/* ---------- The input bar (router.startAdd) ---------- */
 
-const { startAdd, wireConfirm } = await import('../web/js/addflow.js');
+const { startAdd } = await import('../web/js/router.js');
+const { wireConfirm } = await import('../web/js/confirm.js');
 const { store, normalizeDb } = await import('../web/js/store.js');
 
 /** A document just big enough for the confirm dialog; without #confirm-map the preview map stays off. */

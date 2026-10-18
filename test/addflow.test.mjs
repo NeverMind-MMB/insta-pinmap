@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { startAdd } = await import('../web/js/addflow.js');
+const { startAdd } = await import('../web/js/router.js');
 
 /** Replaces fetch for /api/resolve; returns the list of resolve calls. */
 function stubResolve(answer) {
@@ -225,7 +225,7 @@ test('a guide link alone (user= form) still just opens the import with unchecked
 });
 
 test('isShortcutPaste: Shortcut output goes straight to the add flow (a text field would drop its line breaks)', async () => {
-  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  const { isShortcutPaste } = await import('../web/js/router.js');
   assert.equal(isShortcutPaste(`${SYN_GUIDE}\n1001@@Museum@@48.1@@11.5@@Town`), true);
   assert.equal(isShortcutPaste(`${SYN_USER}\n${placePage('1001', 'Museum', 48.1, 11.5)}`), true);
   assert.equal(isShortcutPaste('1001@@Museum@@48.1@@11.5@@Town'), true);
@@ -327,7 +327,7 @@ test('one place link alone still opens the confirm dialog, not the import', asyn
 });
 
 test('isShortcutPaste: two or more place links go straight to the add flow too (the field would join the lines)', async () => {
-  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  const { isShortcutPaste } = await import('../web/js/router.js');
   assert.equal(isShortcutPaste(`${LL_LINK}\n${AUID_LINK}`), true);
   assert.equal(isShortcutPaste(`${LL_LINK}\r\n${ADDRESS_AUID_LINK}\r\n`), true);
   for (const t of [LL_LINK, AUID_LINK, `${LL_LINK}\n${LL_LINK}`, `Look at this:\n${LL_LINK}`]) {
@@ -356,7 +356,7 @@ test('raw HTML without a waiting guide never turns into a list of place links, n
 /** Runs Settings' "Read" on `value`; records the order of closing Settings and opening dialogs. */
 async function readInSettings(value) {
   globalThis.localStorage = memoryStorage();
-  const { addFromSettings } = await import('../web/js/addflow.js');
+  const { addFromSettings } = await import('../web/js/batch.js');
   const { toasts, ui } = fakeUi();
   const field = { value };
   const order = [];
@@ -404,7 +404,7 @@ async function addWithWaitingGuide(text, { viaSettings = false } = {}) {
   const found = new Map([['101', { name: 'Earlier', lat: 48.1, lon: 11.5, address: 'Testtown' }]]);
   savePendingGuide({ title: 'Synthetic Guide', link: 'https://guides.apple.com/?ug=x', entries: inline,
     appleIds: ['101', '202', '303'], found, requested: ['202', '303'] });
-  const { addFromSettings } = await import('../web/js/addflow.js');
+  const { addFromSettings } = await import('../web/js/batch.js');
   const { toasts, ui } = fakeUi();
   const imports = [];
   const env = { ...ui, inputDone: () => {}, showImport: (e, n, g) => imports.push({ e, n, g }) };
@@ -446,7 +446,7 @@ test('Settings → Import: a guide link stays out of a list of place links', asy
 });
 
 test('the input bar: any two links import nothing; with an Instagram post among them it says one post at a time', async () => {
-  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  const { isShortcutPaste } = await import('../web/js/router.js');
   for (const [text, hint] of [
     ['https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/', INSTAGRAM_HINT],
     [`Look: https://www.instagram.com/p/AAA111/ and ${LL_LINK}`, INSTAGRAM_HINT],
@@ -519,7 +519,8 @@ function confirmDocument() {
 }
 
 test('Settings → Import → Read with one place link: once the confirm dialog saves its pin, the field empties', async () => {
-  const { wireConfirm, addFromSettings } = await import('../web/js/addflow.js');
+  const { wireConfirm } = await import('../web/js/confirm.js');
+  const { addFromSettings } = await import('../web/js/batch.js');
   const { store, normalizeDb } = await import('../web/js/store.js');
   const doc = confirmDocument();
   globalThis.document = doc;
@@ -633,7 +634,7 @@ test('the input bar: lookalike links are no Instagram or Apple Maps links: the u
 });
 
 test('Confirm place: colour "Auto" (in the source\'s colour) by default; a picked colour goes to the new pin', async () => {
-  const { wireConfirm } = await import('../web/js/addflow.js');
+  const { wireConfirm } = await import('../web/js/confirm.js');
   const { store, normalizeDb } = await import('../web/js/store.js');
   for (const [pick, want] of [[null, undefined], ['#7a4b8f', '#7a4b8f']]) {
     const doc = confirmDocument();
@@ -731,7 +732,7 @@ test('Settings → Import: place links without their scheme count too', async ()
 /* ---------- 2.1.0: no status; "want-to-go" as the fallback tag suggestion ---------- */
 
 test('Confirm place without any tag suggestion suggests want-to-go; with suggestions from a post it does not', async () => {
-  const { openConfirm } = await import('../web/js/addflow.js');
+  const { openConfirm } = await import('../web/js/confirm.js');
   const suggested = async (cfg) => {
     const doc = confirmDocument();
     globalThis.document = doc;
@@ -747,7 +748,7 @@ test('Confirm place without any tag suggestion suggests want-to-go; with suggest
 });
 
 test('Drop pin plays the add-pin animation with the new pin\'s source (Apple Maps: its logo)', async () => {
-  const { wireConfirm } = await import('../web/js/addflow.js');
+  const { wireConfirm } = await import('../web/js/confirm.js');
   const { store, normalizeDb } = await import('../web/js/store.js');
   const doc = confirmDocument();
   globalThis.document = doc;
@@ -782,7 +783,7 @@ const MAPY_COOR = 'https://mapy.com/en/turisticka?source=coor&id=11.21%2C47.11&x
 
 /** The input bar with a confirm dialog; fetch answers through `answer(url)`. Returns the dialog's fields and what was fetched. */
 async function mapAppInBar(text, answer = () => []) {
-  const { wireConfirm } = await import('../web/js/addflow.js');
+  const { wireConfirm } = await import('../web/js/confirm.js');
   const { store, normalizeDb } = await import('../web/js/store.js');
   const doc = confirmDocument();
   globalThis.document = doc;
@@ -923,7 +924,7 @@ const TT_VIDEO = 'https://www.tiktok.com/@synthetic.user/video/73000000000000000
 const POST_HINT = 'One post or video at a time: paste each link on its own.';
 
 test('the input bar: two post or video links from any site (YouTube, Facebook, TikTok, Instagram, mixed) bring the one-post hint', async () => {
-  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  const { isShortcutPaste } = await import('../web/js/router.js');
   for (const text of [
     `${YT_A}\n${YT_B}`, `${YT_A}\n${FB_POST}`, `${TT_VIDEO}\nhttps://www.instagram.com/p/AAA111/`, `Watch ${YT_A} then go to ${LL_LINK}`,
   ]) {
@@ -950,7 +951,7 @@ test('Settings → Import: YouTube and Facebook links among several are counted 
 });
 
 test('the input bar: a map app share text with a download link in it is one place link: Confirm place, no hint', async () => {
-  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  const { isShortcutPaste } = await import('../web/js/router.js');
   const share = 'Synthetic Cafe\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe\nDownload here: https://omaps.app/get';
   assert.equal(isShortcutPaste(share), false, 'goes into the field like any one link');
   const r = await mapAppInBar(share);

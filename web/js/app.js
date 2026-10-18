@@ -4,7 +4,10 @@
 
 import { store, DEFAULT_SETTINGS, pruneTagFilter } from './store.js';
 import { MainMap, TILES } from './map.js';
-import { startAdd, addFromSettings, wireConfirm, guideImportEntries, isShortcutPaste } from './addflow.js';
+import { startAdd, isShortcutPaste } from './router.js';
+import { addFromSettings } from './batch.js';
+import { wireConfirm } from './confirm.js';
+import { guideImportEntries } from './mapflow.js';
 import {
   toast, hideToast, filter, filteredPins,
   drawTagBar, drawList, showDetail, showImport,

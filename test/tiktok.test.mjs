@@ -199,7 +199,8 @@ test('findTikTokPost: a pin\'s post with the same video ID, whatever link form i
 
 /* ---------- The input bar: TikTok link → caption → Confirm place ---------- */
 
-const { startAdd, wireConfirm } = await import('../web/js/addflow.js');
+const { startAdd } = await import('../web/js/router.js');
+const { wireConfirm } = await import('../web/js/confirm.js');
 const { store, normalizeDb } = await import('../web/js/store.js');
 
 function fakeUi() {

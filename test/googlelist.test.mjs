@@ -2,7 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { startAdd, addFromSettings, isMapLink } = await import('../web/js/addflow.js');
+const { startAdd } = await import('../web/js/router.js');
+const { addFromSettings } = await import('../web/js/batch.js');
+const { isMapLink } = await import('../web/js/mapflow.js');
 const { googleListId, googleListEntries } = await import('../web/js/googlelist.js');
 const { importTag } = await import('../web/js/ui.js');
 const { sourceColor, pinLook, SOURCE_GROUPS } = await import('../web/js/sources.js');

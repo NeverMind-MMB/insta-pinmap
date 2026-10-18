@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { startAdd, wireConfirm } = await import('../web/js/addflow.js');
+const { startAdd } = await import('../web/js/router.js');
+const { wireConfirm } = await import('../web/js/confirm.js');
 const { store, normalizeDb, mergeDb } = await import('../web/js/store.js');
 const { postKey, findPost, buildIndex } = await import('../web/js/dedupe.js');
 
