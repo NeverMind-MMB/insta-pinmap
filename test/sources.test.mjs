@@ -264,8 +264,8 @@ const { PIN_COLORS } = await import('../web/js/store.js');
 test('source colours: each source value the app writes gets its group\'s colour; unknown ones the grey', () => {
   const want = {
     instagram: '#8f4b6b', 'apple-ort': '#3a6ea5', 'apple-guide': '#3a6ea5',
-    'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d',
-    gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f', tiktok: '#5a5f8f', coords: '#4f7a2b',
+    'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d', 'google-list': '#2f7d5d',
+    gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', csv: '#7a4b8f', manual: '#b8543f', tiktok: '#5a5f8f', coords: '#4f7a2b',
     youtube: '#a00830', facebook: '#2f7d7a',
     'osm-link': '#4f7a2b', 'organic-maps-link': '#4f7a2b', 'comaps-link': '#4f7a2b', 'waze-link': '#4f7a2b',
     'here-link': '#4f7a2b', 'mapy-link': '#4f7a2b', 'bing-link': '#4f7a2b',
