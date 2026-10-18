@@ -102,6 +102,28 @@ test('resolve: addresses outside the short-link hosts are refused without any fe
   assert.equal(fetch.calls.length, 0);
 });
 
+test('resolve: Mapy short links (mapy.cz/s/… → mapy.com/s/… → the map) stop at the map address without fetching it', async () => {
+  const final = 'https://mapy.com/en/turisticka?source=base&id=1234&x=11.2&y=47.1&z=17';
+  const fetch = fakeFetch({ 'https://mapy.cz/s/abcdefgh': [301, 'https://mapy.com/s/abcdefgh'], 'https://mapy.com/s/abcdefgh': [301, final] });
+  const res = await handleRequest(apiRequest(resolvePath('https://mapy.cz/s/abcdefgh')), BINDINGS, { fetch });
+  assert.deepEqual(await res.json(), { ok: true, url: final });
+  assert.deepEqual(fetch.calls.map((c) => c.url), ['https://mapy.cz/s/abcdefgh', 'https://mapy.com/s/abcdefgh']);
+  const www = fakeFetch({ 'https://www.mapy.com/s/abcdefgh': [301, final] });
+  const res2 = await handleRequest(apiRequest(resolvePath('https://www.mapy.com/s/abcdefgh')), BINDINGS, { fetch: www });
+  assert.deepEqual(await res2.json(), { ok: true, url: final });
+});
+
+test('resolve: on Mapy only /s/ links are short links; other Mapy addresses and lookalikes are refused without any fetch', async () => {
+  const fetch = fakeFetch({});
+  for (const link of ['https://mapy.com/en/zakladni?x=11.2&y=47.1', 'https://mapy.cz/', 'https://mapy.com.evil.example/s/abc', 'https://notmapy.cz/s/abc']) {
+    const res = await handleRequest(apiRequest(resolvePath(link)), BINDINGS, { fetch });
+    const body = await res.json();
+    assert.equal(body.ok, false, link);
+    assert.equal(body.message, 'Only short map links can be resolved.', link);
+  }
+  assert.equal(fetch.calls.length, 0);
+});
+
 test('resolve: per-address limit, counted apart from /api/ig', async () => {
   const fetch = fakeFetch({ 'https://goo.gl/a': [302, 'https://www.google.com/maps/@1,2,3z'] });
   const headers = { 'CF-Connecting-IP': '10.9.9.9' };

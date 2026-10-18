@@ -23,6 +23,8 @@ const SHORT_LINK_HOSTS = [
   'maps.app.goo.gl', 'goo.gl', 'g.co',
   'maps.apple', 'maps.apple.com', 'guides.apple.com', 'share.apple.com',
 ];
+/** Hosts whose short links are only those under one path: any other address there is an answer, not a hop. */
+const SHORT_LINK_PATHS = { 'mapy.com': '/s/', 'mapy.cz': '/s/' };
 const MAX_HOPS = 5;
 const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const MEMORY_LIMIT = 20; // per address and minute, used when the rate-limit binding is missing
@@ -51,6 +53,13 @@ function fromOtherSite(request) {
 function isShortLinkHost(hostname) {
   const host = hostname.toLowerCase();
   return SHORT_LINK_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+}
+
+/** True for a short link the Worker follows: on a short-link host, or under the short-link path of a SHORT_LINK_PATHS host. */
+function isShortLink(url) {
+  const host = url.hostname.toLowerCase();
+  const pathHost = Object.keys(SHORT_LINK_PATHS).find((h) => host === h || host.endsWith('.' + h));
+  return pathHost ? url.pathname.startsWith(SHORT_LINK_PATHS[pathHost]) : isShortLinkHost(host);
 }
 
 /** `limiter`: a rate-limit binding; without one, an in-memory count of `max` per minute. */
@@ -116,8 +125,8 @@ async function handleResolve(url, request, bindings, deps) {
     return json({ ok: false, message: 'Invalid address.' });
   }
   if (start.protocol !== 'https:' && start.protocol !== 'http:') return json({ ok: false, message: 'Invalid address.' });
-  if (!isShortLinkHost(start.hostname)) {
-    return json({ ok: false, message: 'Only short Google Maps and Apple Maps links can be resolved.' });
+  if (!isShortLink(start)) {
+    return json({ ok: false, message: 'Only short map links can be resolved.' });
   }
 
   const failed = () => json({ ok: false, message: "Couldn't resolve this short link." });
@@ -147,7 +156,7 @@ async function handleResolve(url, request, bindings, deps) {
       return failed();
     }
     if (next.protocol !== 'https:' && next.protocol !== 'http:') return failed();
-    if (!isShortLinkHost(next.hostname)) return json({ ok: true, url: next.href });
+    if (!isShortLink(next)) return json({ ok: true, url: next.href });
     current = next;
   }
   return failed();
