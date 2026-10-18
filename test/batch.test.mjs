@@ -272,3 +272,31 @@ test('Worker routes are paced in a batch too: /api/resolve and /api/list calls e
     restore();
   }
 });
+
+test('"too many requests" from /api/post (YouTube, TikTok) is carried through: the row is read again a minute later, also when oEmbed filled in the text', async () => {
+  quick();
+  try {
+    const TT_ID = '7561234567890123456';
+    const tiktok = `https://www.tiktok.com/@synthetic.user/video/${TT_ID}`;
+    const asked = { yt: 0, tt: 0 };
+    globalThis.fetch = async (url) => {
+      const u = String(url);
+      if (u.startsWith('/api/post')) {
+        const which = u.includes('youtu') ? 'yt' : 'tt';
+        asked[which]++;
+        if (asked[which] === 1) return json({ ok: false, reason: 'rate-limit', message: 'Too many requests. Wait a minute and try again.' }, 429);
+        return json(which === 'yt'
+          ? { ok: true, kind: 'youtube', url: `https://www.youtube.com/watch?v=${YT}`, title: 'Pasta', text: '', author: 'Synthetic Channel', location: { name: 'Trattoria Sintetica', lat: 40.85, lon: 14.26 } }
+          : { ok: true, kind: 'tiktok', text: 'x', location: { name: 'Synthetic Bistro', lat: 47.5, lon: 9.7 } });
+      }
+      if (u.startsWith('https://www.youtube.com/oembed')) return json({ title: 'Pasta at Trattoria Sintetica', author_name: 'Synthetic Channel' });
+      if (u.startsWith('https://www.tiktok.com/oembed')) return json({ title: 'Lunch', author_unique_id: 'synthetic.user', embed_product_id: TT_ID, embed_type: 'video' });
+      return json({ features: [] });
+    };
+    const { opened } = await importInSettings(`https://youtu.be/${YT}\n${tiktok}`);
+    assert.deepEqual(asked, { yt: 2, tt: 2 });
+    assert.deepEqual(opened[0].e.map((r) => [r.name, r.checked]), [['Trattoria Sintetica', true], ['Synthetic Bistro', true]]);
+  } finally {
+    restore();
+  }
+});

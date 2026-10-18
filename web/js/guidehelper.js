@@ -1,7 +1,7 @@
 /**
  * guidehelper.js — the oPin guide helper: Apple Guides without an iPhone.
  *
- * A bookmarklet for a computer's browser (and Android Chrome) that does on an
+ * A bookmarklet for a computer's browser (Chrome, Edge, Firefox) that does on an
  * Apple Maps guide page what the iPhone Shortcut's Safari script does: it reads
  * the guide's data the page already has (`shell-props`), takes the places it
  * names with their position, fetches every other Apple Maps place same-origin

@@ -81,12 +81,13 @@ async function placeOfTikTokTag(tag) {
  *   {saved: existing}       known once the link was followed
  *   {confirm: cfg}          a Facebook page: a place, not a post
  *   a reading: {source, post, text, error, errorTitle?, tagged?, ready?,
- *     locationName?, firstSearch?, titleHint?}
+ *     locationName?, firstSearch?, titleHint?, limited?}
  *     post: what the pin keeps; text: where candidates, tags and the date come
  *     from; error: why the text couldn't be read (null when it could);
  *     tagged: the location tag as a place, first in the list; ready: the tag as
  *     the place itself; locationName: a tag name to search for; firstSearch: a
- *     search before anything from the text; titleHint: the title before any match
+ *     search before anything from the text; titleHint: the title before any match;
+ *     limited: the Worker said "too many requests" (the rest came from elsewhere)
  * ================================================================== */
 
 const instagram = {
@@ -169,6 +170,7 @@ const tiktok = {
       tagged,
       locationName: tagged ? '' : tagName,
       titleHint: tagged?.name || tagName,
+      limited: page?.reason === 'rate-limit',
     };
   },
 };
@@ -215,8 +217,10 @@ function social(site) {
     async read(link, { busy, done }) {
       busy(words.reading);
       let info;
+      let limited = false;
       try {
         info = await inTime(fetchSocialPost(link, postRequestKey(link)), TOO_SLOW);
+        limited = info.reason === 'rate-limit';
         // The Worker couldn't read the video: the title, at least, straight from YouTube.
         if (!info.ok && site === 'youtube') info = (await fetchYouTubeOembed(canonicalPostLink(link))) || info;
       } finally {
@@ -247,6 +251,7 @@ function social(site) {
         locationName: tag?.name || '',
         firstSearch: tag?.name && tag.address ? `${tag.name}, ${tag.address}` : '',
         titleHint: tag?.name || '',
+        limited,
       };
     },
   };
@@ -390,7 +395,7 @@ export async function postRow(link) {
     return answer({ ...page, name: best.name || page.name, address: best.address || '', lat: best.lat, lon: best.lon, warning: 'Check this place: found by the page\'s name.', checked: false, check: true });
   }
 
-  const rateLimited = reading.error?.reason === 'rate-limit';
+  const rateLimited = reading.error?.reason === 'rate-limit' || Boolean(reading.limited);
   const place = reading.tagged || reading.ready;
   if (place) return answer(placedRow(place, reading, { checked: true, warning: FROM_TAG }));
   const { candidates, countries, hintedCountries } = postCandidates(reading);

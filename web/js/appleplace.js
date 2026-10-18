@@ -336,22 +336,6 @@ export function isGuidePage(text) {
 }
 
 /**
- * True for the whole HTML of a guide page (what the Shortcut copies), not for
- * a link or short text that merely mentions a guide: it needs markup as well.
- */
-export function looksLikeGuidePage(text) {
-  const s = String(text ?? '');
-  return s.length > 1000 && /<(html|body|head|div|meta|title)\b/i.test(s) && isGuidePage(s);
-}
-
-/** The title of a guide page without Apple's " - Apple Maps" / " - Apple Karten" suffix; '' without one. */
-export function guidePageTitle(html) {
-  const m = String(html ?? '').match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  if (!m) return '';
-  return decodeEntities(m[1]).replace(/\s+/g, ' ').trim().replace(/\s+[-–—|]\s*Apple\b.*$/i, '').trim();
-}
-
-/**
  * Reads every place of an Apple Maps guide page: the list links first (page
  * order), then places only the map annotations name. Places without valid
  * coordinates are skipped; a place named twice (same ID, or same name at the
