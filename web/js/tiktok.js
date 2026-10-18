@@ -6,7 +6,8 @@
  * Seen on 2026-10-18: oEmbed refuses /photo/<id> links (the same ID asked as
  * /video/<id> works) and some short links (their expanded link works). A refused short
  * link is expanded by the Worker's /api/resolve and asked again.
- * TikTok's own location tag is not read here: it is only in the video page.
+ * TikTok's own location tag is only in the video page: the Worker's /api/post reads it
+ * (worker/post.js), best effort.
  */
 
 import { sourceOf, linkIs } from './sources.js';
@@ -51,6 +52,15 @@ export function tiktokVideo(link) {
   const bare = /^\/(?:v|video|embed|embed\/v2)\/(\d+)(?:\.html)?\/?$/i.exec(path);
   if (bare && VIDEO_ID.test(bare[1])) return { user: '', id: bare[1], kind: 'video' };
   return null;
+}
+
+/**
+ * The key a TikTok video or photo post is known by: "tt:<id>" (dedupe.js), also the key
+ * /api/post's work ticket is computed over (worker/post.js); '' for short links and the rest.
+ */
+export function tiktokPostKey(link) {
+  const video = tiktokVideo(link);
+  return video ? `tt:${video.id}` : '';
 }
 
 /** The link kept on the pin: https://www.tiktok.com/@<user>/<video|photo>/<id>. */

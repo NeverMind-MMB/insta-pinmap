@@ -1,6 +1,6 @@
 /**
- * post.js — reads a public YouTube video or Facebook post, reel or page for
- * /api/post: its text, and its location tag where there is one.
+ * post.js — reads a public YouTube video, Facebook post, reel or page, or TikTok
+ * video for /api/post: its text, and its location tag where there is one.
  *
  * Unofficial, like instagram.js: the pages can change any time. The app then
  * falls back (YouTube: oEmbed straight from the phone; otherwise the manual
@@ -9,13 +9,15 @@
  *
  * Only these hosts are ever fetched: www.youtube.com (the watch page, built
  * from the video ID), www.google.com (one Maps place page, built from the
- * Place ID) and facebook.com / fb.watch (redirects are followed only there),
+ * Place ID), facebook.com / fb.watch (redirects are followed only there) and
+ * www.tiktok.com (the video page, built from the video ID; no redirects),
  * plus a post's thumbnail when imageAsDataUrl's hosts allow it (fbcdn.net).
  * Links are never logged. Pages are read with indexOf, not parsed whole: the
  * free plan allows 10 ms of CPU per request.
  */
 
 import { youtubeId, facebookTarget, canonicalPostLink } from '../web/js/postlinks.js';
+import { tiktokVideo, tiktokLink } from '../web/js/tiktok.js';
 import { metaContent, headOnly, CRAWLER_USER_AGENTS, imageAsDataUrl } from './instagram.js';
 
 export const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
@@ -30,6 +32,8 @@ const FACEBOOK_HOSTS = new Set(['facebook.com', 'www.facebook.com', 'm.facebook.
 const VIDEO_FAILED = "Couldn't read this video.";
 const FACEBOOK_FAILED = "Couldn't read this Facebook post. Only public posts can be read.";
 const PAGE_FAILED = "Couldn't read this Facebook page.";
+const TIKTOK_FAILED = "Couldn't read this TikTok video.";
+const BAD_LINK = "That isn't a YouTube video, Facebook post or TikTok video link.";
 
 /* ------------------------------------------------------------------ *
  * Reading pages
@@ -379,12 +383,87 @@ async function readFacebook(link, fetchFn) {
 }
 
 /* ------------------------------------------------------------------ *
+ * TikTok
+ * ------------------------------------------------------------------ */
+
+/** A trimmed string, '' for anything else. */
+const textOf = (v) => (typeof v === 'string' ? v.trim() : '');
+
+/** A coordinate as a number (TikTok may send numbers or numeric strings); NaN for anything else. */
+function coordinate(v) {
+  if (typeof v === 'number') return v;
+  return typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+}
+
+/**
+ * A TikTok video page: caption, author, day and the creator's location tag (`poi` of the
+ * video's itemStruct in the rehydration JSON: name, address, city, …). Seen on 2026-10-18:
+ * no coordinates; they are taken should TikTok ever send them. Only the itemStruct is
+ * parsed (CPU budget). null when the page isn't this video's (another video, a challenge page).
+ */
+export function parseTikTokPage(html, id) {
+  const s = String(html || '');
+  const scope = s.indexOf('"webapp.video-detail"');
+  const at = scope === -1 ? -1 : s.indexOf('"itemStruct":{', scope);
+  if (at === -1) return null;
+  let item;
+  try {
+    item = JSON.parse(jsonObjectAt(s, at + '"itemStruct":'.length, 2_000_000));
+  } catch {
+    return null;
+  }
+  if (String(item?.id ?? '') !== id) return null;
+
+  const poi = item.poi && typeof item.poi === 'object' ? item.poi : {};
+  const name = textOf(poi.name);
+  let location = null;
+  if (name) {
+    location = { name };
+    const address = textOf(poi.address) || [poi.city, poi.province, poi.country].map(textOf).filter(Boolean).join(', ');
+    if (address) location.address = address;
+    const lat = coordinate(poi.latitude ?? poi.lat);
+    const lon = coordinate(poi.longitude ?? poi.lng ?? poi.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && (lat || lon)) {
+      Object.assign(location, { lat, lon });
+    }
+  }
+  return { text: textOf(item.desc), author: textOf(item.author?.uniqueId), publishedAt: dayOfUnix(item.createTime), location };
+}
+
+/**
+ * A TikTok video or photo post, best effort: TikTok hardens this page (bot checks, challenge
+ * pages), so the app reads the caption through oEmbed first and takes only what this adds.
+ */
+async function readTikTok(video, fetchFn) {
+  const failed = (reason) => ({ ok: false, reason, message: TIKTOK_FAILED });
+  let res;
+  try {
+    res = await fetchFn(tiktokLink({ user: video.user, id: video.id, kind: 'video' }), {
+      headers: { 'User-Agent': DESKTOP_UA, 'Accept-Language': LANGUAGE },
+      redirect: 'manual',
+    });
+  } catch {
+    return failed('network');
+  }
+  if (res.status !== 200) {
+    res.body?.cancel().catch(() => {});
+    return failed(`http-${res.status}`);
+  }
+  const page = parseTikTokPage(await readText(res), video.id);
+  if (!page) return failed('not-found');
+  return compact({
+    ok: true, kind: 'tiktok', url: tiktokLink({ user: page.author || video.user, id: video.id, kind: video.kind }),
+    title: '', text: page.text, author: page.author, publishedAt: page.publishedAt, location: page.location,
+  });
+}
+
+/* ------------------------------------------------------------------ *
  * Entry point
  * ------------------------------------------------------------------ */
 
 /**
- * Reads a YouTube video or a Facebook post, reel, share link or page.
- * @returns {Promise<object>} { ok: true, kind: 'youtube'|'facebook'|'facebook-page', url, title, text,
+ * Reads a YouTube video, a Facebook post, reel, share link or page, or a TikTok video or photo post.
+ * @returns {Promise<object>} { ok: true, kind: 'youtube'|'facebook'|'facebook-page'|'tiktok', url, title, text,
  *   author?, publishedAt?, thumb?, location?: { name, lat?, lon?, address?, placeId? } }
  *   or { ok: false, reason, message }
  */
@@ -392,5 +471,7 @@ export async function readPost(link, fetchFn = fetch) {
   const id = youtubeId(link);
   if (id) return readYouTube(id, fetchFn);
   if (facebookTarget(link)) return readFacebook(link, fetchFn);
-  return { ok: false, reason: 'bad-link', message: "That isn't a YouTube video or Facebook post link." };
+  const video = tiktokVideo(link);
+  if (video) return readTikTok(video, fetchFn);
+  return { ok: false, reason: 'bad-link', message: BAD_LINK };
 }

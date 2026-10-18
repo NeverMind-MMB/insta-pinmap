@@ -8,8 +8,8 @@
  *   /api/guide    the place links of an Apple guide link, read from the link
  *                 itself (for the iPhone Shortcut; Apple is never contacted)
  *   /api/list     the places of a shared Google Maps list (worker/googlelist.js)
- *   /api/post     text and location tag of a YouTube video or Facebook post or
- *                 page (needs a work ticket; see post.js)
+ *   /api/post     text and location tag of a YouTube video, Facebook post or
+ *                 page, or TikTok video (needs a work ticket; see post.js)
  *
  * Apple Maps places of Apple Guides are not looked up here: maps.apple.com
  * refuses Cloudflare's servers (see web/js/appleplace.js).
@@ -24,6 +24,7 @@ import { googleListId } from '../web/js/googlelist.js';
 import { getlistUrl, parseGoogleList, isMissingList, readCapped } from './googlelist.js';
 import { readPost } from './post.js';
 import { postRequestKey } from '../web/js/postlinks.js';
+import { tiktokPostKey } from '../web/js/tiktok.js';
 
 /** Short-link hosts the Worker follows. Any other host ends the walk. */
 const SHORT_LINK_HOSTS = [
@@ -275,9 +276,9 @@ async function handlePost(url, request, bindings, deps) {
   const difficultyHeader = { 'X-Work-Difficulty': String(difficulty) };
   if (await overLimit(bindings.POST_LIMIT, `post:${clientAddress(request)}`, POST_MEMORY_LIMIT)) return tooMany(difficultyHeader);
   const link = url.searchParams.get('url') || '';
-  const key = postRequestKey(link);
+  const key = postRequestKey(link) || tiktokPostKey(link);
   if (!key) {
-    return json({ ok: false, reason: 'bad-link', message: "That isn't a YouTube video or Facebook post link." }, 400, difficultyHeader);
+    return json({ ok: false, reason: 'bad-link', message: "That isn't a YouTube video, Facebook post or TikTok video link." }, 400, difficultyHeader);
   }
   const nowMinute = ticketMinute();
   const valid = await verifyTicket({

@@ -9,7 +9,7 @@
 
 import { sourceOf } from './sources.js';
 import { socialPostKey } from './postlinks.js';
-import { tiktokVideo } from './tiktok.js';
+import { tiktokPostKey } from './tiktok.js';
 
 /* ------------------------------------------------------------------ *
  * Instagram links
@@ -55,8 +55,7 @@ export function isInstagramLink(input) {
  * key get it when the data is read (store.js normalizeDb).
  */
 export function postKey(input) {
-  const tiktok = tiktokVideo(input);
-  return shortcode(input) || socialPostKey(input) || (tiktok ? `tt:${tiktok.id}` : null);
+  return shortcode(input) || socialPostKey(input) || tiktokPostKey(input) || null;
 }
 
 /* ------------------------------------------------------------------ *

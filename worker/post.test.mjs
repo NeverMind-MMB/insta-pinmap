@@ -408,3 +408,98 @@ test('wrangler.toml declares POST_LIMIT: namespace 1004, 20 a minute', () => {
   assert.match(block, /namespace_id = "1004"/);
   assert.match(block, /simple = \{ limit = 20, period = 60 \}/);
 });
+
+/* ---------- TikTok: the video page's location tag (poi) ---------- */
+
+const TT_ID = '7561234567890123456';
+const TT_USER = 'synthetic.user';
+const TT_PAGE_URL = `https://www.tiktok.com/@${TT_USER}/video/${TT_ID}`;
+const TT_POI = {
+  name: 'Trattoria Sintetica', address: 'Via Finta 1, 40100, Testopoli, Italia', city: 'Testopoli', province: '', country: '',
+  id: '22000000000000001', fatherPoiId: '', fatherPoiName: 'Testopoli', type: 0, category: 'Food', cityCode: '1',
+  countryCode: '2', ttTypeCode: '000000', typeCode: '', ttTypeNameTiny: 'Restaurant', ttTypeNameMedium: 'Restaurant', ttTypeNameSuper: 'Food',
+};
+
+/** A TikTok video page as a desktop browser gets it, cut down: the rehydration JSON with the video's itemStruct. */
+function tiktokPage({ id = TT_ID, desc = 'Lunch with a view #foodtok #testopoli', poi = TT_POI, createTime = '1760270400' } = {}) {
+  const item = {
+    id, desc, createTime, scheduleTime: 0,
+    video: { id, playAddr: `https://v16.example/video/${'y'.repeat(3000)}`, cover: 'https://p16.example/cover' },
+    author: { id: '100000000000000001', uniqueId: TT_USER, nickname: 'Synthetic Name', signature: 'Food "and" travel' },
+    music: { id: '1', title: 'original sound', authorName: 'Synthetic Name' },
+    challenges: [{ id: '1', title: 'foodtok' }], stats: { diggCount: 1 },
+    ...(poi ? { poi, contentLocation: { address: { addressLocality: poi.city, streetAddress: `${poi.name}, ${poi.address}` } } } : {}),
+    locationCreated: 'IT', contents: [{ desc }],
+  };
+  const data = { __DEFAULT_SCOPE__: {
+    'webapp.app-context': { language: 'en', region: 'IT' },
+    'webapp.video-detail': { itemInfo: { itemStruct: item }, shareMeta: { title: 'Synthetic Name on TikTok', desc }, statusCode: 0, statusMsg: '' },
+  } };
+  return `<!DOCTYPE html><html lang="en"><head><title>Synthetic Name on TikTok</title></head><body>${'<div>x</div>'.repeat(200)}` +
+    `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify(data)}</script></body></html>`;
+}
+
+const { parseTikTokPage } = await import('./post.js');
+
+test('parseTikTokPage: caption, author, day and the location tag (name and address; TikTok gives no coordinates)', () => {
+  assert.deepEqual(parseTikTokPage(tiktokPage(), TT_ID), {
+    text: 'Lunch with a view #foodtok #testopoli', author: TT_USER, publishedAt: '2025-10-12',
+    location: { name: 'Trattoria Sintetica', address: 'Via Finta 1, 40100, Testopoli, Italia' },
+  });
+  const cityOnly = parseTikTokPage(tiktokPage({ poi: { ...TT_POI, name: 'Testopoli', address: '', province: 'Testregion', country: 'Italia' } }), TT_ID);
+  assert.deepEqual(cityOnly.location, { name: 'Testopoli', address: 'Testopoli, Testregion, Italia' }, 'a city-only tag');
+  const withPoint = parseTikTokPage(tiktokPage({ poi: { ...TT_POI, latitude: '44.4949', longitude: 11.3426 } }), TT_ID);
+  assert.deepEqual([withPoint.location.lat, withPoint.location.lon], [44.4949, 11.3426], 'coordinates, should TikTok ever send them');
+  const zero = parseTikTokPage(tiktokPage({ poi: { ...TT_POI, latitude: 0, longitude: 0 } }), TT_ID);
+  assert.equal('lat' in zero.location, false, 'never 0,0');
+  assert.equal(parseTikTokPage(tiktokPage({ poi: null }), TT_ID).location, null, 'no tag');
+  assert.equal(parseTikTokPage(tiktokPage({ poi: { ...TT_POI, name: '  ' } }), TT_ID).location, null, 'a tag without a name');
+  assert.equal(parseTikTokPage(tiktokPage(), '7000000000000000001'), null, "another video's page");
+  assert.equal(parseTikTokPage('<html><body>Please wait…</body></html>', TT_ID), null, 'a challenge page');
+});
+
+test('readPost TikTok: only the video page on www.tiktok.com (desktop browser), no redirects followed', async () => {
+  const fetch = fakeFetch({ [TT_PAGE_URL]: tiktokPage() });
+  const post = await readPost(`${TT_PAGE_URL}?is_from_webapp=1&sender_device=pc`, fetch);
+  assert.deepEqual(post, {
+    ok: true, kind: 'tiktok', url: TT_PAGE_URL, title: '', text: 'Lunch with a view #foodtok #testopoli', author: TT_USER,
+    publishedAt: '2025-10-12', location: { name: 'Trattoria Sintetica', address: 'Via Finta 1, 40100, Testopoli, Italia' },
+  });
+  assert.deepEqual(fetch.calls.map((c) => c.url), [TT_PAGE_URL]);
+  assert.match(fetch.calls[0].init.headers['User-Agent'], /^Mozilla\/5\.0 \(Windows/);
+  assert.equal(fetch.calls[0].init.redirect, 'manual');
+  // A link without the user name: TikTok's page answers for "@" too.
+  const bare = fakeFetch({ [`https://www.tiktok.com/@/video/${TT_ID}`]: tiktokPage() });
+  assert.equal((await readPost(`https://m.tiktok.com/v/${TT_ID}.html`, bare)).location.name, 'Trattoria Sintetica');
+  // A photo post is asked as a video page.
+  const photo = fakeFetch({ [TT_PAGE_URL]: tiktokPage() });
+  assert.equal((await readPost(`https://www.tiktok.com/@${TT_USER}/photo/${TT_ID}`, photo)).url, `https://www.tiktok.com/@${TT_USER}/photo/${TT_ID}`);
+});
+
+test('readPost TikTok: a redirect, an error, a challenge page or a page without a tag; short links are not read here', async () => {
+  for (const route of [[302, 'https://www.tiktok.com/login'], [403], () => new Response('<html>Please wait…</html>', { status: 200 })]) {
+    const fetch = fakeFetch({ [TT_PAGE_URL]: route });
+    const post = await readPost(TT_PAGE_URL, fetch);
+    assert.equal(post.ok, false);
+    assert.equal(post.message, "Couldn't read this TikTok video.");
+    assert.equal(fetch.calls.length, 1, 'nothing else fetched');
+  }
+  const untagged = await readPost(TT_PAGE_URL, fakeFetch({ [TT_PAGE_URL]: tiktokPage({ poi: null }) }));
+  assert.equal(untagged.ok, true);
+  assert.equal('location' in untagged, false);
+  const none = fakeFetch({});
+  for (const link of ['https://vm.tiktok.com/ZMsynth01/', `https://www.tiktok.com/@${TT_USER}`, 'https://www.tiktok.com.evil.example/@x/video/1234567']) {
+    assert.equal((await readPost(link, none)).reason, 'bad-link', link);
+  }
+  assert.equal(none.calls.length, 0);
+});
+
+test('/api/post: a TikTok video\'s ticket is computed over tt:<id>; a ticket for another key is refused', async () => {
+  const fetch = fakeFetch({ [TT_PAGE_URL]: tiktokPage() });
+  const ok = await handleRequest(apiRequest(await ticketPath(TT_PAGE_URL, `tt:${TT_ID}`)), BINDINGS, { fetch });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).location.name, 'Trattoria Sintetica');
+  const wrong = await handleRequest(apiRequest(await ticketPath(TT_PAGE_URL, 'tt:7000000000000000001')), BINDINGS, { fetch });
+  assert.equal(wrong.status, 403);
+  for (const c of fetch.calls) assert.equal(new URL(c.url).hostname, 'www.tiktok.com');
+});
