@@ -23,7 +23,8 @@ export function issuesSearchUrl(site) {
 /**
  * The sources a link can come from. Which one a link belongs to is decided by
  * its prefix and nothing else (sourceOf): a host and the start of a path,
- * where "*" in the host stands for a domain ending ("com", "de", "co.uk").
+ * where "*" in the host stands for a domain ending ("com", "de", "co.uk"),
+ * or a scheme other than http(s) such as "geo:".
  * Reading the link (post codes, coordinates, guides) comes after, in that
  * source's reader. A new source is one more entry.
  *   name: what the add-pin animation says for it; logo: the image it shows instead (256 px box,
@@ -69,6 +70,9 @@ export const SOURCE_GROUPS = [
   { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
   { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson'] },
   { id: 'search', name: 'Place search', color: '#b8543f', sources: ['manual'] },
+  // Coordinates, geo: links and Plus Codes typed or pasted into the input bar (coords.js).
+  // "geo:" is a scheme prefix: every geo: link is theirs.
+  { id: 'coords', name: 'Coordinates', color: '#4f7a2b', sources: ['coords'], prefixes: ['geo:'] },
 ];
 
 /** The colour of pins from a source the table doesn't know. */
@@ -116,13 +120,14 @@ export function findLinks(text) {
     const token = (at === -1 ? word : word.slice(at)).replace(/[),.]+$/, '');
     if (!token) continue;
     if (at !== -1) links.push(token);
-    else if (sourceOf(token)) links.push(`https://${token}`);
+    else if (linkParts(token) && sourceOf(token)) links.push(`https://${token}`);   // not "https://geo:…"
   }
   return links;
 }
 
 function prefixMatches(prefix, { host, path }) {
   const slash = prefix.indexOf('/');
+  if (slash === -1) return false;   // a scheme prefix ("geo:"): schemeMatch
   const wantHost = prefix.slice(0, slash);
   if (wantHost.endsWith('*')) {
     const stem = wantHost.slice(0, -1);
@@ -136,7 +141,7 @@ function prefixMatches(prefix, { host, path }) {
 /** The longest prefix `link` starts with, and its source group; null when there is none. */
 function matchPrefix(link) {
   const parts = linkParts(link);
-  if (!parts) return null;
+  if (!parts) return schemeMatch(link);
   let best = null;
   for (const group of SOURCE_GROUPS) {
     for (const prefix of group.prefixes || []) {
@@ -146,7 +151,17 @@ function matchPrefix(link) {
   return best;
 }
 
-/** The source a link belongs to ("instagram", "apple", "google"), by its longest matching prefix; null for none. */
+/** A link that isn't http(s) whose scheme is a group's scheme prefix ("geo:…", in any case), and that group; null otherwise. */
+function schemeMatch(link) {
+  const s = String(link ?? '').trim().toLowerCase();
+  for (const group of SOURCE_GROUPS) {
+    const prefix = (group.prefixes || []).find((p) => !p.includes('/') && p.endsWith(':') && s.startsWith(p));
+    if (prefix) return { group, prefix };
+  }
+  return null;
+}
+
+/** The source a link belongs to ("instagram", "apple", "google", "coords"), by its longest matching prefix; null for none. */
 export function sourceOf(link) {
   return matchPrefix(link)?.group.id ?? null;
 }
@@ -177,6 +192,7 @@ export const SUPPORTED_SOURCES = [
     items: [
       'instagram.com/p/…', 'instagram.com/reel/…', 'maps.apple.com/… (places and guides)', 'guides.apple.com/…',
       'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…',
+      'geo:…', 'coordinates (latitude first)', 'Plus Codes',
     ],
     note: 'or type a place name to search',
   },
