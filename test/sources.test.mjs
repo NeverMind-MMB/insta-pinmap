@@ -7,6 +7,7 @@ import { isInstagramLink } from '../web/js/dedupe.js';
 import { isTikTokLink, tiktokVideo } from '../web/js/tiktok.js';
 import { readLink, readFile } from '../web/js/importers.js';
 import { googleListId } from '../web/js/googlelist.js';
+import { isSocialLink, postRequestKey } from '../web/js/postlinks.js';
 import { ugLink, pbText, pbIdRef, pbPin } from './ug.mjs';
 
 const GUIDE = ugLink([pbText(1, 'Synthetic Guide'), pbIdRef(9902, '1001'), pbPin('Pin?', 'Street 1, Town', 47.1, 11.1)]);
@@ -47,6 +48,15 @@ const LINK_SAMPLES = {
   'geo:…': ['geo:48.1372,11.5755', 'geo:0,0?q=48.1372,11.5755(Synthetic%20Cafe)'],
   'coordinates (latitude first)': ['48.1372, 11.5755', `48°08'14"N 11°34'32"E`],
   'Plus Codes': ['8FWH4HPM+QR', '4HX8+QH Synthetic Town'],
+  'youtube.com/watch?v=…': ['https://www.youtube.com/watch?v=AbCdEfGh_-1', 'https://m.youtube.com/watch?v=AbCdEfGh_-1'],
+  'youtube.com/shorts/…': ['https://youtube.com/shorts/AbCdEfGh_-1?si=Synthetic'],
+  'youtube.com/live/…': ['https://www.youtube.com/live/AbCdEfGh_-1'],
+  'youtu.be/…': ['https://youtu.be/AbCdEfGh_-1?si=Synthetic'],
+  'facebook.com/… (public posts, reels and pages)': [
+    'https://www.facebook.com/SyntheticPage/posts/1234567890123456', 'https://www.facebook.com/reel/987654321098765/',
+    'https://www.facebook.com/share/r/SynThCode1/', 'https://www.facebook.com/SyntheticCafe',
+  ],
+  'fb.watch/…': ['https://fb.watch/SynThW1/'],
 };
 const { readCoords } = await import('../web/js/coords.js');
 
@@ -66,6 +76,10 @@ test('every link form listed for the input bar is one the input bar reads', () =
       if (googleListId(link)) { assert.ok(isMapLink(link), `${item}: ${link}`); continue; } // read whole: /api/list
       if (isTikTokLink(link)) {
         assert.ok(tiktokVideo(link) || linkIs(link, 'short'), `${item}: ${link} is a TikTok video or short link`);
+        continue;
+      }
+      if (isSocialLink(link)) {
+        assert.ok(postRequestKey(link), `${item}: ${link} is a video, post or page /api/post reads`);
         continue;
       }
       if (['point', 'short'].includes(readCoords(link)?.kind)) continue;
@@ -148,7 +162,7 @@ const { isAppleGuideLink, isGoogleShortLink } = await import('../web/js/importer
 
 test('sourceOf: every prefix in the table maps to its group', () => {
   const linked = SOURCE_GROUPS.filter((g) => g.prefixes?.length);
-  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google', 'tiktok', 'maps', 'coords']);
+  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google', 'tiktok', 'youtube', 'facebook', 'maps', 'coords']);
   for (const g of linked) {
     for (const prefix of g.prefixes) {
       // A scheme prefix ("geo:") stands for links of that scheme.
@@ -197,6 +211,15 @@ test('sourceOf: real link forms of each source', () => {
     'https://mapy.com/s/abc': 'maps',
     'https://en.mapy.cz/zakladni?x=11.2&y=47.1': 'maps',
     'https://www.bing.com/maps?cp=47.1~11.2': 'maps',
+    'https://www.youtube.com/watch?v=AbCdEfGh_-1': 'youtube',
+    'https://m.youtube.com/watch?v=AbCdEfGh_-1': 'youtube',
+    'https://youtube.com/shorts/AbCdEfGh_-1': 'youtube',
+    'https://youtu.be/AbCdEfGh_-1?si=x': 'youtube',
+    'https://www.youtube.com/@synthetic.channel': 'youtube',
+    'https://www.facebook.com/reel/987654321098765/': 'facebook',
+    'https://m.facebook.com/share/r/SynThCode1/': 'facebook',
+    'https://www.facebook.com/SyntheticCafe': 'facebook',
+    'https://fb.watch/SynThW1/': 'facebook',
   };
   for (const [link, group] of Object.entries(cases)) assert.equal(sourceOf(link), group, link);
 });
@@ -212,6 +235,8 @@ test('sourceOf: lookalikes and other sites have no source', () => {
     'https://notinstagram.com/p/x', 'https://instagram.com.evil.example/p/x', 'https://www.pinterest.com/pin/1/', 'https://pin.it/x',
     'https://maps.apple/p/x', 'https://maps.apple.com.evil.example/place?ll=1,2', 'https://google.evil.example/maps',
     'https://www.google.com/search?q=maps', 'https://goo.gl/abc', 'ftp://instagram.com/p/x', 'Cafe Luitpold', '', null,
+    'https://youtube.com.evil.example/watch?v=AbCdEfGh_-1', 'https://notyoutube.com/watch?v=x', 'https://facebook.com.evil.example/x',
+    'https://notfacebook.com/x', 'https://music.youtube.com/watch?v=AbCdEfGh_-1', 'https://vimeo.com/123456',
   ]) {
     assert.equal(sourceOf(link), null, String(link));
   }
@@ -241,6 +266,7 @@ test('source colours: each source value the app writes gets its group\'s colour;
     instagram: '#8f4b6b', 'apple-ort': '#3a6ea5', 'apple-guide': '#3a6ea5',
     'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d',
     gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f', tiktok: '#5a5f8f', coords: '#4f7a2b',
+    youtube: '#c0603f', facebook: '#2f7d7a',
     'osm-link': '#4f7a2b', 'organic-maps-link': '#4f7a2b', 'comaps-link': '#4f7a2b', 'waze-link': '#4f7a2b',
     'here-link': '#4f7a2b', 'mapy-link': '#4f7a2b', 'bing-link': '#4f7a2b',
   };
@@ -250,9 +276,11 @@ test('source colours: each source value the app writes gets its group\'s colour;
 
 test('source colours: one per group, all different (coordinates share the map apps\' olive), all from the palette', () => {
   const colors = SOURCE_GROUPS.filter((g) => g.id !== 'coords').map((g) => g.color);
-  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id), ['instagram', 'apple', 'google', 'tiktok', 'gps', 'files', 'search', 'maps', 'coords']);
+  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id),
+    ['instagram', 'apple', 'google', 'tiktok', 'youtube', 'facebook', 'gps', 'files', 'search', 'maps', 'coords']);
   assert.equal(SOURCE_GROUPS.find((g) => g.id === 'coords').color, SOURCE_GROUPS.find((g) => g.id === 'maps').color);
   assert.equal(new Set(colors).size, colors.length);
+  // Every source colour can also be picked by hand.
   for (const c of colors) assert.ok(PIN_COLORS.some((p) => p.color === c), c);
 });
 
@@ -294,6 +322,8 @@ test('pinLook: Google Maps, Apple Maps and Instagram show their logo; other sour
   assert.deepEqual(pinLook('apple-guide'), { logo: '/icons/sources/apple.png', caption: '' });
   assert.deepEqual(pinLook('apple-ort'), { logo: '/icons/sources/apple.png', caption: '' });
   assert.deepEqual(pinLook('instagram'), { logo: '/icons/sources/instagram.png', caption: '' });
+  assert.deepEqual(pinLook('youtube'), { logo: '/icons/sources/youtube.png', caption: '' });
+  assert.deepEqual(pinLook('facebook'), { logo: '/icons/sources/facebook.png', caption: '' });
   assert.deepEqual(pinLook('gpx'), { logo: '', caption: 'GPS file' });
   assert.deepEqual(pinLook('kml'), { logo: '', caption: 'Map file' });
   assert.deepEqual(pinLook('manual'), { logo: '', caption: 'Place search' });

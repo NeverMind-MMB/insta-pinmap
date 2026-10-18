@@ -28,3 +28,9 @@ simple = { limit = 30, period = 60 }
 name = "LIST_LIMIT"
 namespace_id = "1003"
 simple = { limit = 20, period = 60 }
+
+# Per-address limit for /api/post (YouTube and Facebook; same note as above).
+[[ratelimits]]
+name = "POST_LIMIT"
+namespace_id = "1004"
+simple = { limit = 20, period = 60 }

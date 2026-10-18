@@ -22,6 +22,7 @@
     "/js/map.js",
     "/js/maplinks.js",
     "/js/pinwheel.js",
+    "/js/postlinks.js",
     "/js/sha256.js",
     "/js/sources.js",
     "/js/store.js",
@@ -47,6 +48,8 @@
     "/icons/settings.png",
     "/icons/sources/google.png",
     "/icons/sources/apple.png",
-    "/icons/sources/instagram.png"
+    "/icons/sources/instagram.png",
+    "/icons/sources/youtube.png",
+    "/icons/sources/facebook.png"
   ]
 }

@@ -8,6 +8,7 @@
  */
 
 import { sourceOf } from './sources.js';
+import { socialPostKey } from './postlinks.js';
 
 /* ------------------------------------------------------------------ *
  * Instagram links
@@ -45,6 +46,15 @@ export function isInstagramLink(input) {
   return sourceOf(input) === 'instagram';
 }
 
+/**
+ * The key a saved post is known by (postIndex, a post's `shortcode` field):
+ * an Instagram post's bare shortcode (old pins and backups keep working);
+ * "yt:<id>" / "fb:<id>" for YouTube videos and Facebook posts (postlinks.js).
+ */
+export function postKey(input) {
+  return shortcode(input) || socialPostKey(input) || null;
+}
+
 /* ------------------------------------------------------------------ *
  * Distance
  * ------------------------------------------------------------------ */
@@ -79,7 +89,7 @@ export function distanceText(m) {
  * @returns {{pin: object, post: object}|null}
  */
 export function findPost(db, link) {
-  const code = shortcode(link);
+  const code = postKey(link);
   if (!code) return null;
 
   // Fast path via the index ...
@@ -87,7 +97,7 @@ export function findPost(db, link) {
   if (pinId) {
     const pin = db.pins.find((p) => p.id === pinId);
     if (pin) {
-      const post = (pin.posts || []).find((x) => shortcode(x.url) === code);
+      const post = (pin.posts || []).find((x) => postKey(x.url) === code);
       if (post) return { pin, post };
     }
   }
@@ -95,7 +105,7 @@ export function findPost(db, link) {
   // behind (for example after a manual import).
   for (const pin of db.pins) {
     for (const post of pin.posts || []) {
-      if (shortcode(post.url) === code) return { pin, post };
+      if (postKey(post.url) === code) return { pin, post };
     }
   }
   return null;
@@ -106,7 +116,7 @@ export function buildIndex(db) {
   const idx = {};
   for (const pin of db.pins) {
     for (const post of pin.posts || []) {
-      const code = shortcode(post.url);
+      const code = postKey(post.url);
       if (code && !idx[code]) idx[code] = pin.id;
     }
   }

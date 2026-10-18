@@ -15,6 +15,7 @@ import {
 } from './appleplace.js';
 import { formatDay } from './extract.js';
 import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR, pinLook, linkSourceName } from './sources.js';
+import { postLinkText, postSiteName } from './postlinks.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -387,7 +388,10 @@ export function showDetail(pinId, env) {
       a.href = post.url;
       a.target = '_blank';
       a.rel = 'noopener';
-      a.textContent = post.username ? `@${post.username}` : `Open on ${linkSourceName(post.url) || 'Instagram'}`;
+      // YouTube/Facebook by postlinks.js; Instagram and TikTok by their username or the source's name.
+      a.textContent = postSiteName(post.url)
+        ? postLinkText(post.url, post.username)
+        : (post.username ? `@${post.username}` : `Open on ${linkSourceName(post.url) || 'Instagram'}`);
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'btn btn--small btn--danger';

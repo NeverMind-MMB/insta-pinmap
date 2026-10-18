@@ -560,7 +560,7 @@ test('the input bar: one link to a site this version doesn\'t read opens the uns
   for (const [text, link] of [
     ['https://www.pinterest.com/pin/123456789/', 'https://www.pinterest.com/pin/123456789/'],
     ['https://pin.it/AbCdEf', 'https://pin.it/AbCdEf'],
-    ['https://www.youtube.com/watch?v=abc123', 'https://www.youtube.com/watch?v=abc123'],
+    ['https://vimeo.com/123456789', 'https://vimeo.com/123456789'],
     ['https://maps.apple/p/AbCdEf1234', 'https://maps.apple/p/AbCdEf1234'],
     ['Look at this: https://pin.it/AbCdEf, nice', 'https://pin.it/AbCdEf'],
   ]) {

@@ -261,11 +261,11 @@ test('colour picker: "Auto" in the source colour first, then the palette colours
       const [input, dot, name] = label.children;
       return { type: input.type, group: input.name, value: input.value, checked: input.checked, dot: dot.style.background, name: name.textContent };
     });
-    assert.equal(options.length, 10);
+    assert.equal(options.length, 11);
     assert.deepEqual(options[0], { type: 'radio', group: 'detail-color', value: '', checked: true, dot: '#a3762b', name: 'Auto (source colour)' });
     assert.deepEqual(options.slice(1).map((o) => [o.name, o.value]), [
       ['Rust', '#b8543f'], ['Amber', '#a3762b'], ['Olive', '#4f7a2b'], ['Green', '#2f7d5d'],
-      ['Teal', '#2f7d7a'], ['Blue', '#3a6ea5'], ['Slate', '#5a5f8f'], ['Purple', '#7a4b8f'], ['Plum', '#8f4b6b'],
+      ['Teal', '#2f7d7a'], ['Blue', '#3a6ea5'], ['Slate', '#5a5f8f'], ['Orange', '#c0603f'], ['Purple', '#7a4b8f'], ['Plum', '#8f4b6b'],
     ]);
     assert.equal(pickedColor(box), '', 'Auto');
     box.children[0].children[0].checked = false;
