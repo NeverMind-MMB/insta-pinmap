@@ -69,6 +69,19 @@ export const SOURCE_GROUPS = [
   { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
   { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson', 'csv'] },
   { id: 'search', name: 'Place search', color: '#b8543f', sources: ['manual'] },
+  {
+    // Other map apps: their links carry the exact point (maplinks.js reads them).
+    id: 'maps',
+    name: 'Map app',
+    color: '#4f7a2b',
+    sources: ['osm-link', 'organic-maps-link', 'comaps-link', 'waze-link', 'here-link', 'mapy-link', 'bing-link'],
+    prefixes: [
+      'openstreetmap.org/', 'osm.org/', 'omaps.app/', 'ge0.me/', 'comaps.at/', 'waze.com/', 'ul.waze.com/',
+      'share.here.com/', 'wego.here.com/', 'mapy.com/', 'mapy.cz/', 'en.mapy.cz/', 'bing.com/maps',
+      'mapy.com/s/', 'mapy.cz/s/', 'en.mapy.cz/s/',
+    ],
+    short: ['mapy.com/s/', 'mapy.cz/s/', 'en.mapy.cz/s/'],
+  },
 ];
 
 /** The colour of pins from a source the table doesn't know. */
@@ -166,6 +179,12 @@ export function siteOf(link) {
   }
 }
 
+/** The links of other map apps (group "maps"), for both link lists below. */
+const MAP_APP_LINKS = [
+  'openstreetmap.org/…', 'osm.org/go/…', 'omaps.app/… (Organic Maps)', 'comaps.at/… (CoMaps)', 'waze.com/…',
+  'share.here.com/…', 'wego.here.com/…', 'mapy.com/…', 'mapy.cz/…', 'bing.com/maps…',
+];
+
 /**
  * The supported links and files, grouped by where they go in.
  * @type {Array<{id: string, title: string, items: string[], note?: string}>}
@@ -178,13 +197,14 @@ export const SUPPORTED_SOURCES = [
       'instagram.com/p/…', 'instagram.com/reel/…', 'maps.apple.com/… (places and guides)', 'guides.apple.com/…',
       'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…',
       'google.com/maps/placelists/… (shared lists)',
+      ...MAP_APP_LINKS,
     ],
     note: 'or type a place name to search',
   },
   {
     id: 'several',
     title: 'Several links at once (Settings → Import)',
-    items: ['maps.apple.com/… place links', 'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…'],
+    items: ['maps.apple.com/… place links', 'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…', ...MAP_APP_LINKS],
   },
   {
     id: 'files',

@@ -741,3 +741,142 @@ test('waiting for the helper shows the pinwheel turning in a "busy" toast (here:
   await startAdd('https://maps.app.goo.gl/deadLink123', ui);
   assert.deepEqual(toasts[0], ['Resolving the short link …', 'busy']);
 });
+
+/* ---------- 2.2.0: links from other map apps (maplinks.js) ---------- */
+
+const jsonResponse = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+const MAPY_COOR = 'https://mapy.com/en/turisticka?source=coor&id=11.21%2C47.11&x=11.2&y=47.1&z=17';
+
+/** The input bar with a confirm dialog; fetch answers through `answer(url)`. Returns the dialog's fields and what was fetched. */
+async function mapAppInBar(text, answer = () => []) {
+  const { wireConfirm } = await import('../web/js/addflow.js');
+  const { store, normalizeDb } = await import('../web/js/store.js');
+  const doc = confirmDocument();
+  globalThis.document = doc;
+  store.db = normalizeDb({});
+  const calls = [];
+  globalThis.fetch = async (url) => { calls.push(String(url)); return jsonResponse(answer(String(url))); };
+  try {
+    const { toasts, ui } = fakeUi();
+    const appEnv = { ...ui, redraw() {}, inputDone() {}, showUnsupported: () => assert.fail('a supported link') };
+    wireConfirm(appEnv);
+    await startAdd(text, appEnv);
+    const open = doc.getElementById('dlg-confirm').open;
+    const result = {
+      open, calls, toasts,
+      title: doc.getElementById('confirm-title').value,
+      coords: doc.getElementById('confirm-coords').textContent,
+      auto: doc.getElementById('confirm-color').children[0]?.children[0].children[1].style.background,
+    };
+    if (open) doc.getElementById('confirm-save').fire('click');
+    result.pins = store.db.pins;
+    return result;
+  } finally {
+    delete globalThis.document;
+    clearTimeout(store._saveTimer);
+    store._saveTimer = null;
+  }
+}
+
+test('the input bar: an OpenStreetMap node is looked up on OpenStreetMap; Confirm place has its name and point, no place search', async () => {
+  const r = await mapAppInBar('https://www.openstreetmap.org/node/1234567890', (url) =>
+    (url.includes('nominatim.openstreetmap.org/lookup') ? [{ lat: '47.1234', lon: '11.5678', name: 'Synthetic Peak', display_name: 'Synthetic Peak, Testtown' }] : []));
+  assert.equal(r.open, true);
+  assert.equal(r.title, 'Synthetic Peak');
+  assert.equal(r.coords, '47.12340, 11.56780');
+  assert.deepEqual(r.calls, ['https://nominatim.openstreetmap.org/lookup?osm_ids=N1234567890&format=jsonv2']);
+  assert.deepEqual(r.toasts[0], ['Looking up the place on OpenStreetMap …', 'busy']);
+  assert.equal(r.auto, '#4f7a2b', 'Auto shows the map apps\' olive');
+  assert.deepEqual(r.pins.map((p) => [p.title, p.lat, p.lon, p.address, p.source]),
+    [['Synthetic Peak', 47.1234, 11.5678, 'Synthetic Peak, Testtown', 'osm-link']]);
+});
+
+test('the input bar: links with their own coordinates open Confirm place straight away, nothing fetched', async () => {
+  for (const [link, title, coords] of [
+    ['https://www.openstreetmap.org/?mlat=47.1&mlon=11.2#map=17/47.1/11.2', 'OpenStreetMap place', '47.10000, 11.20000'],
+    ['https://comaps.at/map?ll=47.1,11.2&n=Synthetic%20Hut', 'Synthetic Hut', '47.10000, 11.20000'],
+    ['https://share.here.com/l/47.1,11.2,Synthetic%20Cafe', 'Synthetic Cafe', '47.10000, 11.20000'],
+    ['https://www.bing.com/maps?cp=47.1~11.2&where1=Synthetic%20Bar', 'Synthetic Bar', '47.10000, 11.20000'],
+    ['see waze.com/ul?ll=47.1,11.2 there', 'Waze place', '47.10000, 11.20000'],
+  ]) {
+    const r = await mapAppInBar(link);
+    assert.equal(r.open, true, link);
+    assert.equal(r.title, title, link);
+    assert.equal(r.coords, coords, link);
+    assert.deepEqual(r.calls, [], link);
+  }
+});
+
+test('the input bar: a Mapy short link is expanded by the helper; Mapy\'s share text needs no request at all', async () => {
+  let r = await mapAppInBar('https://mapy.cz/s/abcdefgh', (url) => (url.startsWith('/api/resolve') ? { ok: true, url: MAPY_COOR } : []));
+  assert.equal(r.open, true);
+  assert.equal(r.coords, '47.11000, 11.21000');
+  assert.deepEqual(r.calls, [`/api/resolve?url=${encodeURIComponent('https://mapy.cz/s/abcdefgh')}`]);
+  assert.deepEqual(r.toasts[0], ['Resolving the short link …', 'busy']);
+  r = await mapAppInBar('Synthetic Hut 47.1234567N, 11.7654321E https://mapy.com/s/abcdefgh');
+  assert.equal(r.title, 'Synthetic Hut');
+  assert.equal(r.coords, '47.12346, 11.76543');
+  assert.deepEqual(r.calls, []);
+});
+
+test('the input bar: Waze\'s share text names the place', async () => {
+  const r = await mapAppInBar('Use Waze to drive to Synthetic Cafe: https://waze.com/ul/hu0qt1v6ps2');
+  assert.equal(r.open, true);
+  assert.equal(r.title, 'Synthetic Cafe');
+  assert.deepEqual(r.calls, []);
+  assert.equal(r.pins[0].source, 'waze-link');
+});
+
+test('the input bar: a map app link without a place, a lookup that finds nothing, a short link that leads nowhere: an error toast', async () => {
+  const opened = [];
+  globalThis.document = { getElementById: (id) => { opened.push(id); throw new Error('confirm dialog reached'); } };
+  try {
+    for (const [link, answer, message] of [
+      ['https://www.waze.com/ul?venue_id=1.2.3', () => [], /Waze link has no coordinates/],
+      ['https://www.openstreetmap.org/relation/42', () => [], /OpenStreetMap/],
+      ['https://mapy.com/s/deadlink', () => ({ ok: false, message: "This short link doesn't lead anywhere." }), /short link/],
+    ]) {
+      globalThis.fetch = async (url) => jsonResponse(answer(String(url)));
+      const { toasts, ui } = fakeUi();
+      await startAdd(link, { ...ui, showUnsupported: () => assert.fail('a supported link') });
+      assert.equal(toasts.at(-1)[1], 'error', link);
+      assert.match(toasts.at(-1)[0], message, link);
+    }
+    assert.deepEqual(opened, []);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('the input bar: lookalikes of map app hosts open the unsupported-link dialog', async () => {
+  for (const link of ['https://share.here.com.evil.example/l/47.1,11.2', 'https://notwaze.com/ul?ll=47.1,11.2', 'https://mapy.com.evil.example/s/abc']) {
+    const shown = [];
+    const { ui } = fakeUi();
+    await startAdd(link, { ...ui, showUnsupported: (l) => shown.push(l) });
+    assert.deepEqual(shown, [link]);
+  }
+});
+
+test('Settings → Import: links from several map apps open one import dialog; OSM objects and Mapy short links wait for the import', async () => {
+  const calls = [];
+  globalThis.fetch = async (url) => { calls.push(String(url)); return jsonResponse([]); };
+  const { imports, toasts } = await readInSettings([
+    'https://share.here.com/l/47.1,11.2,Synthetic%20Cafe',
+    'https://waze.com/ul?ll=47.3,11.4',
+    'https://www.openstreetmap.org/node/1234567890',
+    'https://mapy.cz/s/abcdefgh',
+    'https://www.bing.com/maps?ppois=47.5_11.6_Synthetic%20Bar_x~',
+    'https://www.google.com/maps/place/Synthetic+Inn/@45.4,9.2,17z/data=!3d45.4719!4d9.1721',
+  ].join('\n'));
+  assert.equal(imports.length, 1);
+  const { e, g } = imports[0];
+  assert.equal(g, null);
+  assert.deepEqual(e.map((r) => [r.name, r.lat, r.source]), [
+    ['Synthetic Cafe', 47.1, 'here-link'], ['Waze place', 47.3, 'waze-link'], ['OpenStreetMap place', null, 'osm-link'],
+    ['Mapy place', null, 'mapy-link'], ['Synthetic Bar', 47.5, 'bing-link'], ['Synthetic Inn', 45.4719, 'google-link'],
+  ]);
+  assert.match(e[2].warning, /looked up/i);
+  assert.match(e[3].warning, /resolved on import/);
+  assert.deepEqual(calls, [], 'lookups happen on import');
+  assert.deepEqual(toasts, []);
+});

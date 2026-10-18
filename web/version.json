@@ -19,6 +19,7 @@
     "/js/idb.js",
     "/js/importers.js",
     "/js/map.js",
+    "/js/maplinks.js",
     "/js/pinwheel.js",
     "/js/sha256.js",
     "/js/sources.js",
