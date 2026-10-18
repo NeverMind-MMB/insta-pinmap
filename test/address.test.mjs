@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isOldAddress, newAddressUrl } from '../web/js/address.js';
+import { isOldAddress, newAddressUrl, showsMoveBanner } from '../web/js/address.js';
+import { MOVED_TO_OPIN } from '../web/js/sources.js';
 
 test('the old address: a host whose first label is insta-pinmap', () => {
   assert.equal(isOldAddress('insta-pinmap.someone.workers.dev'), true);
@@ -15,6 +16,15 @@ test('the old address: a host whose first label is insta-pinmap', () => {
 test('the new address: the same URL with the first host label replaced by opin, subdomain kept', () => {
   assert.equal(newAddressUrl('https://insta-pinmap.someone.workers.dev/'), 'https://opin.someone.workers.dev/');
   assert.equal(newAddressUrl('https://insta-pinmap.other.workers.dev/?focus=input'), 'https://opin.other.workers.dev/?focus=input');
+});
+
+test('the move banner shows on the old address only while MOVED_TO_OPIN is on (a copy that keeps the name insta-pinmap turns it off)', () => {
+  assert.equal(MOVED_TO_OPIN, true, 'this app moved');
+  assert.equal(showsMoveBanner('insta-pinmap.someone.workers.dev'), true);
+  assert.equal(showsMoveBanner('insta-pinmap.someone.workers.dev', false), false);
+  assert.equal(showsMoveBanner('opin.someone.workers.dev'), false);
+  assert.equal(showsMoveBanner('opin.someone.workers.dev', true), false);
+  assert.match(readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8'), /if \(showsMoveBanner\(location\.hostname\)\)/);
 });
 
 test('index.html: the move banner with its three steps, "Save backup" and "Open the new address", hidden until needed', () => {

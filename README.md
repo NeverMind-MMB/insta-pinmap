@@ -260,8 +260,10 @@ author's copy for a guide's place links when you share a guide from the Maps
 app. Change that once:
 
 1. In the Shortcuts app, tap **•••** on **Fetch Apple Guide** to edit it.
-2. Find the **URL** action with `/api/guide?link=` in it; as shared it points at the author's copy,
-   `https://opin.<subdomain>.workers.dev`.
+2. Find the **URL** action with `/api/guide?link=` in it. As shared it points at the author's
+   copy, `https://opin.<subdomain>.workers.dev`, or still at the old
+   `https://insta-pinmap.<subdomain>.workers.dev` until the Shortcut is shared again; check it
+   either way.
 3. Replace the address in front of `/api/guide` with yours, so it starts with
    `https://<name>.<your-subdomain>.workers.dev/api/guide?link=`. Leave the rest
    of the action as it is.
@@ -301,7 +303,9 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
 ### Updating your copy
 
 1. Download the new version (or `git pull`). Keep your changes to `wrangler.toml`
-   (name, `namespace_id`s).
+   (name, `namespace_id`s). Keeping the old `name = "insta-pinmap"`? Then set
+   `MOVED_TO_OPIN = false` in `web/js/sources.js`, or the app shows a move banner that points at an
+   `opin` address you don't have.
 2. Deploy again: `npx --yes wrangler@4 deploy`.
 3. On your phone: **Settings → App → Check for updates → Install** (see "Updates").
 

@@ -8,6 +8,13 @@
 /** The project's GitHub issues: where people ask for a site the app doesn't read yet. */
 export const ISSUES_URL = 'https://github.com/NeverMind-MMB/insta-pinmap/issues';
 
+/**
+ * The app moved from insta-pinmap.… to opin.… in 2.1.0: on the old address it shows a banner
+ * that sends people to the new one (address.js). A copy that keeps the Worker name
+ * insta-pinmap sets this to false.
+ */
+export const MOVED_TO_OPIN = true;
+
 /** GitHub's issue search for `site`, e.g. "pinterest.com". */
 export function issuesSearchUrl(site) {
   return `${ISSUES_URL}?q=${encodeURIComponent(`is:issue ${site}`)}`;

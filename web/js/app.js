@@ -13,7 +13,7 @@ import {
 import { readFile } from './importers.js';
 import { isInstagramLink, shortcode } from './dedupe.js';
 import { findLinks } from './sources.js';
-import { isOldAddress, newAddressUrl } from './address.js';
+import { showsMoveBanner, newAddressUrl } from './address.js';
 import { playPinwheel } from './pinwheel.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
@@ -114,7 +114,7 @@ async function start() {
   wireGuideReminder();
 
   // 4c) The old address: oPin moved, and the pins stay here until a backup takes them along.
-  if (isOldAddress(location.hostname)) {
+  if (showsMoveBanner(location.hostname)) {
     $('move-open').href = newAddressUrl(location.href);
     $('move-reminder').hidden = false;
   }
