@@ -4,7 +4,7 @@
  * Serves web/ as static files (configured in wrangler.toml) and answers two
  * routes the phone cannot do itself because of CORS:
  *   /api/ig       caption of an Instagram post (needs a work ticket)
- *   /api/resolve  where a short map link points to
+ *   /api/resolve  where a short map link (or a TikTok short link) points to
  *   /api/guide    the place links of an Apple guide link, read from the link
  *                 itself (for the iPhone Shortcut; Apple is never contacted)
  *
@@ -22,7 +22,10 @@ import { readAppleGuide, isAppleGuideLink, appleIdLink } from '../web/js/importe
 const SHORT_LINK_HOSTS = [
   'maps.app.goo.gl', 'goo.gl', 'g.co',
   'maps.apple', 'maps.apple.com', 'guides.apple.com', 'share.apple.com',
+  'vm.tiktok.com', 'vt.tiktok.com',
 ];
+/** Short links on a host that serves other pages too: only these paths are followed (host, path start). */
+const SHORT_LINK_PATHS = [['tiktok.com', '/t/']];
 const MAX_HOPS = 5;
 const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const MEMORY_LIMIT = 20; // per address and minute, used when the rate-limit binding is missing
@@ -51,6 +54,13 @@ function fromOtherSite(request) {
 function isShortLinkHost(hostname) {
   const host = hostname.toLowerCase();
   return SHORT_LINK_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+}
+
+/** A short-link host, or a short-link path on a host with other pages (tiktok.com/t/…). */
+function isShortLink(url) {
+  const host = url.hostname.toLowerCase();
+  return isShortLinkHost(host) ||
+    SHORT_LINK_PATHS.some(([h, path]) => (host === h || host.endsWith('.' + h)) && url.pathname.startsWith(path));
 }
 
 /** `limiter`: a rate-limit binding; without one, an in-memory count of `max` per minute. */
@@ -116,8 +126,8 @@ async function handleResolve(url, request, bindings, deps) {
     return json({ ok: false, message: 'Invalid address.' });
   }
   if (start.protocol !== 'https:' && start.protocol !== 'http:') return json({ ok: false, message: 'Invalid address.' });
-  if (!isShortLinkHost(start.hostname)) {
-    return json({ ok: false, message: 'Only short Google Maps and Apple Maps links can be resolved.' });
+  if (!isShortLink(start)) {
+    return json({ ok: false, message: 'Only short Google Maps, Apple Maps and TikTok links can be resolved.' });
   }
 
   const failed = () => json({ ok: false, message: "Couldn't resolve this short link." });
@@ -147,7 +157,7 @@ async function handleResolve(url, request, bindings, deps) {
       return failed();
     }
     if (next.protocol !== 'https:' && next.protocol !== 'http:') return failed();
-    if (!isShortLinkHost(next.hostname)) return json({ ok: true, url: next.href });
+    if (!isShortLink(next)) return json({ ok: true, url: next.href });
     current = next;
   }
   return failed();
