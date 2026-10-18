@@ -608,6 +608,21 @@ test('the input bar: free text without a link still runs the place search', asyn
   }
 });
 
+test('the input bar: a site named without a path ("Pizza I saw on youtube.com", "tiktok.com") is free text: the place search', async () => {
+  for (const text of ['Pizza I saw on youtube.com', 'tiktok.com', 'facebook.com', 'Lunch spot from instagram.com']) {
+    const opened = [];
+    globalThis.document = { getElementById: (id) => { opened.push(id); throw new Error('confirm dialog reached'); } };
+    try {
+      const { toasts, ui } = fakeUi();
+      await assert.rejects(startAdd(text, { ...ui, showUnsupported: () => opened.push('unsupported') }), /confirm dialog reached/, text);
+      assert.deepEqual(opened, ['dlg-confirm'], text);
+      assert.deepEqual(toasts, [], text);
+    } finally {
+      delete globalThis.document;
+    }
+  }
+});
+
 test('the input bar: lookalike links are no Instagram or Apple Maps links: the unsupported-link dialog', async () => {
   for (const link of ['https://notinstagram.com/p/ABC123/', 'https://maps.apple.com.evil.example/place?ll=48.1,11.5&q=X']) {
     const shown = [];

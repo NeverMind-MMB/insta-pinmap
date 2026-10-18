@@ -155,7 +155,8 @@ function linkParts(link) {
 /**
  * The links in a text, in order: every http(s) link (also glued to a word
  * before it), and every word that starts with a registered prefix but lacks
- * the scheme ("instagram.com/p/…" becomes "https://instagram.com/p/…").
+ * the scheme ("instagram.com/p/…" becomes "https://instagram.com/p/…"); such a
+ * word needs a "/", so a site named in passing ("seen on youtube.com") is no link.
  * Trailing ")", "," and "." are dropped.
  */
 export function findLinks(text) {
@@ -165,7 +166,7 @@ export function findLinks(text) {
     const token = (at === -1 ? word : word.slice(at)).replace(/[),.]+$/, '');
     if (!token) continue;
     if (at !== -1) links.push(token);
-    else if (linkParts(token) && sourceOf(token)) links.push(`https://${token}`);   // not "https://geo:…"
+    else if (token.includes('/') && linkParts(token) && sourceOf(token)) links.push(`https://${token}`);   // not "https://geo:…"
   }
   return links;
 }

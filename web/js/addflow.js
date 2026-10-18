@@ -70,7 +70,9 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   // "Check this out: https://... " instead of just the URL, and a link may
   // lack its scheme ("see instagram.com/p/…").
   const linkInText = findLinks(text)[0] || '';
-  const candidateLink = linkInText || text;
+  // The text itself counts as a link only with a scheme ("geo:…") or a "/": a site's
+  // name alone ("tiktok.com") is free text, as in findLinks.
+  const candidateLink = linkInText || (/^[a-z][a-z0-9+.-]*:|\//i.test(text) ? text : '');
 
   // The link's source, by its prefix (sources.js), picks the reader.
   if (isInstagramLink(candidateLink)) {

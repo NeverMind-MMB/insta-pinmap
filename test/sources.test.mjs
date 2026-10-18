@@ -313,6 +313,16 @@ test('findLinks: every http(s) link, and words that start with a registered pref
   }
 });
 
+test('findLinks: a bare host word without a path is no link ("Pizza I saw on youtube.com"); with a "/" it is', async () => {
+  const { findLinks } = await import('../web/js/sources.js');
+  for (const text of ['Pizza I saw on youtube.com', 'tiktok.com', 'facebook.com', 'Found it on instagram.com.', 'maps.apple.com', 'www.youtube.com']) {
+    assert.deepEqual(findLinks(text), [], text);
+  }
+  assert.deepEqual(findLinks('youtube.com/shorts/AbCdEfGhIj0'), ['https://youtube.com/shorts/AbCdEfGhIj0']);
+  assert.deepEqual(findLinks('see facebook.com/SyntheticCafe'), ['https://facebook.com/SyntheticCafe']);
+  assert.deepEqual(findLinks('Pizza on https://youtube.com'), ['https://youtube.com'], 'with its scheme it is a link');
+});
+
 /* ---------- 2.1.0: the add-pin animation's logo or caption ---------- */
 
 test('pinLook: Google Maps, Apple Maps and Instagram show their logo; other sources their name as a caption', async () => {
