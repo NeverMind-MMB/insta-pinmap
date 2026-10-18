@@ -1,16 +1,17 @@
 /**
  * shortcut.js — what the iPhone Shortcut "Fetch Apple Guide" hands back,
  * pasted into the input bar (or Settings → Import): a guide link with the
- * results below it, "@@" lines, place pages for a waiting guide, a whole guide
- * page; and the place links the app copied for the Shortcut, pasted again
- * before it has run ("The Shortcut isn't done yet").
+ * results below it (Safari), "@@" lines, place pages for a waiting guide (the
+ * Maps app); and the place links the app copied for the Shortcut, pasted again
+ * before it has run ("The Shortcut isn't done yet"). A whole guide page, what
+ * Shortcuts before 2.0.8 copied, is read only by "Paste results" in the import
+ * dialog now.
  * What the results look like is read in appleplace.js.
  */
 
 import { readLink, isAppleGuideLink } from './importers.js';
 import {
-  looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
-  loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
+  guidePlaceRow, applyPasteToGuide, loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
 } from './appleplace.js';
 import { guideImportEntries, guideOf } from './mapflow.js';
 
@@ -21,10 +22,10 @@ function guideWithResults(text) {
   return isAppleGuideLink(first.trim()) && (/<html/i.test(rest) || rest.includes('@@')) ? { link: first.trim(), rest } : null;
 }
 
-/** True for the Shortcut's output: a guide page, place pages, "@@" lines, or a guide link with results below it. */
+/** True for the Shortcut's output: place pages (any raw HTML), "@@" lines, or a guide link with results below it. */
 export function isShortcutOutput(text) {
   const s = String(text ?? '').trim();
-  return looksLikeGuidePage(s) || /<html/i.test(s) || guideWithResults(s) !== null ||
+  return /<html/i.test(s) || guideWithResults(s) !== null ||
     (s.includes('@@') && parseShortcutResults(s).size > 0);
 }
 
@@ -35,41 +36,10 @@ export function isShortcutOutput(text) {
 export function addShortcutOutput(text, env) {
   // A guide link with the Shortcut's results below it.
   if (addGuideWithResults(text, env)) return true;
-  // The whole guide page (what the Shortcut copies) pasted into the input bar.
-  if (looksLikeGuidePage(text)) {
-    addFromGuidePage(text, env);
-    return true;
-  }
   // Only the Shortcut's "@@" lines: those places as checked rows.
   if (text.includes('@@') && addFromResultLines(text, env)) return true;
   // The Shortcut's place pages, likewise, for a waiting guide.
   return /<html/i.test(text) && addFromPlacePages(text, env);
-}
-
-/**
- * The Shortcut's answer pasted into the main input bar instead of the import
- * dialog: goes the same way as "Paste results" (a waiting guide gets its Apple
- * places filled), else every place of the page becomes a checked row.
- */
-function addFromGuidePage(html, env) {
-  const places = parseGuidePage(html);
-  if (!places.length) {
-    env.toast('This Apple Guide page lists no places. Copy the guide link in the app again and rerun the Shortcut.', 'error', 8000);
-    return;
-  }
-  const pending = loadPendingGuide();
-  if (pending) {
-    const entries = guideImportEntries(pending);
-    const { found, added } = applyPasteToGuide(entries, pending.appleIds, html);
-    // Nothing in common: the page belongs to another guide.
-    if (found || added) {
-      env.showImport?.(entries, pending.title || guidePageTitle(html) || 'Apple Guide', pending);
-      env.inputDone?.();
-      return;
-    }
-  }
-  env.showImport?.(places.map(guidePlaceRow), guidePageTitle(html) || 'Apple Guide', null);
-  env.inputDone?.();
 }
 
 /**

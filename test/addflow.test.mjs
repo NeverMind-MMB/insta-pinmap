@@ -63,7 +63,7 @@ test('Apple Guide link: inline places plus unchecked Apple Maps places go to the
   assert.deepEqual(toasts, []);
 });
 
-/* ---------- The whole guide page pasted into the main input bar ---------- */
+/* ---------- A whole guide page pasted into the main input bar (no longer read there) ---------- */
 
 const { readFileSync } = await import('node:fs');
 const { savePendingGuide, clearPendingGuide, appleIdOf } = await import('../web/js/appleplace.js');
@@ -74,37 +74,20 @@ function memoryStorage() {
   return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
 }
 
-test('guide page in the input bar: every place is a checked row, title without the Apple suffix', async () => {
-  globalThis.localStorage = memoryStorage();
-  const { toasts, ui } = fakeUi();
-  const imports = [];
-  let cleared = 0;
-  await startAdd(GUIDE_PAGE, { ...ui, inputDone: () => cleared++, showImport: (e, n, g) => imports.push({ e, n, g }) });
-  assert.equal(imports.length, 1);
-  assert.equal(imports[0].n, 'Epic Gamering');
-  assert.equal(imports[0].g, null);
-  assert.equal(imports[0].e.length, 10);
-  assert.ok(imports[0].e.every((r) => r.checked === true && r.source === 'apple-guide' && Number.isFinite(r.lat)));
-  assert.equal(cleared, 1);
-  assert.equal(toasts.length, 0);
-});
-
-test('guide page with a waiting guide: its Apple ID rows are filled', async () => {
-  globalThis.localStorage = memoryStorage();
-  const ids = ['4053793356543820372', '14921016072022586346', '9816041141257892933'];
-  const inline = [{ name: 'Hive Gaming', address: '', lat: 49.4458656, lon: 11.0497961, url: '', source: 'apple-guide', note: '', warning: '' }];
-  savePendingGuide({ title: 'Epic Gamering', link: 'https://guides.apple.com/?ug=x', entries: inline, appleIds: ids });
-  const { ui } = fakeUi();
-  const imports = [];
-  await startAdd(GUIDE_PAGE, { ...ui, showImport: (e, n, g) => imports.push({ e, n, g }) });
-  const { e, n, g } = imports[0];
-  assert.equal(n, 'Epic Gamering');
-  assert.ok(g && g.appleIds.length === 3, 'the pending guide is handed on, so the dialog clears it');
-  for (const id of ids) {
-    const row = e.find((r) => appleIdOf(r.url) === id);
-    assert.ok(row && Number.isFinite(row.lat) && row.checked && row.name !== 'Apple Maps place', id);
+test('a whole guide page (what Shortcuts before 2.0.8 copied) is no longer read by the input bar: an error toast, no import', async () => {
+  // Today's Shortcut copies "@@" lines (Safari) or place pages (Maps); "Paste results" in the dialog still reads a page.
+  for (const pending of [false, true]) {
+    globalThis.localStorage = memoryStorage();
+    if (pending) {
+      savePendingGuide({ title: 'Epic Gamering', link: 'https://guides.apple.com/?ug=x', entries: [], appleIds: ['4053793356543820372'] });
+    }
+    const { toasts, ui } = fakeUi();
+    const imports = [];
+    await startAdd(GUIDE_PAGE, { ...ui, showImport: (e, n, g) => imports.push({ e, n, g }) });
+    assert.deepEqual(imports, [], String(pending));
+    assert.equal(toasts.at(-1)?.[1], 'error', String(pending));
+    clearPendingGuide();
   }
-  clearPendingGuide();
 });
 
 /** A raw Apple Maps place page as the Shortcut's round 2 fetches it (synthetic). */
@@ -141,20 +124,6 @@ test('place pages in the input bar with a waiting guide: import opens with the p
   assert.equal(row('303').checked, false);
   assert.equal(cleared, 1);
   assert.deepEqual(toasts, []);
-  clearPendingGuide();
-});
-
-test('guide page with a waiting guide that has places found before: they stay filled', async () => {
-  globalThis.localStorage = memoryStorage();
-  const ids = ['4053793356543820372', '777'];
-  const found = new Map([['777', { name: 'Earlier', lat: 48.1, lon: 11.5, address: '' }]]);
-  savePendingGuide({ title: 'Epic Gamering', link: 'https://guides.apple.com/?ug=x', entries: [], appleIds: ids, found });
-  const { ui } = fakeUi();
-  const imports = [];
-  await startAdd(GUIDE_PAGE, { ...ui, showImport: (e, n, g) => imports.push({ e, n, g }) });
-  const { e } = imports[0];
-  assert.equal(e.find((r) => appleIdOf(r.url) === '777').name, 'Earlier');
-  assert.ok(Number.isFinite(e.find((r) => appleIdOf(r.url) === ids[0]).lat));
   clearPendingGuide();
 });
 
@@ -233,17 +202,6 @@ test('isShortcutPaste: Shortcut output goes straight to the add flow (a text fie
   for (const t of [SYN_GUIDE, 'https://www.instagram.com/p/ABC123/', 'Check this out:\nhttps://www.instagram.com/p/ABC123/', 'Cafe Luitpold', 'a@@b']) {
     assert.equal(isShortcutPaste(t), false, t.slice(0, 40));
   }
-});
-
-test('guide page without places: error toast, no import dialog', async () => {
-  globalThis.localStorage = memoryStorage();
-  const { toasts, ui } = fakeUi();
-  let opened = 0;
-  const page = '<html><body><div class="mw-collection-place-name">' + 'x'.repeat(1200) + '</div></body></html>';
-  await startAdd(page, { ...ui, showImport: () => opened++ });
-  assert.equal(opened, 0);
-  assert.equal(toasts.at(-1)[1], 'error');
-  assert.match(toasts.at(-1)[0], /lists no places/);
 });
 
 /* ---------- Several map place links in one paste (2.0.10) ---------- */

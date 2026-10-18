@@ -26,7 +26,7 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   const text = String(input || '').trim();
   if (!text) return;
 
-  // The Shortcut's results: a guide link with results, a guide page, "@@" lines, place pages.
+  // The Shortcut's results: a guide link with results, "@@" lines, place pages.
   if (addShortcutOutput(text, env)) return;
   // Two or more map place links, one per line: one import dialog for all of them
   // from Settings, a hint there from the input bar.
@@ -69,8 +69,8 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
 }
 
 /**
- * True for the Shortcut's output (a guide page, place pages, "@@" lines, or a
- * guide link with results below it) and for two or more different links (which
+ * True for the Shortcut's output (place pages, "@@" lines, or a guide link
+ * with results below it) and for two or more different links (which
  * startAdd sends to Settings → Import): it goes straight to startAdd, since a
  * text field would drop its line breaks.
  */
