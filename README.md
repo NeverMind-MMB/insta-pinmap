@@ -397,7 +397,7 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   small adapter per site), `mapflow.js` map links and coordinates, `shortcut.js`
   what the iPhone Shortcut hands back, `batch.js` Settings → Import (several items,
   one import list), `confirm.js` the Confirm place window.
-- Readers added in 2.2.0: `web/js/coords.js` (coordinates, `geo:`, Plus Codes),
+- More readers: `web/js/coords.js` (coordinates, `geo:`, Plus Codes),
   `maplinks.js` (other map apps), `csvcolumns.js` (CSV/TSV columns),
   `googlelist.js` (Google lists), `tiktok.js` (TikTok's oEmbed) and `postlinks.js`
   (YouTube and Facebook links, shared with the Worker); in the Worker

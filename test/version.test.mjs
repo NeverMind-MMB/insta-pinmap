@@ -9,6 +9,10 @@ test('version.js and version.json agree', () => {
   assert.equal(APP_VERSION, info.version);
 });
 
+test('oPin starts at 1.0.0 on its own address (the update check works per address)', () => {
+  assert.equal(APP_VERSION, '1.0.0');
+});
+
 test('compareVersions', () => {
   assert.equal(compareVersions('2.0.1', '2.0.0'), 1);
   assert.equal(compareVersions('2.0.0', '2.0.0'), 0);
