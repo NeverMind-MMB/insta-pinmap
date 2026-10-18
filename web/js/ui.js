@@ -7,6 +7,7 @@ import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, googlePlaceName, isAppleIdLink, isGoogleShortLink } from './importers.js';
+import { needsMapAppLookup, lookUpMapAppEntry } from './maplinks.js';
 import {
   SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
@@ -832,6 +833,18 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
 
     let lat = e.lat;
     let lon = e.lon;
+
+    // Another map app's link that needs a request first (an OpenStreetMap object, a Mapy short
+    // link): no place search for its stand-in name when nothing is found.
+    if (!Number.isFinite(lat) && needsMapAppLookup(e)) {
+      const done = await lookUpMapAppEntry(e, { resolve: resolveShortLink });
+      if (!done.ok) {
+        failed.push(e.name);
+        continue;
+      }
+      Object.assign(e, done.entry);
+      ({ lat, lon } = done.entry);
+    }
 
     // Resolve short link
     if (!Number.isFinite(lat) && e.url && isGoogleShortLink(e.url)) {

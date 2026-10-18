@@ -25,6 +25,7 @@ import {
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
 import { siteOf, sourceOf, sourceColor, findLinks, pinLook } from './sources.js';
+import { withShareText, needsMapAppLookup, lookUpMapAppEntry } from './maplinks.js';
 import { colorPicker, pickedColor } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -70,7 +71,7 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   }
 
   if (isMapLink(candidateLink)) {
-    return addFromMapLink(candidateLink, env);
+    return addFromMapLink(candidateLink, env, false, linkInText ? text : '');
   }
 
   // A link from no source this version reads: say so instead of searching for its address.
@@ -89,10 +90,10 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   });
 }
 
-/** A map link: from Apple Maps (places and guides) or Google Maps, by its prefix (sources.js). */
+/** A map link: from Apple Maps (places and guides), Google Maps or another map app, by its prefix (sources.js). */
 export function isMapLink(link) {
   const source = sourceOf(link);
-  return source === 'apple' || source === 'google';
+  return source === 'apple' || source === 'google' || source === 'maps';
 }
 
 /**
@@ -384,8 +385,11 @@ function addFromResultLines(text, env) {
   return true;
 }
 
-/** `resolved`: the link is already the answer of /api/resolve. */
-async function addFromMapLink(link, env, resolved = false) {
+/**
+ * `resolved`: the link is already the answer of /api/resolve. `shareText`: the pasted
+ * text around the link (a map app's share text may name the place, see maplinks.js).
+ */
+async function addFromMapLink(link, env, resolved = false, shareText = '') {
   // Lists get their own way later; for now the dialog says so.
   if (isGoogleListLink(link)) {
     env.showUnsupported?.(link, 'Google Maps lists');
@@ -407,10 +411,22 @@ async function addFromMapLink(link, env, resolved = false) {
     return;
   }
 
-  const e0 = parsed.entries[0];
+  let e0 = parsed.entries[0];
   if (!e0) {
     env.toast('This link contains no place.', 'error');
     return;
+  }
+  if (shareText) e0 = withShareText(e0, shareText);
+
+  // Another map app's link that needs a request first: an OpenStreetMap object, a Mapy short link.
+  if (!Number.isFinite(e0.lat) && needsMapAppLookup(e0)) {
+    const done = await lookUpMapAppEntry(e0, { resolve: resolveShortLink, busy: (text) => env.toast(text, 'busy', 8000) });
+    env.hideToast?.();
+    if (!done.ok) {
+      env.toast(done.message, 'error', 6000);
+      return;
+    }
+    e0 = done.entry;
   }
 
   // Short link? Resolve it first.

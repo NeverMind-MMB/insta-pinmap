@@ -361,3 +361,26 @@ test('Import selected plays the add-pin animation once when it added pins, not w
     delete globalThis.document;
   }
 });
+
+/* ---------- 2.2.0: map app links in an import (maplinks.js) ---------- */
+
+test('import: an OpenStreetMap object row is looked up, a Mapy short link row expanded; one nothing is known for is no pin and no search', async () => {
+  const { readLink } = await import('../web/js/importers.js');
+  const calls = [];
+  const json = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    if (u.startsWith('/api/resolve')) return json({ ok: true, url: 'https://mapy.com/en/turisticka?source=coor&id=11.21%2C47.11&x=11.2&y=47.1&z=17' });
+    if (u.includes('osm_ids=N1&')) return json([{ lat: '47.3', lon: '11.3', name: 'Synthetic Peak', display_name: 'Synthetic Peak, Testtown' }]);
+    return json([]);
+  };
+  const rows = ['https://www.openstreetmap.org/node/1', 'https://mapy.cz/s/abcdefgh', 'https://www.openstreetmap.org/way/2']
+    .map((link) => readLink(link).entries[0]);
+  const pin = await importRows(rows, '', '', []);
+  assert.equal(store.db.pins.length, 2);
+  assert.deepEqual([pin('Synthetic Peak')?.lat, pin('Synthetic Peak')?.address, pin('Synthetic Peak')?.source],
+    [47.3, 'Synthetic Peak, Testtown', 'osm-link']);
+  assert.deepEqual([pin('Mapy place')?.lat, pin('Mapy place')?.lon, pin('Mapy place')?.source], [47.11, 11.21, 'mapy-link']);
+  assert.ok(!calls.some((u) => u.includes('photon') || u.includes('/search')), `no search for "OpenStreetMap place": ${calls.join(' ')}`);
+});

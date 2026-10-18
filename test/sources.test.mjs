@@ -22,6 +22,20 @@ const LINK_SAMPLES = {
   'maps.google.com/…': ['https://maps.google.com/?q=45.4719,9.1721'],
   'maps.app.goo.gl/…': ['https://maps.app.goo.gl/synthetic1'],
   'goo.gl/maps/…': ['https://goo.gl/maps/synthetic2'],
+  'openstreetmap.org/…': [
+    'https://www.openstreetmap.org/?mlat=47.1&mlon=11.2#map=17/47.1/11.2', 'https://www.openstreetmap.org/#map=16/47.1/11.2',
+    'https://www.openstreetmap.org/node/1234567890',
+  ],
+  'osm.org/go/…': ['https://osm.org/go/0EEQjEEb?m='],
+  'omaps.app/… (Organic Maps)': ['https://omaps.app/0yxdjqU7NK/Synthetic_Cafe', 'https://omaps.app/47.1,11.2/Synthetic_Hut'],
+  'comaps.at/… (CoMaps)': ['https://comaps.at/0yxdjqU7NK/Synthetic_Cafe', 'https://comaps.at/map?ll=47.1,11.2&n=Synthetic%20Hut'],
+  'waze.com/…': ['https://waze.com/ul/hu0qt1v6ps2', 'https://ul.waze.com/ul?ll=47.1%2C11.2&navigate=yes',
+    'https://www.waze.com/live-map/directions?to=ll.47.1%2C11.2'],
+  'share.here.com/…': ['https://share.here.com/l/47.1,11.2,Synthetic%20Cafe'],
+  'wego.here.com/…': ['https://wego.here.com/?map=47.1,11.2,15'],
+  'mapy.com/…': ['https://mapy.com/en/zakladni?x=11.2&y=47.1&z=17', 'https://mapy.com/s/abcdefgh'],
+  'mapy.cz/…': ['https://mapy.cz/turisticka?source=coor&id=11.2%2C47.1&x=11.2&y=47.1&z=17', 'https://mapy.cz/s/abcdefgh'],
+  'bing.com/maps…': ['https://www.bing.com/maps?cp=47.1~11.2&where1=Synthetic%20Cafe', 'https://www.bing.com/maps?ppois=47.1_11.2_Synthetic%20Cafe_x~'],
 };
 
 const group = (id) => SUPPORTED_SOURCES.find((g) => g.id === id);
@@ -111,12 +125,12 @@ test('a track in several parts (what togeojson makes of a GPX track with pauses)
 
 /* ---------- Which source a link belongs to: its prefix, nothing more ---------- */
 
-const { sourceOf, SOURCE_GROUPS } = await import('../web/js/sources.js');
+const { sourceOf, linkIs, SOURCE_GROUPS } = await import('../web/js/sources.js');
 const { isAppleGuideLink, isGoogleShortLink } = await import('../web/js/importers.js');
 
 test('sourceOf: every prefix in the table maps to its group', () => {
   const linked = SOURCE_GROUPS.filter((g) => g.prefixes?.length);
-  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google']);
+  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google', 'maps']);
   for (const g of linked) {
     for (const prefix of g.prefixes) assert.equal(sourceOf(`https://${prefix.replace('*', 'com')}x`), g.id, prefix);
   }
@@ -141,6 +155,18 @@ test('sourceOf: real link forms of each source', () => {
     'https://maps.google.de/?q=45.4,9.2': 'google',
     'https://maps.app.goo.gl/abc': 'google',
     'https://goo.gl/maps/abc': 'google',
+    'https://www.openstreetmap.org/node/1': 'maps',
+    'https://osm.org/go/0EEQjEEb': 'maps',
+    'https://omaps.app/0yxdjqU7NK/X': 'maps',
+    'http://ge0.me/0yxdjqU7NK/X': 'maps',
+    'https://comaps.at/map?ll=47.1,11.2': 'maps',
+    'https://waze.com/ul/hu0qt1v6ps2': 'maps',
+    'https://ul.waze.com/ul?ll=47.1,11.2': 'maps',
+    'https://share.here.com/l/47.1,11.2': 'maps',
+    'https://wego.here.com/?map=47.1,11.2,15': 'maps',
+    'https://mapy.com/s/abc': 'maps',
+    'https://en.mapy.cz/zakladni?x=11.2&y=47.1': 'maps',
+    'https://www.bing.com/maps?cp=47.1~11.2': 'maps',
   };
   for (const [link, group] of Object.entries(cases)) assert.equal(sourceOf(link), group, link);
 });
@@ -170,6 +196,9 @@ test('the longest prefix also says what a link is: a guide, a short link', () =>
   assert.equal(isGoogleShortLink('https://goo.gl/maps/abc'), true);
   assert.equal(isGoogleShortLink('https://www.google.com/maps/place/Bar'), false);
   assert.equal(isGoogleShortLink('https://goo.gl/abc'), false);
+  assert.equal(linkIs('https://mapy.com/s/abc', 'short'), true, 'a Mapy short link');
+  assert.equal(linkIs('https://mapy.cz/s/abc', 'short'), true);
+  assert.equal(linkIs('https://mapy.com/en/zakladni?x=11.2&y=47.1', 'short'), false);
 });
 
 /* ---------- A pin's colour defaults to its source ---------- */
@@ -182,6 +211,8 @@ test('source colours: each source value the app writes gets its group\'s colour;
     instagram: '#8f4b6b', 'apple-ort': '#3a6ea5', 'apple-guide': '#3a6ea5',
     'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d',
     gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f',
+    'osm-link': '#4f7a2b', 'organic-maps-link': '#4f7a2b', 'comaps-link': '#4f7a2b', 'waze-link': '#4f7a2b',
+    'here-link': '#4f7a2b', 'mapy-link': '#4f7a2b', 'bing-link': '#4f7a2b',
   };
   for (const [source, color] of Object.entries(want)) assert.equal(sourceColor(source), color, source);
   for (const source of ['import', 'somewhere-else', '', undefined]) assert.equal(sourceColor(source), '#8a8f98', String(source));
@@ -189,7 +220,7 @@ test('source colours: each source value the app writes gets its group\'s colour;
 
 test('source colours: one per group, all different, all from the pin colour palette', () => {
   const colors = SOURCE_GROUPS.map((g) => g.color);
-  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id), ['instagram', 'apple', 'google', 'gps', 'files', 'search']);
+  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id), ['instagram', 'apple', 'google', 'gps', 'files', 'search', 'maps']);
   assert.equal(new Set(colors).size, colors.length);
   for (const c of colors) assert.ok(PIN_COLORS.some((p) => p.color === c), c);
 });
@@ -235,6 +266,8 @@ test('pinLook: Google Maps, Apple Maps and Instagram show their logo; other sour
   assert.deepEqual(pinLook('gpx'), { logo: '', caption: 'GPS file' });
   assert.deepEqual(pinLook('kml'), { logo: '', caption: 'Map file' });
   assert.deepEqual(pinLook('manual'), { logo: '', caption: 'Place search' });
+  assert.deepEqual(pinLook('osm-link'), { logo: '', caption: 'Map app' });
+  assert.deepEqual(pinLook('waze-link'), { logo: '', caption: 'Map app' });
   assert.deepEqual(pinLook('somewhere-else'), { logo: '', caption: '' });
 });
 

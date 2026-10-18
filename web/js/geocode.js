@@ -23,7 +23,8 @@ export function makeQueue(gapMs) {
 }
 
 const photonQueue = makeQueue(250);
-const nominatimQueue = makeQueue(1100);
+/** Every Nominatim request goes through this queue (also maplinks.js's lookups). */
+export const nominatimQueue = makeQueue(1100);
 
 export function normPhoton(json) {
   return (json?.features || []).map((f) => {

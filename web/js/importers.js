@@ -13,6 +13,7 @@
 
 import { readBackupText } from './backup.js';
 import { sourceOf, linkIs } from './sources.js';
+import { readMapAppLink } from './maplinks.js';
 import { unzipSync, strFromU8 } from '../vendor/fflate.js';
 import { kml, gpx } from '../vendor/togeojson.js';
 
@@ -632,6 +633,11 @@ export function readLink(link) {
       }],
       appleIds: [],
     };
+  }
+  // Other map apps (OpenStreetMap, Organic Maps, Waze, HERE, Mapy, Bing): maplinks.js.
+  if (source === 'maps') {
+    const entry = readMapAppLink(s);
+    return { name: entry.name, entries: [entry], appleIds: [] };
   }
   throw new Error('I don\'t recognize this link. Expected an Apple Guides, Apple Maps or Google Maps link.');
 }
