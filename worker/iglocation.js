@@ -58,6 +58,26 @@ function codeBefore(s, at) {
 }
 
 /**
+ * The day (UTC, 'YYYY-MM-DD') post `code` was published: the "taken_at" right after
+ * its own "code" in its media object; '' when there is none (or an implausible one).
+ * The caption trick's date (in the page's language) comes first; this fills in without it.
+ */
+export function readTakenAt(html, code) {
+  const s = typeof html === 'string' ? html : '';
+  const key = `"code":"${code}"`;
+  let found = 0;
+  for (let at = s.indexOf(key); at !== -1 && found < MAX_TAGS; at = s.indexOf(key, at + key.length)) {
+    found++;
+    // Only inside the same object: up to its first "}" (a "more posts" entry ends before the next post's fields).
+    const end = s.indexOf('}', at);
+    const m = /"taken_at":(\d{9,11})(?!\d)/.exec(s.slice(at, Math.min(at + 400, end === -1 ? s.length : end)));
+    const ms = m ? Number(m[1]) * 1000 : NaN;
+    if (ms >= Date.UTC(2010, 0, 1) && ms <= Date.now() + 86400000) return new Date(ms).toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+/**
  * `{ name, lat, lon, address? }` of the location tag of post `code`, or null.
  * Only a dict right after this post's own "code" counts, so a tagged post in the
  * page's "more posts" list is never taken for an untagged one.

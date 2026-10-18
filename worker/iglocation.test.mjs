@@ -167,3 +167,25 @@ test('/api/ig: still no answer and no Instagram request without a work ticket', 
   assert.equal(body.locationTag, undefined);
   assert.deepEqual(calls, []);
 });
+
+/* ---------- taken_at: the published day when the description has none ---------- */
+
+const { readTakenAt } = await import('./iglocation.js');
+
+test('readTakenAt: the day (UTC) from the post\'s own media object; another post\'s or a missing one gives ""', () => {
+  assert.equal(readTakenAt(postPage('SynthAbc123'), 'SynthAbc123'), '2026-05-01');
+  const other = postPage('SynthAbc123', { related: [{ code: 'SynthOther9' }] });
+  assert.equal(readTakenAt(other, 'SynthOther9'), '', 'a "more posts" entry has no taken_at');
+  assert.equal(readTakenAt(postPage('SynthAbc123').replace('"taken_at":1777600000,', ''), 'SynthAbc123'), '');
+  assert.equal(readTakenAt(postPage('SynthAbc123').replace('1777600000', '99'), 'SynthAbc123'), '', 'implausible');
+  assert.equal(readTakenAt(null, 'SynthAbc123'), '');
+});
+
+test('fetchPost: a description without a date takes the day from taken_at; a date in the description stays', async () => {
+  const undated = postPage('SynthAbc123').replace('synthetic.user on May 1, 2026: ', 'synthetic.user: ');
+  let r = await fetchPost('SynthAbc123', pageFetch([{ body: undated }]));
+  assert.equal(r.postedAt, '2026-05-01');
+  const dated = postPage('SynthAbc123').replace('on May 1, 2026', 'on April 30, 2026');
+  r = await fetchPost('SynthAbc123', pageFetch([{ body: dated }]));
+  assert.equal(r.postedAt, '2026-04-30');
+});

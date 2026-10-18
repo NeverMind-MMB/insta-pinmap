@@ -7,7 +7,7 @@
  * falls back to manual search.
  */
 
-import { readLocationTag } from './iglocation.js';
+import { readLocationTag, readTakenAt } from './iglocation.js';
 
 export const SHORTCODE_RE = /^[A-Za-z0-9_-]{5,40}$/;
 
@@ -126,7 +126,7 @@ export async function fetchPost(code, fetchFn = fetch) {
       const location = readLocationTag(html, code);
       return {
         ok: true, shortcode: code, caption: page.caption, username: page.username,
-        postedAt: page.postedAt, imageUrl: page.imageUrl,
+        postedAt: page.postedAt || readTakenAt(html, code), imageUrl: page.imageUrl,
         ...(location ? { location } : {}),
       };
     }
