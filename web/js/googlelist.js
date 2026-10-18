@@ -27,8 +27,11 @@ export function isGoogleList(link) {
   return linkIs(link, 'lists') || googleListId(link) !== '';
 }
 
-/** Says a Google Maps list goes in on its own (the batch toast in batch.js, the import's summary in ui.js). */
-export const LISTS_ALONE = 'Google Maps lists go in on their own: paste one list link at a time.';
+/**
+ * The import's summary (ui.js) for a Google short link that turned out to be a list on import:
+ * a short link shows it is a list only once expanded, and the input bar does that first.
+ */
+export const LISTS_ALONE = "Paste a list's short link on its own in the input bar to import its places.";
 
 /**
  * Import rows for the places /api/list sent: all checked, source "google-list".

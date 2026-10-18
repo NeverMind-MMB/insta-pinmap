@@ -134,13 +134,17 @@ const SYN_GUIDE = ugLink([pbText(1, 'Synthetic Guide'), pbIdRef(9902, '1001'), p
 const SYN_USER = 'https://maps.apple.com/guides?user=' +
   new URL(SYN_GUIDE).searchParams.get('ug').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+/** The input bar; `handed`: what it handed over to Settings → Import (importPaste). */
 async function pasteIntoBar(text) {
   globalThis.localStorage = memoryStorage();
   const { toasts, ui } = fakeUi();
   const imports = [];
+  const handed = [];
   let cleared = 0;
-  await startAdd(text, { ...ui, inputDone: () => cleared++, showImport: (e, n, g) => imports.push({ e, n, g }) });
-  return { imports, toasts, cleared };
+  await startAdd(text, {
+    ...ui, inputDone: () => cleared++, showImport: (e, n, g) => imports.push({ e, n, g }), importPaste: (t) => handed.push(t),
+  });
+  return { imports, toasts, cleared, handed };
 }
 
 const rowOf = (e, id) => e.find((r) => appleIdOf(r.url) === id);
@@ -204,7 +208,7 @@ test('isShortcutPaste: Shortcut output goes straight to the add flow (a text fie
   }
 });
 
-/* ---------- Several map place links in one paste (2.0.10) ---------- */
+/* ---------- Several items in one paste: Settings → Import (2.2.0: every kind, one list) ---------- */
 
 const LL_LINK = 'https://maps.apple.com/?ll=48.1371,11.5754&q=Synthetic%20Cafe';
 const ADDRESS_AUID_LINK = 'https://maps.apple.com/?address=Teststrasse%201,%2080331%20Testtown,%20Germany&auid=1234567890123&ll=48.2,11.6&lsp=9902&q=Synthetic%20Museum&t=m';
@@ -213,15 +217,13 @@ const PLACE_ID_LINK = 'https://maps.apple.com/place?address=Testweg%202&coordina
 // 987654321 is 0x3ADE68B1: Apple's place-id is "I" + the ID in hexadecimal.
 const PLACE_ID_ONLY_LINK = 'https://maps.apple.com/place?place-id=I3ADE68B1&_provider=9902';
 
-const SEVERAL_LINKS_HINT = 'Several map links? Paste them in Settings → Import (one per line), or import a file there.';
-const INSTAGRAM_HINT = 'One post or video at a time: paste each link on its own.';
-
-test('the input bar takes one link at a time: several place links bring a hint to Settings → Import, no dialog', async () => {
+test('the input bar takes one item: two or more links go to Settings → Import with the whole paste, no toast', async () => {
   for (const text of [[LL_LINK, ADDRESS_AUID_LINK, AUID_LINK].join('\n'), `${AUID_LINK}\n${PLACE_ID_LINK}`]) {
-    const { imports, toasts, cleared } = await pasteIntoBar(text);
-    assert.deepEqual(imports, [], text);
-    assert.deepEqual(toasts, [[SEVERAL_LINKS_HINT, 'info']], text);
-    assert.equal(cleared, 0, 'nothing imported');
+    const { imports, toasts, cleared, handed } = await pasteIntoBar(text);
+    assert.deepEqual(handed, [text], text);
+    assert.deepEqual(imports, [], 'the import list is Settings\' to open');
+    assert.deepEqual(toasts, [], text);
+    assert.equal(cleared, 1, 'the paste is in Settings now');
   }
 });
 
@@ -304,9 +306,14 @@ test('Settings → Import: an Apple link with only a place-id is an Apple ID row
 test('raw HTML without a waiting guide never turns into a list of place links, not even in Settings', async () => {
   const page = (id) => `<!DOCTYPE html><html><head><link rel="canonical" href="https://maps.apple.com/place?auid=${id}"></head>` +
     `<body><a href="https://maps.apple.com/?ll=48.1,11.5&q=Spot${id}">x</a></body></html>`;
-  const { imports, toasts } = await readInSettings(`${page(101)}\n${page(202)}`);
+  const { imports, toasts, field } = await readInSettings(`${page(101)}\n${page(202)}`);
   assert.equal(imports.length, 0);
-  assert.ok(!toasts.some(([t]) => t === SEVERAL_LINKS_HINT));
+  assert.equal(toasts.at(-1)[1], 'error');
+  assert.match(field.value, /<html>/, 'kept');
+  const { isShortcutPaste } = await import('../web/js/router.js');
+  const { itemCount } = await import('../web/js/batch.js');
+  assert.equal(itemCount(`${page(101)}\n${page(202)}`), 0, 'raw HTML holds no items');
+  assert.equal(isShortcutPaste(page(101)), true, 'the input bar still takes it whole (place pages)');
 });
 
 /* ---------- Settings → Import: pasted text goes the input bar's way (2.0.10) ---------- */
@@ -339,13 +346,23 @@ test('Settings → Import → Read: a guide link with the Shortcut\'s results wo
   assert.equal(field.value, '');
 });
 
-test('Settings → Import → Read: an empty field does nothing; a link nothing could open stays in the field', async () => {
+test('Settings → Import → Read: an empty field does nothing; text without any item stays in the field, Settings stays open', async () => {
   const empty = await readInSettings('  \n ');
   assert.deepEqual(empty.order, []);
-  const failed = await readInSettings(AUID_LINK);
-  assert.deepEqual(failed.imports, []);
-  assert.equal(failed.toasts.at(-1)[1], 'error');
-  assert.equal(failed.field.value, AUID_LINK, 'kept, so it can be fixed');
+  for (const text of ['Cafe Luitpold, Munich', 'see you there\nbring a jacket']) {
+    const failed = await readInSettings(text);
+    assert.deepEqual(failed.imports, [], text);
+    assert.deepEqual(failed.order, [], `${text}: Settings stays open`);
+    assert.deepEqual(failed.toasts.at(-1), ['No place, post, guide or list found in this text.', 'error'], text);
+    assert.equal(failed.field.value, text, 'kept, so it can be fixed');
+  }
+});
+
+test('Settings → Import → Read: one Apple link with only an ID is a row for the Shortcut lookup (the input bar can\'t read it alone)', async () => {
+  const { imports, field } = await readInSettings(AUID_LINK);
+  assert.deepEqual(imports[0].e.map((r) => [r.name, r.checked]), [['Apple Maps place', false]]);
+  assert.deepEqual(imports[0].g.appleIds, ['987654321']);
+  assert.equal(field.value, '');
 });
 
 /* ---------- Fix round 1 (2.0.10 review) ---------- */
@@ -365,10 +382,11 @@ async function addWithWaitingGuide(text, { viaSettings = false } = {}) {
   const { addFromSettings } = await import('../web/js/batch.js');
   const { toasts, ui } = fakeUi();
   const imports = [];
-  const env = { ...ui, inputDone: () => {}, showImport: (e, n, g) => imports.push({ e, n, g }) };
+  const handed = [];
+  const env = { ...ui, inputDone: () => {}, showImport: (e, n, g) => imports.push({ e, n, g }), importPaste: (t) => handed.push(t) };
   if (viaSettings) await addFromSettings({ value: text }, env, () => {});
   else await startAdd(text, env);
-  return { imports, toasts };
+  return { imports, toasts, handed };
 }
 
 test('the copied place links pasted back before the Shortcut is done: the waiting guide reopens, with a hint', async () => {
@@ -386,65 +404,68 @@ test('the copied place links pasted back before the Shortcut is done: the waitin
   }
 });
 
-test('place links that are not all the waiting guide\'s, or come with other places: their own list in Settings, the hint in the input bar', async () => {
+test('place links that are not all the waiting guide\'s, or come with other places: their own list in Settings, handed over from the input bar', async () => {
   for (const text of [shortcutInput(['202', '999']), `${shortcutInput(['202'])}\n${LL_LINK}`]) {
     const settings = await addWithWaitingGuide(text, { viaSettings: true });
     assert.equal(settings.imports[0].n, '', text);
     assert.ok(!settings.toasts.some(([t]) => /isn't done yet/.test(t)), text);
     const bar = await addWithWaitingGuide(text);
     assert.deepEqual(bar.imports, [], text);
-    assert.deepEqual(bar.toasts, [[SEVERAL_LINKS_HINT, 'info']], text);
+    assert.deepEqual(bar.handed, [text], text);
+    assert.deepEqual(bar.toasts, [], text);
   }
 });
 
-test('Settings → Import: a guide link stays out of a list of place links', async () => {
+test('Settings → Import: a guide link and place links make one list: the guide\'s places, the links\' places, all Apple IDs to look up', async () => {
   const { imports } = await readInSettings([SYN_GUIDE, LL_LINK, PLACE_ID_LINK].join('\n'));
-  assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe', 'Synthetic Lake']);
-  assert.equal(imports[0].g, null, 'none of the guide\'s Apple IDs');
+  const { e, n, g } = imports[0];
+  assert.deepEqual(e.map((r) => [r.name, r.checked !== false]), [
+    ['Pin', true], ['Synthetic Cafe', true], ['Synthetic Lake', true], ['Apple Maps place', false], ['Apple Maps place', false],
+  ]);
+  assert.deepEqual(g.appleIds, ['1001', '1002']);
+  assert.equal(n, '', 'not one guide: no tag to start with');
 });
 
-test('the input bar: any two links import nothing; with an Instagram post among them it says one post at a time', async () => {
+test('Settings → Import: one guide link alone keeps its name (the tag field starts with it) and its link for the Shortcut', async () => {
+  const { imports } = await readInSettings(SYN_GUIDE);
+  const { e, n, g } = imports[0];
+  assert.equal(n, 'Synthetic Guide');
+  assert.equal(g.link, SYN_GUIDE);
+  assert.equal(e.length, 3);
+});
+
+test('the input bar: two or more links of any kind (posts, guides, map links) go to Settings → Import; isShortcutPaste takes them whole', async () => {
   const { isShortcutPaste } = await import('../web/js/router.js');
-  for (const [text, hint] of [
-    ['https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/', INSTAGRAM_HINT],
-    [`Look: https://www.instagram.com/p/AAA111/ and ${LL_LINK}`, INSTAGRAM_HINT],
-    [`Two guides:\n${APPLE_UG}\n${SYN_GUIDE}`, SEVERAL_LINKS_HINT],
-    [`${LL_LINK}\n${SYN_GUIDE}`, SEVERAL_LINKS_HINT],
+  for (const text of [
+    'https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/',
+    `Look: https://www.instagram.com/p/AAA111/ and ${LL_LINK}`,
+    `Two guides:\n${APPLE_UG}\n${SYN_GUIDE}`,
+    `${LL_LINK}\n${SYN_GUIDE}`,
+    `${SYN_GUIDE}\n${LL_LINK}`,
+    `${LL_LINK}\n48.2001, 11.6001`,
   ]) {
-    const { imports, toasts, cleared } = await pasteIntoBar(text);
+    globalThis.fetch = async () => assert.fail('nothing fetched by the input bar');
+    const { imports, toasts, handed } = await pasteIntoBar(text);
+    assert.deepEqual(handed, [text], text);
     assert.deepEqual(imports, [], text);
-    assert.deepEqual(toasts, [[hint, 'info']], text);
-    assert.equal(cleared, 0, text);
-    assert.equal(isShortcutPaste(text), true, `${text}: straight to the add flow, so the hint shows on paste`);
+    assert.deepEqual(toasts, [], text);
+    assert.equal(isShortcutPaste(text), true, text);
   }
 });
 
-const SKIPPED_WITH_INSTAGRAM = (n) => `Skipped ${n} ${n === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read. ` +
-  'Posts and videos go in the input bar, one at a time.';
-
-test('Settings → Import: a list of place links says in one toast how many other links it left out', async () => {
-  const text = [LL_LINK, AUID_LINK, 'https://maps.apple/p/AbCdEf1234', 'https://www.instagram.com/p/ABC123/', SYN_GUIDE, LL_LINK].join('\n');
-  const { imports, toasts } = await readInSettings(text);
-  assert.equal(imports[0].e.length, 2);
-  assert.deepEqual(toasts, [[SKIPPED_WITH_INSTAGRAM(3), 'info']]);
-});
-
-test('Settings → Import: Instagram posts among several links never take over or go missing', async () => {
-  const two = await readInSettings('https://www.instagram.com/p/AAA111/\nhttps://www.instagram.com/p/BBB222/');
-  assert.deepEqual(two.imports, [], 'not the first post');
-  assert.deepEqual(two.toasts, [[SKIPPED_WITH_INSTAGRAM(2), 'info']]);
-  assert.match(two.field.value, /AAA111/, 'kept, to paste each post in the input bar');
-  for (const text of [`${LL_LINK}\nhttps://www.instagram.com/p/AAA111/`, `https://www.instagram.com/p/AAA111/\n${LL_LINK}`]) {
-    const { imports, toasts } = await readInSettings(text);
-    assert.deepEqual(imports[0]?.e.map((r) => r.name), ['Synthetic Cafe'], text);
-    assert.deepEqual(toasts, [[SKIPPED_WITH_INSTAGRAM(1), 'info']], text);
-  }
-});
-
-test('Settings → Import: the copied place links with another link: their own list, not the waiting guide', async () => {
-  const { imports, toasts } = await addWithWaitingGuide(`${shortcutInput(['202', '303'])}\nhttps://maps.apple/p/AbCdEf1234`, { viaSettings: true });
+test('Settings → Import: the copied place links with another link: their own list, not the waiting guide; the other link\'s site in a notice', async () => {
+  globalThis.localStorage = memoryStorage();
+  const inline = [{ name: 'Pin', address: '', lat: 47.1, lon: 11.1, url: '', source: 'apple-guide', note: '', warning: '' }];
+  savePendingGuide({ title: 'Synthetic Guide', link: 'https://guides.apple.com/?ug=x', entries: inline, appleIds: ['101', '202', '303'] });
+  const { addFromSettings } = await import('../web/js/batch.js');
+  const { toasts, ui } = fakeUi();
+  const imports = [];
+  await addFromSettings({ value: `${shortcutInput(['202', '303'])}\nhttps://maps.apple/p/AbCdEf1234` },
+    { ...ui, showImport: (e, n, g, notes) => imports.push({ e, n, g, notes }) }, () => {});
   assert.equal(imports[0].n, '');
-  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read.", 'info']]);
+  assert.deepEqual(imports[0].g.appleIds, ['202', '303']);
+  assert.deepEqual(imports[0].notes, { unsupported: ['https://maps.apple/p/AbCdEf1234'] });
+  assert.deepEqual(toasts, []);
 });
 
 /** A document just big enough for the confirm dialog; without #confirm-map the preview map stays off. */
@@ -476,41 +497,20 @@ function confirmDocument() {
   };
 }
 
-test('Settings → Import → Read with one place link: once the confirm dialog saves its pin, the field empties', async () => {
-  const { wireConfirm } = await import('../web/js/confirm.js');
-  const { addFromSettings } = await import('../web/js/batch.js');
-  const { store, normalizeDb } = await import('../web/js/store.js');
-  const doc = confirmDocument();
-  globalThis.document = doc;
-  store.db = normalizeDb({});
-  try {
-    const { ui } = fakeUi();
-    const appEnv = { ...ui, redraw() {}, inputDone() {} };
-    wireConfirm(appEnv);
-    const field = { value: LL_LINK };
-    await addFromSettings(field, appEnv, () => {});
-    assert.equal(doc.getElementById('dlg-confirm').open, true, 'the confirm dialog is open');
-    assert.equal(field.value, LL_LINK, 'kept while the dialog is open, like the input bar');
-    doc.getElementById('confirm-save').fire('click');
-    assert.deepEqual(store.db.pins.map((p) => p.title), ['Synthetic Cafe']);
-    assert.equal(field.value, '');
-  } finally {
-    delete globalThis.document;
-    clearTimeout(store._saveTimer);
-    store._saveTimer = null;
-  }
+test('Settings → Import → Read with one place link: one import list with its row (Settings takes every item into the list)', async () => {
+  const { imports, field, order } = await readInSettings(LL_LINK);
+  assert.deepEqual(order, ['close', 'import']);
+  assert.deepEqual(imports[0].e.map((r) => [r.name, r.lat, r.checked !== false]), [['Synthetic Cafe', 48.1371, true]]);
+  assert.equal(imports[0].g, null);
+  assert.equal(field.value, '');
 });
 
-test('the input bar: a paste whose first line is a guide link never brings the hint; the guide opens as in 2.0.9', async () => {
-  for (const text of [
-    `${SYN_GUIDE}\nhttps://maps.apple.com/place?auid=1001\nhttps://maps.apple.com/place?auid=1002`, // a Maps-route output without its pages
-    `${SYN_GUIDE}\n${LL_LINK}`,
-  ]) {
-    const { imports, toasts } = await pasteIntoBar(text);
-    assert.equal(imports[0]?.n, 'Synthetic Guide', text);
-    assert.deepEqual(imports[0].g.appleIds, ['1001', '1002'], text);
-    assert.ok(!toasts.some(([t]) => t === SEVERAL_LINKS_HINT || t === INSTAGRAM_HINT), text);
-  }
+test('the input bar: a guide link with only its own place links below (the Maps route without pages) opens that guide', async () => {
+  const text = `${SYN_GUIDE}\nhttps://maps.apple.com/place?auid=1001\nhttps://maps.apple.com/place?auid=1002`;
+  const { imports, handed } = await pasteIntoBar(text);
+  assert.deepEqual(handed, []);
+  assert.equal(imports[0]?.n, 'Synthetic Guide');
+  assert.deepEqual(imports[0].g.appleIds, ['1001', '1002']);
 });
 
 /* ---------- Links to sites this version doesn't read (2.0.10) ---------- */
@@ -644,28 +644,48 @@ test('the input bar: a Google link with search text searches for that text; with
   }
 });
 
-const LIST_ALONE = 'Google Maps lists go in on their own: paste one list link at a time.';
 const SYNTHETIC_LIST_ID = 'AbCdEf1234567890xyz';
 
-test('Settings → Import: a Google Maps list link is left out of a list of place links, and the toast names it', async () => {
-  const { imports, toasts } = await readInSettings([LL_LINK, PLACE_ID_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n'));
-  assert.equal(imports[0].e.length, 2);
-  assert.deepEqual(toasts, [[`Skipped 1 Google Maps list. ${LIST_ALONE}`, 'info']]);
+/** /api/list answers a synthetic list per list ID (`lists`); everything else 404. Returns the requests. */
+function stubLists(lists) {
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    const id = /^\/api\/list\?link=/.test(u) ? Object.keys(lists).find((k) => decodeURIComponent(u).includes(k)) : null;
+    return id ? new Response(JSON.stringify({ ok: true, ...lists[id] }), { headers: { 'content-type': 'application/json' } })
+      : new Response('{}', { status: 404 });
+  };
+  return calls;
+}
+
+test('Settings → Import: Google Maps lists among other links are read (also a list\'s resolved address); their places join the one list', async () => {
+  const resolvedList = `https://www.google.com/maps/@/data=!3m1!4b1!4m3!11m2!2s${SYNTHETIC_LIST_ID}!3e3`;
+  const OTHER_ID = 'ZyXwVu9876543210abc';
+  const calls = stubLists({
+    [SYNTHETIC_LIST_ID]: { title: 'Synthetic Rome', total: 1, places: [{ name: 'Synthetic Gelato', lat: 41.9, lon: 12.5, address: 'Rome' }] },
+    [OTHER_ID]: { title: 'Synthetic Milan', total: 1, places: [{ name: 'Synthetic Bar', lat: 45.4, lon: 9.2, address: 'Milan' }] },
+  });
+  const { imports, toasts } = await readInSettings([LL_LINK, resolvedList, `https://www.google.com/maps/placelists/list/${OTHER_ID}`, 'https://example.com/x'].join('\n'));
+  assert.equal(calls.filter((u) => u.startsWith('/api/list')).length, 2);
+  const { e, n, g } = imports[0];
+  assert.deepEqual(e.map((r) => [r.name, r.source, r.checked !== false]), [
+    ['Synthetic Cafe', 'apple-ort', true], ['Synthetic Gelato', 'google-list', true], ['Synthetic Bar', 'google-list', true],
+  ]);
+  assert.equal(n, '', 'two lists and a link: no tag to start with');
+  assert.equal(g, null);
+  assert.deepEqual(toasts.filter(([, kind]) => kind !== 'busy'), [], 'only the "Reading 1 of 2" toasts');
+  assert.deepEqual(toasts.filter(([, kind]) => kind === 'busy').map(([t]) => t), ['Reading 1 of 2 …', 'Reading 2 of 2 …']);
 });
 
-test('Settings → Import: a list\'s resolved address never becomes a "Google place" row; lists and other links are named apart', async () => {
-  const resolvedList = `https://www.google.com/maps/@/data=!3m1!4b1!4m3!11m2!2s${SYNTHETIC_LIST_ID}!3e3`;
-  let { imports, toasts } = await readInSettings([LL_LINK, PLACE_ID_LINK, resolvedList, 'https://example.com/x'].join('\n'));
-  assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe', 'Synthetic Lake']);
-  assert.deepEqual(toasts, [[`Skipped 1 link that isn't a place link this app can read and 1 Google Maps list. ${LIST_ALONE}`, 'info']]);
-  // One place link and one list: the list isn't dropped without a word.
-  ({ imports, toasts } = await readInSettings([LL_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n')));
-  assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe']);
-  assert.deepEqual(toasts, [[`Skipped 1 Google Maps list. ${LIST_ALONE}`, 'info']]);
-  // Two lists: no dialog, the toast says how.
-  ({ imports, toasts } = await readInSettings(['https://www.google.com/maps/placelists/list/AbCdEf123', resolvedList].join('\n')));
-  assert.deepEqual(imports, []);
-  assert.deepEqual(toasts, [[`Skipped 2 Google Maps lists. ${LIST_ALONE}`, 'info']]);
+test('Settings → Import: a list that can\'t be read is a row with the reason, never imported; one list alone keeps its title', async () => {
+  stubLists({ [SYNTHETIC_LIST_ID]: { title: 'Synthetic Rome', total: 1, places: [{ name: 'Synthetic Gelato', lat: 41.9, lon: 12.5, address: 'Rome' }] } });
+  let { imports } = await readInSettings([LL_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n'));
+  const failed = imports[0].e[1];
+  assert.deepEqual([failed.name, failed.lat, failed.checked, failed.unplaced], ['Google Maps list', null, false, true]);
+  assert.match(failed.warning, /incomplete/);
+  ({ imports } = await readInSettings(`https://www.google.com/maps/placelists/list/${SYNTHETIC_LIST_ID}`));
+  assert.equal(imports[0].n, 'Synthetic Rome');
 });
 
 test('the input bar: a link without its scheme inside text is still found (instagram.com/p/…, maps.app.goo.gl/…)', async () => {
@@ -873,68 +893,40 @@ test('Settings → Import: links from several map apps open one import dialog; O
   assert.deepEqual(toasts, []);
 });
 
-/* ---------- Posts and videos from every site count as one each; promo links don't count ---------- */
+/* ---------- The input bar counts links: one → its flow, two or more → Settings → Import ---------- */
 
 const YT_A = 'https://www.youtube.com/watch?v=AbCdEfGhIj0';
 const YT_B = 'https://youtu.be/ZyXwVuTsRq9';
 const FB_POST = 'https://www.facebook.com/SyntheticCafe/posts/pfbid0SyntheticSyntheticSynthetic1';
 const TT_VIDEO = 'https://www.tiktok.com/@synthetic.user/video/7300000000000000001';
-const POST_HINT = 'One post or video at a time: paste each link on its own.';
+const OMAPS = 'https://omaps.app/o4B4pYZsRs/Synthetic_Cafe';
 
-test('the input bar: two post or video links from any site (YouTube, Facebook, TikTok, Instagram, mixed) bring the one-post hint', async () => {
+test('the input bar counts links: two of any kind (posts, a share text with its download link, an unsupported one) go to Settings → Import', async () => {
   const { isShortcutPaste } = await import('../web/js/router.js');
   for (const text of [
     `${YT_A}\n${YT_B}`, `${YT_A}\n${FB_POST}`, `${TT_VIDEO}\nhttps://www.instagram.com/p/AAA111/`, `Watch ${YT_A} then go to ${LL_LINK}`,
+    `Synthetic Cafe\n${OMAPS}\nDownload here: https://omaps.app/get`,
+    `Get Organic Maps: https://omaps.app/get\n${OMAPS}`,
+    `https://pin.it/SynthAbc then ${OMAPS}`,
   ]) {
     globalThis.fetch = async () => assert.fail('nothing fetched');
-    const { imports, toasts, cleared } = await pasteIntoBar(text);
+    const { imports, toasts, handed } = await pasteIntoBar(text);
+    assert.deepEqual(handed, [text], text);
     assert.deepEqual(imports, [], text);
-    assert.deepEqual(toasts, [[POST_HINT, 'info']], text);
-    assert.equal(cleared, 0, text);
+    assert.deepEqual(toasts, [], text);
     assert.equal(isShortcutPaste(text), true, text);
   }
 });
 
-test('Settings → Import: YouTube and Facebook links among several are counted as left out, never dropped silently', async () => {
-  const skipped = (n) => `Skipped ${n} ${n === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read. ` +
-    'Posts and videos go in the input bar, one at a time.';
+test('Settings → Import: a share text\'s two links to the same place (ge0:// and omaps.app) give one row; its download link a row with the reason', async () => {
   globalThis.fetch = async () => assert.fail('nothing fetched');
-  const two = await readInSettings(`${YT_A}\n${FB_POST}`);
-  assert.deepEqual(two.imports, []);
-  assert.deepEqual(two.toasts, [[skipped(2), 'info']]);
-  assert.match(two.field.value, /youtube/, 'kept, to paste each one in the input bar');
-  const mixed = await readInSettings(`${LL_LINK}\n${YT_B}`);
-  assert.deepEqual(mixed.imports[0]?.e.map((r) => r.name), ['Synthetic Cafe']);
-  assert.deepEqual(mixed.toasts, [[skipped(1), 'info']]);
-});
-
-test('the input bar: a map app share text with a download link in it is one place link: Confirm place, no hint', async () => {
-  const { isShortcutPaste } = await import('../web/js/router.js');
-  const share = 'Synthetic Cafe\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe\nDownload here: https://omaps.app/get';
-  assert.equal(isShortcutPaste(share), false, 'goes into the field like any one link');
-  const r = await mapAppInBar(share);
-  assert.equal(r.open, true);
-  assert.equal(r.title, 'Synthetic Cafe');
-  assert.ok(!r.toasts.some(([t]) => /at a time|Several map links/.test(t)), JSON.stringify(r.toasts));
-});
-
-test('the input bar: a download link before the place link is passed over: the place link opens Confirm place', async () => {
-  for (const text of [
-    'Get Organic Maps: https://omaps.app/get\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe',
-    'https://pin.it/SynthAbc then https://omaps.app/o4B4pYZsRs/Synthetic_Cafe',
-  ]) {
-    const r = await mapAppInBar(text);
-    assert.equal(r.open, true, text);
-    assert.equal(r.coords, '47.38593, 8.57666', text);
-    assert.ok(!r.toasts.some(([, kind]) => kind === 'error'), JSON.stringify(r.toasts));
-  }
-});
-
-test('the input bar: two real place links still bring the hint, also with a download link among them', async () => {
-  const text = `${LL_LINK}\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe\nDownload here: https://omaps.app/get`;
-  const { imports, toasts } = await pasteIntoBar(text);
-  assert.deepEqual(imports, []);
-  assert.deepEqual(toasts, [[SEVERAL_LINKS_HINT, 'info']]);
+  const { imports } = await readInSettings(`Synthetic Cafe\nge0://o4B4pYZsRs/Synthetic_Cafe\n${OMAPS}\nDownload here: https://omaps.app/get`);
+  const { e } = imports[0];
+  assert.deepEqual(e.map((r) => [r.name, r.lat?.toFixed(5) ?? null, r.checked !== false, Boolean(r.unplaced)]), [
+    ['Synthetic Cafe', '47.38593', true, false],
+    ['Map link', null, false, true],
+  ]);
+  assert.match(e[1].warning, /Organic Maps link/);
 });
 
 /* ---------- Apple ll=0,0 and Google @0,0: no coordinates, never a pin at 0,0 ---------- */

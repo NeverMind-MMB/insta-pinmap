@@ -21,9 +21,9 @@ import {
   isTikTokLink, isTikTokShortLink, tiktokVideo, readTikTok, findTikTokPost, tiktokPostKey,
 } from './tiktok.js';
 import {
-  isSocialLink, postRequestKey, socialPostKey, canonicalPostLink, facebookTarget, candidateText,
+  isSocialLink, postRequestKey, socialPostKey, canonicalPostLink, facebookTarget, candidateText, postAuthorLabel,
 } from './postlinks.js';
-import { openConfirm } from './confirm.js';
+import { openConfirm, matchCandidates } from './confirm.js';
 
 /**
  * How long a read through the Worker's /api/post, or the place search for a tag, may take
@@ -267,11 +267,6 @@ export function isPostSource(link) {
   return adapterOf(link) !== null;
 }
 
-/** A post or video link the app reads: an Instagram post, a TikTok video, a YouTube video, a Facebook post or page. */
-export function isReadablePost(link) {
-  return adapterOf(link)?.isPost(link) || false;
-}
-
 /* ================================================================== *
  * The shared flow
  * ================================================================== */
@@ -335,4 +330,81 @@ export async function addFromPost(link, env) {
   if (tellSaved(reading.saved, env)) return;
   if (reading.confirm) return openConfirm({ ...reading.confirm, env });
   return openConfirm({ ...confirmOf(reading), env });
+}
+
+/* ================================================================== *
+ * A post as one row of Settings → Import
+ * ================================================================== */
+
+const POST_WORD = { instagram: 'Instagram post', tiktok: 'TikTok video', youtube: 'YouTube video', facebook: 'Facebook post' };
+const FROM_TAG = "From the post's location tag.";
+const NO_MATCHES = { top: [], late: true };
+
+/** A row the app couldn't place: never imported, it shows the reason (the link in the address line). */
+function unplacedRow(link, source, reason, post = null) {
+  const author = post?.username ? postAuthorLabel(post.url, post.username) : '';
+  return {
+    name: `${POST_WORD[source] || 'Post'}${author ? ` by ${author}` : ''}`,
+    address: post?.url || link, lat: null, lon: null, url: post?.url || link, source, note: '',
+    warning: reason, checked: false, unplaced: true,
+  };
+}
+
+/** A row at `place` that keeps the post. */
+function placedRow(place, reading, { checked, warning }) {
+  const row = {
+    name: place.name || reading.titleHint || POST_WORD[reading.source] || 'Post', address: place.address || '',
+    lat: place.lat, lon: place.lon, url: reading.post.url, source: reading.source, note: '', warning, checked, post: reading.post,
+  };
+  if (!checked) row.check = true;
+  return row;
+}
+
+/**
+ * A post link as one import row, read the way the input bar reads it (also with its time
+ * limits), placed at its best place: the location tag (checked), else the place search's top
+ * match for its text (unchecked, "Check this place"). A post the app couldn't place, or one
+ * already saved, is a row with the reason that is never imported. Nothing is saved here.
+ * @returns {Promise<{row: object, rateLimited: boolean}>}  rateLimited: the Worker said "too many requests"
+ */
+export async function postRow(link) {
+  const adapter = adapterOf(link);
+  const source = sourceOf(link);
+  const answer = (row, rateLimited = false) => ({ row, rateLimited });
+  if (!adapter.isPost(link)) return answer(unplacedRow(link, source, adapter.notPost));
+  const savedFirst = adapter.saved(link);
+  if (savedFirst) return answer(unplacedRow(link, source, `Already saved: "${savedFirst.pin.title}".`));
+  const reading = await adapter.read(link, { busy() {}, done() {} });
+  if (reading.stop) return answer(unplacedRow(link, source, reading.stop));
+  if (reading.saved) return answer(unplacedRow(link, source, `Already saved: "${reading.saved.pin.title}".`));
+
+  // A Facebook page: its map pin, else the best match for its name and address.
+  if (reading.confirm) {
+    const cfg = reading.confirm;
+    const page = { name: cfg.titleSuggestion, address: '', lat: null, lon: null, url: cfg.note, source: 'facebook', note: cfg.note };
+    if (cfg.readyPlace) {
+      return answer({ ...page, ...cfg.readyPlace, name: cfg.titleSuggestion || cfg.readyPlace.name, source: 'facebook', warning: "From the page's map pin.", checked: true });
+    }
+    const best = (await inTime(matchCandidates(cfg.candidates, [], []), NO_MATCHES)).top[0];
+    if (!best) return answer({ ...page, warning: 'No place found for this page.', checked: false, unplaced: true });
+    return answer({ ...page, name: best.name || page.name, address: best.address || '', lat: best.lat, lon: best.lon, warning: 'Check this place: found by the page\'s name.', checked: false, check: true });
+  }
+
+  const rateLimited = reading.error?.reason === 'rate-limit';
+  const place = reading.tagged || reading.ready;
+  if (place) return answer(placedRow(place, reading, { checked: true, warning: FROM_TAG }));
+  const { candidates, countries, hintedCountries } = postCandidates(reading);
+  const found = candidates.length ? await inTime(matchCandidates(candidates, countries, hintedCountries), NO_MATCHES) : { top: [] };
+  const best = found.top[0];
+  if (best) {
+    // YouTube's location tag (name and address) is searched first: its match is the tagged place.
+    const fromTag = Boolean(reading.firstSearch) && best.searchedAs === reading.firstSearch;
+    return answer(placedRow(best, reading, fromTag
+      ? { checked: true, warning: FROM_TAG }
+      : { checked: false, warning: `Check this place: found for "${best.searchedAs}" in the post's text.` }), rateLimited);
+  }
+  const reason = reading.error && !reading.text ? reading.error.message || "Couldn't read this post."
+    : found.late ? 'The place search took too long.'
+      : candidates.length ? "The place search found nothing for the post's text." : "No place found in the post's text.";
+  return answer(unplacedRow(link, reading.source, reason, reading.post), rateLimited);
 }

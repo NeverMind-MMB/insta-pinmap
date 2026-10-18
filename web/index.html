@@ -289,16 +289,17 @@
         <legend>Import</legend>
         <p class="field__help">
           Files from Google Takeout (GeoJSON and list CSV), My&nbsp;Maps (KML/KMZ), GPX,
-          GeoJSON and spreadsheets (CSV/TSV) with coordinate or address columns, or several map
-          links at once. A single link, an Apple Guide link too, goes in
-          the input bar.
+          GeoJSON and spreadsheets (CSV/TSV) with coordinate or address columns, or several
+          links at once: map links, Apple Guides, Google Maps lists, posts and videos,
+          coordinates. They open one import list; posts are read one after another and
+          their places wait for you to check them. Two or more pasted in the input bar come here.
         </p>
         <label class="field">
           <span class="field__label">Choose files</span>
           <input type="file" id="settings-import-file" accept=".json,.geojson,.csv,.tsv,.kml,.kmz,.gpx,.zip,.html,.htm" multiple>
         </label>
         <label class="field">
-          <span class="field__label">Several links at once (one per line)</span>
+          <span class="field__label">Links, posts or coordinates (one per line)</span>
           <textarea id="settings-import-link" rows="3" placeholder="https://maps.apple.com/…" autocapitalize="off" spellcheck="false"></textarea>
         </label>
         <div class="buttonrow">
@@ -365,6 +366,10 @@
     </header>
     <div class="sheet__body">
       <p id="import-info" role="status"></p>
+      <p class="notice" id="import-unsupported" hidden>
+        <span id="import-unsupported-text"></span>
+        <a class="btn btn--small" id="import-unsupported-issues" target="_blank" rel="noopener">Check GitHub issues</a>
+      </p>
       <div class="notice" id="import-apple" hidden>
         <p id="import-apple-text"></p>
         <div class="buttonrow">

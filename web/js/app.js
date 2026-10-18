@@ -34,7 +34,7 @@ const env = {
   get map() { return map; },
   redraw,
   showDetail: (id) => showDetail(id, env),
-  showImport: (e, n, guide) => showImport(e, n, env, guide),
+  showImport: (e, n, guide, notes) => showImport(e, n, env, guide, notes),
   showUnsupported,
   pinwheel: playPinwheel,
 };
@@ -305,14 +305,15 @@ function wireSettings() {
     }
   });
 
-  $('btn-settings').addEventListener('click', () => {
+  const openSettings = () => {
     $('settings-radius').value = store.settings.radiusM;
     $('settings-radius-out').value = `${store.settings.radiusM} m`;
     $('settings-tiles').value = store.settings.tiles;
     $('settings-import-status').textContent = '';
     $('settings-backup-age').textContent = backupAgeLabel();
     dlg.showModal();
-  });
+  };
+  $('btn-settings').addEventListener('click', openSettings);
 
   $('settings-radius').addEventListener('input', (e) => {
     const v = Number(e.target.value);
@@ -351,18 +352,26 @@ function wireSettings() {
       return;
     }
     dlg.close();
-    showImport(all, names.join(', '), env, null, skipped);
+    showImport(all, names.join(', '), env, null, { skipped });
   });
 
-  // --- Import from pasted links or Shortcut results: the input bar's way ---
-  $('settings-import-link-go').addEventListener('click', async () => {
+  // --- Import from pasted links, posts, coordinates or Shortcut results: one import list ---
+  const importPasted = async () => {
     try {
       await addFromSettings($('settings-import-link'), env, () => dlg.close());
     } catch (err) {
       console.error(err);
       toast('Something went wrong: ' + err.message, 'error', 6000);
     }
-  });
+  };
+  $('settings-import-link-go').addEventListener('click', importPasted);
+  // The input bar's paste of two or more items: here, in the box, and read at once.
+  env.importPaste = (text) => {
+    openSettings();
+    $('settings-import-link').value = text;
+    $('settings-import-link').scrollIntoView({ block: 'center' });
+    return importPasted();
+  };
 
   // --- Backup ---
   $('settings-export-html').addEventListener('click', async () => {

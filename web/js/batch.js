@@ -1,147 +1,275 @@
 /**
- * batch.js — several items in one paste: the Settings → Import box, and what
- * the input bar does with two or more links.
+ * batch.js — several items in one paste: the Settings → Import box, which
+ * takes every kind of item into one import list, and what the input bar hands
+ * over to it (two or more items; the input bar takes one).
+ *
+ * An item is a link (each different link once), or a line without a link that
+ * holds coordinates, a geo: link or a Plus Code. In the import list:
+ *   map links and coordinates → their places (checked)
+ *   Apple Guides → their places (Apple Maps places unchecked, for the Shortcut lookup)
+ *   Google Maps lists → their places, read through the Worker
+ *   posts → read one after another, one row each at its best place (postflow.js)
+ *   links of no source this version reads → one notice with the GitHub link
+ * The same post or the same place comes in once. Nothing is saved before
+ * "Import selected".
  */
 
-import { readLink, isAppleGuideLink } from './importers.js';
-import { isGoogleList, LISTS_ALONE } from './googlelist.js';
-import { findLinks } from './sources.js';
-import { isPostSource, isReadablePost } from './postflow.js';
-import { appleIdOnly, guideImportEntries } from './mapflow.js';
-import { reopenWaitingGuide } from './shortcut.js';
-import { startAdd } from './router.js';
+import { readLink, isAppleGuideLink, appleIdEntries } from './importers.js';
+import { isGoogleList, googleListId, fetchGoogleList, googleListEntries } from './googlelist.js';
+import { readCoords, placeShortCode } from './coords.js';
+import { makeQueue } from './geocode.js';
+import { findLinks, siteOf } from './sources.js';
+import { isInstagramLink, postKey } from './dedupe.js';
+import { isPostSource, postRow } from './postflow.js';
+import { isMapLink, appleIdOnly, guideOf } from './mapflow.js';
+import { addShortcutOutput, reopenWaitingGuide } from './shortcut.js';
 
 /**
- * Settings → Import → "Read": the pasted text goes the input bar's way, and
- * several place links open one import dialog. Settings closes first, so the
- * dialog startAdd opens is on top; like the input bar, the field empties once
- * a dialog has the text.
+ * The pace of the posts an import reads: each Worker route at most one request per `gapMs`
+ * (under its 20 per minute and address); after a "too many requests" one more try once
+ * `limitWaitMs` has passed. An object, so tests can make it quick.
+ */
+export const BATCH_PACE = { gapMs: 3500, limitWaitMs: 61000 };
+
+/**
+ * The items of a paste, in paste order: every different link, and every line without a link
+ * whose coordinates, geo: link or Plus Code readCoords reads. Raw HTML has none.
+ * @returns {Array<{link: string} | {coords: object, line: string}>}
+ */
+export function pasteItems(text) {
+  const s = String(text ?? '');
+  if (/<html/i.test(s)) return [];
+  const items = [];
+  const seen = new Set();
+  for (const raw of s.split(/\r?\n/)) {
+    const line = raw.trim();
+    const links = findLinks(line);
+    for (const link of links) {
+      if (seen.has(link)) continue;
+      seen.add(link);
+      items.push({ link });
+    }
+    if (links.length || seen.has(`coords:${line}`)) continue;
+    const coords = readCoords(line);
+    if (coords && coords.kind !== 'error') {
+      seen.add(`coords:${line}`);
+      items.push({ coords, line });
+    }
+  }
+  return items;
+}
+
+/**
+ * The place links "Look up with iPhone Shortcut" copied, pasted again before the Shortcut has
+ * run: back to the waiting guide, when they are its Apple IDs and nothing else.
+ * @returns {boolean} true when the waiting guide opened
+ */
+export function reopenGuideFor(items, env) {
+  const ids = items.map((item) => (item.link ? appleIdOnly(item.link) : ''));
+  return ids.length > 0 && ids.every(Boolean) && reopenWaitingGuide([...new Set(ids)], env);
+}
+
+/**
+ * Settings → Import → "Read": everything in the box into one import list (the Shortcut's
+ * output goes to its guide, as in the input bar). Settings stays open while the posts are
+ * read and closes as a dialog opens; the box empties once the import list has the text.
+ * Where nothing could be read, a toast says so and the text stays.
  * @param {{value: string}} field  the paste box
  */
 export async function addFromSettings(field, env, closeSettings) {
   const text = field.value.trim();
   if (!text) return;
-  closeSettings();
-  await startAdd(text, { ...env, inputDone: () => { field.value = ''; } }, { severalLinks: true });
+  let closed = false;
+  const close = () => {
+    if (!closed) closeSettings();
+    closed = true;
+  };
+  await importPaste(text, {
+    ...env,
+    inputDone: () => { field.value = ''; },
+    showImport: (...args) => { close(); env.showImport?.(...args); },
+    showUnsupported: (...args) => { close(); env.showUnsupported?.(...args); },
+  });
 }
 
-/** A link that gives a place (also by Apple ID), a guide, a Google list or a post or video. */
-export function givesPlaceOrPost(link) {
-  if (isReadablePost(link) || isAppleGuideLink(link) || isGoogleList(link) || appleIdOnly(link)) return true;
-  try {
-    return readLink(link).entries.length > 0;
-  } catch {
-    return false;
-  }
+/** A paste as one import list (see addFromSettings). */
+async function importPaste(text, env) {
+  if (addShortcutOutput(text, env)) return;
+  const items = pasteItems(text);
+  if (reopenGuideFor(items, env)) return;
+  await importItems(items, env);
 }
 
-/** How many different links in a paste give a place, a guide, a list or a post (see placeLinks). */
-export function readableLinks(text) {
-  return placeLinks(text).readable;
+/** The pin rows of a coordinates line (a short Plus Code with a town finds the town first). */
+async function coordsRow({ coords, line }) {
+  const row = { name: '', address: '', lat: null, lon: null, url: '', source: 'coords', note: '', warning: '' };
+  if (coords.kind === 'search') return { ...row, name: coords.query, warning: 'No coordinates; looked up by name on import.' };
+  const point = coords.kind === 'short' ? await placeShortCode(coords) : coords;
+  if (!point.ok && point.kind !== 'point') return { ...row, name: coords.code || line, warning: point.message, checked: false, unplaced: true };
+  return { ...row, name: point.name, lat: point.lat, lon: point.lon };
+}
+
+/** The rows of a Google Maps list, read through the Worker; one row with the reason when it can't be read. */
+async function listRows(link) {
+  const failed = (warning) => ({
+    rows: [{ name: 'Google Maps list', address: link, lat: null, lon: null, url: link, source: 'google-list', note: '', warning, checked: false, unplaced: true }],
+  });
+  if (!googleListId(link)) return failed('This Google Maps list link is incomplete. Copy the list link in Google Maps again (Share list).');
+  const list = await fetchGoogleList(link);
+  if (!list.ok) return failed(list.message);
+  const rows = googleListEntries(list.places);
+  if (!rows.length) return failed('This Google Maps list has no places.');
+  const cut = Number.isInteger(list.total) && list.total > rows.length ? `Google sent ${rows.length} of the ${list.total} places in this list.` : '';
+  return { rows, title: String(list.title || ''), cut };
+}
+
+/** A row for a map link readLink can't read (it says why); never imported. */
+function unreadRow(link, warning) {
+  return { name: 'Map link', address: link, lat: null, lon: null, url: link, source: '', note: '', warning, checked: false, unplaced: true };
+}
+
+/** "sites" as words: "a.com", "a.com and b.com", "a.com, b.com and c.com". */
+function joinSites(sites) {
+  return sites.length < 2 ? sites.join('') : `${sites.slice(0, -1).join(', ')} and ${sites.at(-1)}`;
 }
 
 /**
- * The map place links in a paste (text around them is ignored), each link
- * once: their places as import rows, and the Apple IDs of Apple links without
- * coordinates that name their place by ID (each ID once). Guide links stay out:
- * a guide goes its own way, with its title.
- * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number,
- *   readable: number, social: number, posts: number}}
- *   links: how many brought a place; skipped: how many other links (guides, links it can't read);
- *   distinct: how many different links the paste has; readable: how many of them give a place, a
- *   guide, a list or a post (not, say, a map app's download link); social: how many are Instagram,
- *   TikTok, YouTube or Facebook links; posts: how many of those are posts or videos the app reads
+ * The items as one import list. Posts are read one after another at BATCH_PACE, with a
+ * "Reading 2 of 5 …" toast; lists are read through the Worker; Google short links, OpenStreetMap
+ * objects and Mapy short links wait for the import, as in a file import.
  */
-function placeLinks(text) {
-  const entries = [];
+async function importItems(items, env) {
+  const rows = [];
   const appleIds = [];
-  const seen = new Set();
-  let links = 0;
-  let skipped = 0;
-  let readable = 0;
-  let social = 0;
-  let posts = 0;
-  let lists = 0;
-  for (const link of findLinks(text)) {
-    if (seen.has(link)) continue;
-    seen.add(link);
-    if (isPostSource(link)) social++;
-    const post = isReadablePost(link);
-    if (post) posts++;
-    // A Google Maps list (also its resolved address, which readLink would take for a
-    // place without coordinates) goes in on its own, never as a row of a batch.
+  const unsupported = [];
+  const guides = [];
+  const lists = [];
+  const notes = [];
+  const pace = { ig: makeQueue(BATCH_PACE.gapMs), post: makeQueue(BATCH_PACE.gapMs) };
+  const seenPosts = new Set();
+  const slow = items.filter((i) => (i.link && (isPostSource(i.link) || isGoogleList(i.link))) || (i.coords?.kind === 'short' && i.coords.place)).length;
+  let step = 0;
+  const progress = () => env.toast(`Reading ${Math.min(step, slow)} of ${slow} …`, 'busy', 0);
+  const waiting = () => env.toast(`The helper's limit: waiting a minute (${Math.min(step, slow)} of ${slow}) …`, 'busy', 0);
+
+  for (const item of items) {
+    if (item.coords) {
+      if (item.coords.kind === 'short' && item.coords.place) { step++; progress(); }
+      rows.push(await coordsRow(item));
+      continue;
+    }
+    const { link } = item;
+    if (isPostSource(link)) {
+      const key = postKey(link);
+      if (key && seenPosts.has(key)) continue;
+      step++;
+      progress();
+      const row = await readPost(link, pace, waiting);
+      const keyRead = row.post ? postKey(row.post.url) || row.post.url : '';
+      if (keyRead && seenPosts.has(keyRead)) continue;
+      for (const k of [key, keyRead]) if (k) seenPosts.add(k);
+      rows.push(row);
+      continue;
+    }
     if (isGoogleList(link)) {
-      readable++;
-      skipped++;
-      lists++;
+      step++;
+      progress();
+      const list = await listRows(link);
+      rows.push(...list.rows);
+      if (list.title !== undefined) lists.push(list.title);
+      if (list.cut) notes.push(list.cut);
       continue;
     }
-    let parsed = null;
-    try {
-      parsed = isAppleGuideLink(link) ? null : readLink(link);
-    } catch { /* no link readLink knows; perhaps an Apple link with only an ID */ }
-    const id = parsed?.entries.some((e) => Number.isFinite(e.lat)) ? '' : appleIdOnly(link);
-    if (givesPlaceOrPost(link)) readable++;
-    if (id) {
-      if (appleIds.includes(id)) continue;
-      appleIds.push(id);
-    } else if (parsed?.entries.length) {
-      entries.push(...parsed.entries);
+    if (isAppleGuideLink(link)) {
+      try {
+        const parsed = readLink(link);
+        rows.push(...parsed.entries.map((e) => ({ ...e })));
+        appleIds.push(...(parsed.appleIds || []));
+        guides.push(parsed);
+      } catch (e) {
+        rows.push(unreadRow(link, e.message));
+      }
+      continue;
+    }
+    if (isMapLink(link)) {
+      let parsed = null;
+      let error = '';
+      try {
+        parsed = readLink(link);
+      } catch (e) {
+        error = e.message;
+      }
+      // An Apple link that names its place by ID only: a row for the Shortcut lookup.
+      const id = parsed?.entries.some((e) => Number.isFinite(e.lat)) ? '' : appleIdOnly(link);
+      if (id) appleIds.push(id);
+      else if (parsed?.entries.length) rows.push(...parsed.entries.map((e) => ({ ...e })));
+      else rows.push(unreadRow(link, error || 'This link contains no place.'));
+      continue;
+    }
+    // A link of no source this version reads (a link-like word without a site is no link).
+    if (siteOf(link)) unsupported.push(link);
+  }
+  if (slow) env.hideToast?.();
+
+  const ids = [...new Set(appleIds)];
+  const unique = withoutRepeats(rows);
+  const all = [...unique, ...appleIdEntries(ids, new Map())];
+  if (!all.length) {
+    if (unsupported.length) {
+      const sites = [...new Set(unsupported.map(siteOf))];
+      env.showUnsupported?.(unsupported[0], sites.length > 1 ? `Links from ${joinSites(sites)}` : '');
     } else {
-      skipped++;
-      continue;
+      env.toast('No place, post, guide or list found in this text.', 'error', 6000);
     }
-    links++;
+    return;
   }
-  return { entries, appleIds, links, skipped, distinct: seen.size, readable, social, posts, lists };
+  // The tag field starts with a name only when the whole import is one guide or one list.
+  const one = items.length === 1;
+  const sourceName = one && guides.length === 1 ? guides[0].name : one && lists.length === 1 ? lists[0] : '';
+  const guide = !ids.length ? null
+    : one && guides.length === 1 ? guideOf(guides[0])
+      : { title: '', link: '', entries: unique, appleIds: ids };
+  env.showImport?.(all, sourceName, guide, unsupported.length ? { unsupported } : undefined);
+  env.inputDone?.();
+  if (notes.length) env.toast(notes.join(' '), 'info', 8000);
+}
+
+/** One post as a row at BATCH_PACE; after "too many requests", once more a minute later. */
+async function readPost(link, pace, waiting) {
+  const route = isInstagramLink(link) ? 'ig' : 'post';
+  for (let attempt = 0; ; attempt++) {
+    await pace[route](() => {});
+    const { row, rateLimited } = await postRow(link);
+    if (!rateLimited || attempt) return row;
+    waiting();
+    await new Promise((resolve) => setTimeout(resolve, BATCH_PACE.limitWaitMs));
+  }
 }
 
 /**
- * The toast for the links a list of place links left out (`lists` of them Google Maps
- * lists, named apart); posts and videos go in the input bar.
+ * The rows with each place once: a row without a post at the spot of an earlier one (five
+ * decimals) is left out, and so is a link row met before. Rows with a post stay: the import
+ * attaches the post to the pin at that spot.
  */
-function skippedNotice(skipped, social, lists = 0) {
-  const other = skipped - lists;
-  const parts = [];
-  if (other) parts.push(`${other} ${other === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read`);
-  if (lists) parts.push(`${lists} Google Maps ${lists === 1 ? 'list' : 'lists'}`);
-  let notice = `Skipped ${parts.join(' and ')}.`;
-  if (lists) notice += ` ${LISTS_ALONE}`;
-  return social ? `${notice} Posts and videos go in the input bar, one at a time.` : notice;
-}
-
-/**
- * Two or more map place links in one paste, from Settings → Import
- * (`severalLinks`): one import dialog, one row per place. Rows with coordinates
- * are checked; Apple places named only by ID get the dialog's Shortcut lookup,
- * as a guide's do. A post or video (Instagram, TikTok, YouTube, Facebook) among
- * several links never takes over: it is counted as left out, even next to just
- * one place link or none. The input bar takes one link at a time: with two or
- * more links that give a place or a post it imports nothing and says where to go
- * instead (a link that gives neither, such as a map app's download link in its
- * share text, doesn't count).
- * @returns {boolean} false for fewer than two (one link goes on as before)
- */
-export function addFromPlaceLinks(text, env, severalLinks) {
-  const { entries, appleIds, links, skipped, distinct, readable, social, posts, lists } = placeLinks(text);
-  // The place links "Look up with iPhone Shortcut" copied, pasted before the
-  // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
-  if (!entries.length && !skipped && reopenWaitingGuide(appleIds, env)) return true;
-  if (!severalLinks) {
-    // The input bar: any two different links that give a place or a post. A guide link on
-    // the first line is the Shortcut's output (or what is left of it): the guide's way.
-    if (readable < 2 || isAppleGuideLink(text.split(/\r?\n/, 1)[0].trim())) return false;
-    env.toast(posts
-      ? 'One post or video at a time: paste each link on its own.'
-      : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
+function withoutRepeats(rows) {
+  const spots = new Set();
+  const links = new Set();
+  return rows.filter((row) => {
+    if (row.post) return true;
+    if (Number.isFinite(row.lat) && Number.isFinite(row.lon)) {
+      const spot = `${row.lat.toFixed(5)},${row.lon.toFixed(5)}`;
+      if (spots.has(spot)) return false;
+      spots.add(spot);
+      return true;
+    }
+    if (!row.url) return true;
+    if (links.has(row.url)) return false;
+    links.add(row.url);
     return true;
-  }
-  if (links < 2 && !((social || lists) && distinct >= 2)) return false;
-  if (links) {
-    const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
-    env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
-  }
-  if (skipped) env.toast(skippedNotice(skipped, social, lists), 'info', 6000);
-  if (links) env.inputDone?.();
-  return true;
+  });
+}
+
+/** How many items a paste has (see pasteItems): two or more go to Settings → Import. */
+export function itemCount(text) {
+  return pasteItems(text).length;
 }

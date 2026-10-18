@@ -269,8 +269,11 @@ export const SUPPORTED_SOURCES = [
   },
   {
     id: 'several',
-    title: 'Several links at once (Settings → Import)',
-    items: ['maps.apple.com/… place links', 'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…', ...MAP_APP_LINKS],
+    title: 'Several at once (Settings → Import)',
+    items: [
+      'everything the input bar takes, one per line, into one import list (two or more pasted in the input bar go there too)',
+      'maps.apple.com/place?auid=… (Apple Maps places named by their ID: looked up with the iPhone Shortcut)',
+    ],
   },
   {
     id: 'files',

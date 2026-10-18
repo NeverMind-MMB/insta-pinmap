@@ -24,14 +24,19 @@ check what it found before anything is saved.
 | YouTube videos and Shorts | The video's title, description and location tag, read by the app's helper. |
 | Public Facebook posts, reels and pages | A post's or reel's text, or a page's map pin and address, read by the app's helper. |
 
-The input bar takes one link at a time: an Instagram, TikTok, YouTube or
-Facebook link, a map app's place, an Apple Guide or a Google Maps list; or
-coordinates, a `geo:` link or a Plus Code. Several map links at once go in through
-**Settings → Import** (one per line; they open one import list), files through
-**Settings → Import → Choose files**. The import list puts a tag with the
-guide's, list's or file's name on every place it imports; change or clear it
-before you tap **Import selected**. With the tag filter you then show or hide a
-whole guide at once.
+The input bar takes one item: an Instagram, TikTok, YouTube or Facebook link, a
+map app's place, an Apple Guide or a Google Maps list; or coordinates, a `geo:`
+link or a Plus Code. Paste two or more there and they go to **Settings → Import**,
+which takes any number of them, one per line, into one import list: map links and
+coordinates as their places, guides and lists with all their places, and posts and
+videos read one after another (a few seconds each, to stay within the helper's
+limits). A post's place is its location tag, ticked; without a tag the best match
+for its text, left unticked and marked to check. A post the app can't place, and a
+link it doesn't read yet, are listed with the reason; the same place or post comes
+in once. Files go in through **Settings → Import → Choose files**. When the whole
+import is one guide, list or file, the import list puts a tag with its name on
+every place it imports; change or clear it before you tap **Import selected**.
+With the tag filter you then show or hide a whole guide at once.
 
 A pin takes the colour of where it came from (Instagram, TikTok, YouTube,
 Facebook, Apple Maps, Google Maps, other map apps and coordinates, GPS files,
@@ -387,6 +392,11 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   `/api/list` and `/api/post`.
 - `web/js/sources.js` lists every source: its link prefixes, pin colour and the
   dialog's supported links and files. A new source is one more entry there.
+- Adding a pin: `router.js` decides where a paste goes (one if-chain);
+  `postflow.js` is the one flow for Instagram, TikTok, YouTube and Facebook (a
+  small adapter per site), `mapflow.js` map links and coordinates, `shortcut.js`
+  what the iPhone Shortcut hands back, `batch.js` Settings → Import (several items,
+  one import list), `confirm.js` the Confirm place window.
 - Readers added in 2.2.0: `web/js/coords.js` (coordinates, `geo:`, Plus Codes),
   `maplinks.js` (other map apps), `csvcolumns.js` (CSV/TSV columns),
   `googlelist.js` (Google lists), `tiktok.js` (TikTok's oEmbed) and `postlinks.js`

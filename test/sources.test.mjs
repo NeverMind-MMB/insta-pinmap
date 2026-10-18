@@ -91,11 +91,16 @@ test('every link form listed for the input bar is one the input bar reads', () =
   }
 });
 
-test('every link form listed for Settings → Import is a place link readLink reads', () => {
-  for (const item of group('several').items) {
-    const samples = LINK_SAMPLES[item];
-    assert.ok(samples, `${item}: add a sample link to this test`);
-    for (const link of samples) assert.equal(readLink(link).entries.length, 1, `${item}: ${link}`);
+test('Settings → Import is listed as taking everything the input bar takes, plus Apple places named by ID only', async () => {
+  const items = group('several').items;
+  assert.match(items[0], /^everything the input bar takes, one per line, into one import list/);
+  assert.match(items[1], /auid=/);
+  const { pasteItems } = await import('../web/js/batch.js');
+  const { appleIdOnly } = await import('../web/js/mapflow.js');
+  assert.equal(appleIdOnly('https://maps.apple.com/place?auid=987654321'), '987654321');
+  // Each sample of the input bar's list is one item there.
+  for (const item of group('bar').items) {
+    for (const link of LINK_SAMPLES[item]) assert.equal(pasteItems(link).length, 1, `${item}: ${link}`);
   }
 });
 

@@ -46,6 +46,7 @@ test('Shortcut help: both install links get SHORTCUT_INSTALL_URL, the shared "Fe
 
 const { store, normalizeDb } = await import('../web/js/store.js');
 const { importTag, applyImport } = await import('../web/js/ui.js');
+const { issuesSearchUrl } = await import('../web/js/sources.js');
 
 test('import tag: the guide or list name as a tag, file names without their extension', () => {
   assert.equal(importTag('Epic Gamering'), 'epic-gamering');
@@ -156,7 +157,7 @@ test('a Google short link resolving to neither name nor spot: no place search fo
   assert.deepEqual(calls.filter((u) => !u.startsWith('/api/resolve')), [], 'nothing searched');
 });
 
-test('a Google short link that turns out to be a list: no pin, no place search, and the toast says lists go in on their own', async () => {
+test('a Google short link that turns out to be a list: no pin, no place search, and the toast says to paste it in the input bar', async () => {
   const calls = stubNetwork({ resolved: 'https://www.google.com/maps/@/data=!3m1!4b1!4m3!11m2!2sAbCdEf1234567890xyz!3e3' });
   const realSave = store.save;
   store.save = async () => ({ ok: true });
@@ -168,7 +169,7 @@ test('a Google short link that turns out to be a list: no pin, no place search, 
     assert.deepEqual(calls.filter((u) => !u.startsWith('/api/resolve')), [], 'nothing searched');
     const shown = globalThis.document.getElementById('toast');
     assert.equal(shown.textContent,
-      '1 place imported, 1 Google Maps list left out. Google Maps lists go in on their own: paste one list link at a time.');
+      "1 place imported, 1 Google Maps list left out. Paste a list's short link on its own in the input bar to import its places.");
     assert.equal(shown.dataset.kind, 'info');
   } finally {
     store.save = realSave;
@@ -239,7 +240,7 @@ test('showUnsupported: names the site, searches GitHub issues for it, lists what
     assert.equal(lines.length, 3);
     assert.match(lines[0], /^One link at a time \(input bar\): instagram\.com\/p\/… · instagram\.com\/reel\/… · /);
     assert.match(lines[0], / — or type a place name to search$/);
-    assert.match(lines[1], /^Several links at once \(Settings → Import\): maps\.apple\.com\/… place links · /);
+    assert.match(lines[1], /^Several at once \(Settings → Import\): everything the input bar takes, one per line/);
     assert.match(lines[2], /^Files \(Settings → Import → Choose files\): Google Maps saved places and lists \(files from the Google Takeout zip\) · /);
     assert.equal(doc.getElementById('unsupported-sources').open, false);
     assert.equal(doc.getElementById('dlg-unsupported').shown, true);
@@ -403,4 +404,85 @@ test('import: an OpenStreetMap object row is looked up, a Mapy short link row ex
     [47.3, 'Synthetic Peak, Testtown', 'osm-link']);
   assert.deepEqual([pin('Mapy place')?.lat, pin('Mapy place')?.lon, pin('Mapy place')?.source], [47.11, 11.21, 'mapy-link']);
   assert.ok(!calls.some((u) => u.includes('photon') || u.includes('/search')), `no search for "OpenStreetMap place": ${calls.join(' ')}`);
+});
+
+/* ---------- 2.2.0: posts in an import (Settings → Import takes every kind) ---------- */
+
+const POST = { url: 'https://www.instagram.com/p/SynthTag001/', caption: 'Lunch!', username: 'synthetic.user', thumb: '', postedAt: '2026-05-01' };
+
+test('Import selected: a post row\'s pin keeps the post; near a pin already there, the post is attached to it; rows that couldn\'t be placed never become pins', async () => {
+  const realSave = store.save;
+  store.save = async () => ({ ok: true });
+  try {
+    const pin = await importRows([
+      row('Synthetic Bistro', 47.5, 9.7, { source: 'instagram', post: POST }),
+      row('Old place by post', 48.1, 11.5, { source: 'instagram', post: { ...POST, url: 'https://www.instagram.com/p/SynthTxt002/' } }),
+      row('Instagram post', null, null, { unplaced: true, checked: false, warning: 'No place found.' }),
+    ], '', '');
+    assert.equal(store.db.pins.length, 2, 'the new one and the old one; nothing for the unplaced row');
+    assert.deepEqual(pin('Synthetic Bistro').posts.map((p) => [p.url, p.shortcode]), [[POST.url, 'SynthTag001']]);
+    assert.equal(pin('Synthetic Bistro').source, 'instagram');
+    assert.deepEqual(pin('Old place').posts.map((p) => p.url), ['https://www.instagram.com/p/SynthTxt002/']);
+    assert.equal(globalThis.document, undefined);
+  } finally {
+    store.save = realSave;
+  }
+});
+
+/** A document for the import dialog: every id an element; checkboxes found by querySelectorAll. */
+function importDocument() {
+  const descendants = (n) => (n.children || []).flatMap((c) => [c, ...descendants(c)]);
+  const make = (tag = '') => ({
+    tag, hidden: false, disabled: false, checked: false, value: '', textContent: '', innerHTML: '', href: '', className: '',
+    style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, children: [],
+    setAttribute() {}, focus() {}, select() {}, showModal() { this.open = true; }, close() {},
+    appendChild(kid) { this.children.push(kid); return kid; },
+    append(...kids) { this.children.push(...kids); },
+    replaceChildren(...kids) { this.children = kids; },
+    querySelector: () => null,
+    querySelectorAll(sel) { return sel === 'input[type=checkbox]' ? descendants(this).filter((n) => n.type === 'checkbox') : []; },
+  });
+  const els = new Map();
+  return {
+    getElementById: (id) => els.get(id) ?? els.set(id, make(id)).get(id),
+    createElement: (tag) => make(tag), querySelectorAll: () => [],
+  };
+}
+
+test('the import dialog: a row to check is marked and unchecked; a row that couldn\'t be placed is shown but can\'t be ticked, also not by "Select all"', async () => {
+  const { showImport } = await import('../web/js/ui.js');
+  const doc = importDocument();
+  globalThis.document = doc;
+  try {
+    showImport([
+      row('Synthetic Bistro', 47.5, 9.7, { source: 'instagram', post: POST, checked: true }),
+      row('Harbour Cafe', 48.2, 11.6, { source: 'instagram', post: POST, checked: false, check: true, warning: 'Check this place: found for "Harbour Cafe".' }),
+      row('Instagram post', null, null, { unplaced: true, checked: false, warning: 'No place found.' }),
+    ], '', { redraw() {} }, null, { unsupported: ['https://www.pinterest.com/pin/1/', 'https://pin.it/x'] });
+    const items = doc.getElementById('import-list').children;
+    const box = (i) => items[i].children[0];
+    assert.deepEqual(items.map((li) => li.className), ['importrow', 'importrow importrow--check', 'importrow importrow--unplaced']);
+    assert.deepEqual(items.map((_, i) => [box(i).checked, box(i).disabled]), [[true, false], [false, false], [false, true]]);
+    assert.match(doc.getElementById('import-info').textContent, /3 places found — 1 place comes from a post's text: check it, then tick it; 1 couldn't be placed\./);
+    doc.getElementById('import-all').onclick();
+    assert.deepEqual(items.map((_, i) => box(i).checked), [true, true, false]);
+    assert.equal(doc.getElementById('import-unsupported').hidden, false);
+    assert.equal(doc.getElementById('import-unsupported-text').textContent, "2 links from pinterest.com and pin.it don't work in this version of oPin.");
+    assert.equal(doc.getElementById('import-unsupported-issues').href, 'https://github.com/NeverMind-MMB/opin/issues');
+    showImport([row('Lake', 47.1, 11.1)], 'Synthetic Guide', { redraw() {} }, null, { unsupported: ['https://vimeo.com/2'] });
+    assert.equal(doc.getElementById('import-unsupported-issues').href, issuesSearchUrl('vimeo.com'));
+    showImport([row('Lake', 47.1, 11.1)], 'Synthetic Guide', { redraw() {} });
+    assert.equal(doc.getElementById('import-unsupported').hidden, true);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('index.html: the import dialog\'s notice for unsupported links, its GitHub link without an address (set from sources.js)', () => {
+  const part = between('id="dlg-import"', 'id="import-apple"');
+  assert.match(part, /<p class="notice" id="import-unsupported" hidden>/);
+  const link = part.match(/<a\b[^>]*id="import-unsupported-issues"[^>]*>Check GitHub issues<\/a>/);
+  assert.ok(link);
+  assert.doesNotMatch(link[0], /\bhref=/);
+  assert.match(link[0], /target="_blank" rel="noopener"/);
 });

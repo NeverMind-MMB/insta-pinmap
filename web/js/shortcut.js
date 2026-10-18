@@ -13,13 +13,30 @@ import { readLink, isAppleGuideLink } from './importers.js';
 import {
   guidePlaceRow, applyPasteToGuide, loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
 } from './appleplace.js';
-import { guideImportEntries, guideOf } from './mapflow.js';
+import { findLinks } from './sources.js';
+import { guideImportEntries, guideOf, appleIdOnly } from './mapflow.js';
 
 /** {link, rest} when the first line is an Apple guide link and the rest the Shortcut's results; else null. */
 function guideWithResults(text) {
   const [first, ...more] = String(text ?? '').trim().split(/\r?\n/);
   const rest = more.join('\n');
   return isAppleGuideLink(first.trim()) && (/<html/i.test(rest) || rest.includes('@@')) ? { link: first.trim(), rest } : null;
+}
+
+/**
+ * A guide link on the first line and below it only that guide's own Apple place links (what the
+ * Maps route copies when it got no pages): the guide's way, not an import of several links.
+ */
+export function isGuideWithOwnPlaces(text) {
+  const [first, ...rest] = String(text ?? '').trim().split(/\r?\n/);
+  if (!isAppleGuideLink(first.trim())) return false;
+  let ids;
+  try {
+    ids = readLink(first.trim()).appleIds || [];
+  } catch {
+    return false;
+  }
+  return findLinks(rest.join('\n')).every((link) => ids.includes(appleIdOnly(link)));
 }
 
 /** True for the Shortcut's output: place pages (any raw HTML), "@@" lines, or a guide link with results below it. */

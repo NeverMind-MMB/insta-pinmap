@@ -510,6 +510,10 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
 .importrow__name { font-size: .9375rem; font-weight: 600; }
 .importrow__address  { font-size: .8125rem; color: var(--text-muted); }
 .importrow__warning { grid-column: 2; font-size: .75rem; color: var(--danger); }
+/* A post's best match by its text: to check before ticking. A row that couldn't be placed: shown, never imported. */
+.importrow--check { border-color: var(--accent); border-style: dashed; }
+.importrow--unplaced { opacity: .7; border-style: dashed; }
+.importrow--unplaced .importrow__address { overflow-wrap: anywhere; }
 
 /* ---------- Pin details ---------- */
 

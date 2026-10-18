@@ -66,12 +66,12 @@ test('the TikTok group: short links are vm./vt.tiktok.com and tiktok.com/t/; the
   assert.equal(linkSourceName('https://www.pinterest.com/pin/1/'), '');
 });
 
-test('the unsupported-link dialog lists TikTok links for the input bar, not for Settings → Import', () => {
+test('the unsupported-link dialog lists TikTok links for the input bar (Settings → Import takes the same links)', () => {
   const items = (id) => SUPPORTED_SOURCES.find((g) => g.id === id).items;
   for (const item of ['tiktok.com/@…/video/…', 'vm.tiktok.com/…', 'vt.tiktok.com/…', 'tiktok.com/t/…']) {
     assert.ok(items('bar').includes(item), item);
   }
-  assert.ok(!items('several').some((item) => item.includes('tiktok')));
+  assert.match(items('several')[0], /everything the input bar takes/);
 });
 
 /* ---------- Reading a link ---------- */
@@ -362,20 +362,26 @@ test('the input bar: a TikTok video already on a pin opens that pin, before and 
   }
 });
 
-test('the input bar takes one TikTok video at a time; Settings → Import leaves TikTok videos out of a list of place links', async () => {
+test('the input bar takes one TikTok video; with another link it goes to Settings → Import, where the video is read into the list', async () => {
   const LL_LINK = 'https://maps.apple.com/?ll=48.1371,11.5754&q=Synthetic%20Cafe';
-  const hint = 'One post or video at a time: paste each link on its own.';
   for (const text of [`${VIDEO}\nhttps://vm.tiktok.com/ZMsynth01/`, `${LL_LINK}\n${VIDEO}`]) {
     globalThis.fetch = stubFetch(() => assert.fail('nothing fetched'));
     const { toasts, ui } = fakeUi();
-    await startAdd(text, { ...ui, showImport: () => assert.fail('no import from the input bar') });
-    assert.deepEqual(toasts, [[hint, 'info']], text);
+    const handed = [];
+    await startAdd(text, { ...ui, showImport: () => assert.fail('no import from the input bar'), importPaste: (t) => handed.push(t) });
+    assert.deepEqual(handed, [text], text);
+    assert.deepEqual(toasts, [], text);
   }
-  const { toasts, ui } = fakeUi();
+  const { addFromSettings } = await import('../web/js/batch.js');
+  store.db = normalizeDb({});
+  globalThis.fetch = appFetch();
+  const { ui } = fakeUi();
   const imports = [];
-  await startAdd(`${LL_LINK}\n${VIDEO}`, { ...ui, showImport: (e) => imports.push(e) }, { severalLinks: true });
-  assert.deepEqual(imports.map((e) => e.map((r) => r.name)), [['Synthetic Cafe']]);
-  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read. Posts and videos go in the input bar, one at a time.", 'info']]);
+  await addFromSettings({ value: `${LL_LINK}\n${VIDEO}` }, { ...ui, showImport: (e) => imports.push(e) }, () => {});
+  const [cafe, video] = imports[0];
+  assert.equal(cafe.name, 'Synthetic Cafe');
+  assert.deepEqual([video.name, video.source, video.checked, video.check, video.post.url], ['Trattoria Sintetica', 'tiktok', false, true, VIDEO]);
+  assert.match(video.warning, /^Check this place/);
 });
 
 /* ---------- The pin's posts ---------- */

@@ -289,9 +289,9 @@ test('the skipped count reaches the import dialog\'s notice (and the status when
   const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('../web/js/ui.js', import.meta.url), 'utf8');
   assert.match(app, /skipped: dropped = 0 \} = await readFile\(f\)/);
-  assert.match(app, /showImport\(all, names\.join\(', '\), env, null, skipped\)/);
+  assert.match(app, /showImport\(all, names\.join\(', '\), env, null, \{ skipped \}\)/);
   assert.match(app, /'The files contained no places\.' \+ \(skipped \? ` \$\{skippedPlacesNotice\(skipped\)\}` : ''\)/);
-  assert.match(ui, /export function showImport\(entries, sourceName, env, guide = null, skipped = 0\)/);
+  assert.match(ui, /export function showImport\(entries, sourceName, env, guide = null, \{ skipped = 0, unsupported = \[\] \} = \{\}\)/);
   assert.match(ui, /skippedPlacesNotice\(skipped\)/);
 });
 

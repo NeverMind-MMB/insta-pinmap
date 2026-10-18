@@ -15,7 +15,7 @@ import {
   lookupState, lookupNotice, lookupButton, rememberRequested, copiedNotice,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
-import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR, pinLook, linkSourceName } from './sources.js';
+import { SUPPORTED_SOURCES, ISSUES_URL, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR, pinLook, linkSourceName } from './sources.js';
 import { postLinkText, postSiteName } from './postlinks.js';
 
 const $ = (id) => document.getElementById(id);
@@ -520,17 +520,39 @@ function cleanTag(text) {
   return normTag(text).replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
 }
 
+/** "sites" as words: "a.com", "a.com and b.com", "a.com, b.com and c.com". */
+function joinWords(words) {
+  return words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
+}
+
+/** The import dialog's notice for links of sites this version doesn't read, with GitHub's issue search. */
+function drawUnsupportedNotice(links = []) {
+  const box = $('import-unsupported');
+  box.hidden = !links.length;
+  if (!links.length) return;
+  const sites = [...new Set(links.map(siteOf))];
+  const n = links.length;
+  $('import-unsupported-text').textContent =
+    `${n} ${n === 1 ? 'link' : 'links'} from ${joinWords(sites)} ${n === 1 ? "doesn't" : "don't"} work in this version of oPin.`;
+  $('import-unsupported-issues').href = sites.length === 1 ? issuesSearchUrl(sites[0]) : ISSUES_URL;
+}
+
 /**
- * @param {Array} entries  import rows; `checked: false` starts a row unchecked
+ * @param {Array} entries  import rows; `checked: false` starts a row unchecked; `unplaced: true`
+ *   is a row the app couldn't place (its warning says why): shown, never imported; `check: true`
+ *   marks a place to check (the best match for a post's text); `post`: kept on the new pin
  * @param {{title, link, entries, appleIds} | null} guide  an Apple Guide with Apple Maps
  *   places still to look up: shows the Shortcut notice and keeps the guide for 24 h
- * @param {number} skipped  places the files named with neither coordinates nor a name (left out)
+ * @param {{skipped?: number, unsupported?: string[]}} [notes]  skipped: places the files named
+ *   with neither coordinates nor a name (left out); unsupported: links of sites this version
+ *   doesn't read (a notice with the GitHub link)
  */
-export function showImport(entries, sourceName, env, guide = null, skipped = 0) {
+export function showImport(entries, sourceName, env, guide = null, { skipped = 0, unsupported = [] } = {}) {
   const dlg = $('dlg-import');
   const list = $('import-list');
   $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
   $('import-tag').value = importTag(sourceName);
+  drawUnsupportedNotice(unsupported);
   // One colour for the new pins; Auto shows the rows' source colour when they share one.
   const rowColors = new Set(entries.map((e) => sourceColor(e.source)));
   const colorChoice = colorPicker('import-color-choice', {
@@ -538,15 +560,19 @@ export function showImport(entries, sourceName, env, guide = null, skipped = 0) 
   });
   $('import-color').replaceChildren(colorChoice);
 
-  const checked = entries.map((e) => e.checked !== false);
-  const noCoords = (e) => !Number.isFinite(e.lat) || !Number.isFinite(e.lon);
+  const checked = entries.map((e) => e.checked !== false && !e.unplaced);
+  const noCoords = (e) => !e.unplaced && (!Number.isFinite(e.lat) || !Number.isFinite(e.lon));
 
   const drawInfo = () => {
     const open = entries.filter((e) => noCoords(e) && isAppleIdLink(e.url)).length;
     const toLookUp = entries.filter(noCoords).length - open;
+    const toCheck = entries.filter((e) => e.check).length;
+    const unplaced = entries.filter((e) => e.unplaced).length;
     const notes = [];
     if (toLookUp) notes.push(`${toLookUp} of them have no coordinates; these will be looked up on import`);
     if (open) notes.push(`${open} Apple Maps ${open === 1 ? 'place still needs a lookup and is' : 'places still need a lookup and are'} unchecked`);
+    if (toCheck) notes.push(`${toCheck} ${toCheck === 1 ? 'place comes' : 'places come'} from a post's text: check ${toCheck === 1 ? 'it' : 'them'}, then tick ${toCheck === 1 ? 'it' : 'them'}`);
+    if (unplaced) notes.push(`${unplaced} couldn't be placed`);
     $('import-info').textContent =
       `${entries.length} ${entries.length === 1 ? 'place' : 'places'} found` +
       (notes.length ? ` — ${notes.join('; ')}.` : '.') +
@@ -561,11 +587,12 @@ export function showImport(entries, sourceName, env, guide = null, skipped = 0) 
     list.innerHTML = '';
     entries.forEach((e, i) => {
       const li = document.createElement('li');
-      li.className = 'importrow';
+      li.className = e.unplaced ? 'importrow importrow--unplaced' : e.check ? 'importrow importrow--check' : 'importrow';
 
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = checked[i];
+      cb.disabled = Boolean(e.unplaced);
       cb.id = `imp-${i}`;
       cb.dataset.index = String(i);
 
@@ -593,8 +620,8 @@ export function showImport(entries, sourceName, env, guide = null, skipped = 0) 
   };
 
   const setAllChecked = (value) => {
-    checked.fill(value);
-    for (const cb of list.querySelectorAll('input[type=checkbox]')) cb.checked = value;
+    entries.forEach((e, i) => { checked[i] = value && !e.unplaced; });
+    for (const cb of list.querySelectorAll('input[type=checkbox]')) if (!cb.disabled) cb.checked = value;
     updateApply();
   };
   list.onchange = (ev) => {
@@ -630,7 +657,7 @@ export function showImport(entries, sourceName, env, guide = null, skipped = 0) 
   };
 
   $('import-apply').onclick = async () => {
-    const selected = entries.filter((_, i) => checked[i]);
+    const selected = entries.filter((e, i) => checked[i] && !e.unplaced);
     const tag = $('import-tag').value;
     const color = pickedColor(colorChoice);
     dlg.close();
@@ -820,13 +847,16 @@ function wireAppleLookup(guide, entries, onResults) {
 
 /**
  * Imports the rows. Each new pin gets the tag from the dialog's tag field
- * (`tag`, normalized here); a pin already at a row's spot gets it added.
+ * (`tag`, normalized here); a pin already at a row's spot gets it added, and a
+ * row's post (Settings → Import) is attached to it. Rows the app couldn't
+ * place (`unplaced`) never become pins.
  * `color`: the colour picked for the new pins, '' (Auto) for each its source's.
  */
 export async function applyImport(entries, sourceName, env, tag = '', color = '') {
   let created = 0;
   const createdSources = [];
   let skipped = 0;
+  let attached = 0;
   let lists = 0;
   const failed = [];
   const radius = store.settings.radiusM;
@@ -837,6 +867,7 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
+    if (e.unplaced) continue;
     toast(`Importing ${i + 1} of ${entries.length} …`, 'info', 0);
 
     let lat = e.lat;
@@ -896,7 +927,13 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
     if (nearby) {
       const united = [...new Set([...(nearby.tags || []), ...tags])];
       if (united.length > (nearby.tags || []).length) store.updatePin(nearby.id, { tags: united });
-      skipped++;
+      // A post goes on the pin already there, as "attach" in Confirm place.
+      if (e.post) {
+        store.attachPost(nearby.id, e.post);
+        attached++;
+      } else {
+        skipped++;
+      }
       continue;
     }
 
@@ -906,6 +943,7 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
       address: e.address || '',
       note: e.note || '',
       tags,
+      post: e.post || null,
       source: e.source || 'import',
       color,
     });
@@ -919,6 +957,7 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
   if (!saved.ok) return;
 
   const parts = [`${created} ${created === 1 ? 'place' : 'places'} imported`];
+  if (attached) parts.push(`${attached} ${attached === 1 ? 'post' : 'posts'} attached to pins already there`);
   if (skipped) parts.push(`${skipped} skipped as duplicates`);
   if (failed.length) parts.push(`${failed.length} left without coordinates`);
   if (lists) parts.push(`${lists} Google Maps ${lists === 1 ? 'list' : 'lists'} left out`);
