@@ -69,27 +69,67 @@ export function reopenGuideFor(items, env) {
   return ids.length > 0 && ids.every(Boolean) && reopenWaitingGuide([...new Set(ids)], env);
 }
 
+/** The batch being read, `{cancelled}`; null when none runs. One at a time. */
+let running = null;
+
+/** True while Settings → Import reads a paste. */
+export function batchRunning() {
+  return running !== null;
+}
+
+/** Stops the batch being read (Settings was closed): no further item is read, no import list opens. */
+export function cancelBatch() {
+  if (running) running.cancelled = true;
+}
+
+export const STILL_READING = 'An import is still being read. Wait for it, or close Settings to stop it.';
+
 /**
  * Settings → Import → "Read": everything in the box into one import list (the Shortcut's
  * output goes to its guide, as in the input bar). Settings stays open while the posts are
  * read and closes as a dialog opens; the box empties once the import list has the text.
- * Where nothing could be read, a toast says so and the text stays.
+ * Where nothing could be read, a toast says so and the text stays. One batch at a time;
+ * cancelBatch() stops it. An import list the user has open by the end is never replaced.
  * @param {{value: string}} field  the paste box
+ * @param {object} env  also `importOpen()`: true while an import list is open
  */
 export async function addFromSettings(field, env, closeSettings) {
   const text = field.value.trim();
   if (!text) return;
+  if (running) {
+    env.toast(STILL_READING, 'info', 6000);
+    return;
+  }
+  const batch = { cancelled: false };
+  running = batch;
   let closed = false;
   const close = () => {
     if (!closed) closeSettings();
     closed = true;
   };
-  await importPaste(text, {
-    ...env,
-    inputDone: () => { field.value = ''; },
-    showImport: (...args) => { close(); env.showImport?.(...args); },
-    showUnsupported: (...args) => { close(); env.showUnsupported?.(...args); },
-  });
+  const opening = (show) => (...args) => {
+    if (batch.cancelled) return;
+    if (env.importOpen?.()) {
+      env.toast('The import list is still open: finish it, then tap Read again.', 'info', 6000);
+      batch.cancelled = true;
+      return;
+    }
+    // Done reading: Settings closing now is no stop any more.
+    if (running === batch) running = null;
+    close();
+    show?.(...args);
+  };
+  try {
+    await importPaste(text, {
+      ...env,
+      batch,
+      inputDone: () => { if (!batch.cancelled) field.value = ''; },
+      showImport: opening(env.showImport),
+      showUnsupported: opening(env.showUnsupported),
+    });
+  } finally {
+    if (running === batch) running = null;
+  }
 }
 
 /** A paste as one import list (see addFromSettings). */
@@ -152,7 +192,9 @@ async function importItems(items, env) {
   const progress = () => env.toast(`Reading ${Math.min(step, slow)} of ${slow} …`, 'busy', 0);
   const waiting = () => env.toast(`The helper's limit: waiting a minute (${Math.min(step, slow)} of ${slow}) …`, 'busy', 0);
 
+  const stopped = () => env.batch?.cancelled;
   for (const item of items) {
+    if (stopped()) break;
     if (item.coords) {
       if (item.coords.kind === 'short' && item.coords.place) { step++; progress(); }
       rows.push(await coordsRow(item));
@@ -164,7 +206,7 @@ async function importItems(items, env) {
       if (key && seenPosts.has(key)) continue;
       step++;
       progress();
-      const row = await readPost(link, pace, waiting);
+      const row = await readPost(link, pace, waiting, stopped);
       const keyRead = row.post ? postKey(row.post.url) || row.post.url : '';
       if (keyRead && seenPosts.has(keyRead)) continue;
       for (const k of [key, keyRead]) if (k) seenPosts.add(k);
@@ -209,7 +251,8 @@ async function importItems(items, env) {
     // A link of no source this version reads (a link-like word without a site is no link).
     if (siteOf(link)) unsupported.push(link);
   }
-  if (slow) env.hideToast?.();
+  if (slow || stopped()) env.hideToast?.();
+  if (stopped()) return;
 
   const ids = [...new Set(appleIds)];
   const unique = withoutRepeats(rows);
@@ -234,8 +277,8 @@ async function importItems(items, env) {
   if (notes.length) env.toast(notes.join(' '), 'info', 8000);
 }
 
-/** One post as a row at BATCH_PACE; after "too many requests", once more a minute later. */
-async function readPost(link, pace, waiting) {
+/** One post as a row at BATCH_PACE; after "too many requests", once more a minute later (unless stopped). */
+async function readPost(link, pace, waiting, stopped) {
   const route = isInstagramLink(link) ? 'ig' : 'post';
   for (let attempt = 0; ; attempt++) {
     await pace[route](() => {});
@@ -243,6 +286,7 @@ async function readPost(link, pace, waiting) {
     if (!rateLimited || attempt) return row;
     waiting();
     await new Promise((resolve) => setTimeout(resolve, BATCH_PACE.limitWaitMs));
+    if (stopped()) return row;
   }
 }
 

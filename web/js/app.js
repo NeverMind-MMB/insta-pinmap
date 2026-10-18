@@ -5,7 +5,7 @@
 import { store, DEFAULT_SETTINGS, pruneTagFilter } from './store.js';
 import { MainMap, TILES } from './map.js';
 import { startAdd, isShortcutPaste } from './router.js';
-import { addFromSettings } from './batch.js';
+import { addFromSettings, batchRunning, cancelBatch, STILL_READING } from './batch.js';
 import { wireConfirm } from './confirm.js';
 import { guideImportEntries } from './mapflow.js';
 import {
@@ -358,17 +358,28 @@ function wireSettings() {
   });
 
   // --- Import from pasted links, posts, coordinates or Shortcut results: one import list ---
+  // One batch at a time: Read waits while one is read; closing Settings stops it.
   const importPasted = async () => {
+    if (batchRunning()) return;
+    $('settings-import-link-go').disabled = true;
     try {
       await addFromSettings($('settings-import-link'), env, () => dlg.close());
     } catch (err) {
       console.error(err);
       toast('Something went wrong: ' + err.message, 'error', 6000);
+    } finally {
+      $('settings-import-link-go').disabled = false;
     }
   };
   $('settings-import-link-go').addEventListener('click', importPasted);
+  dlg.addEventListener('close', cancelBatch);
+  env.importOpen = () => $('dlg-import').open;
   // The input bar's paste of two or more items: here, in the box, and read at once.
   env.importPaste = (text) => {
+    if (batchRunning()) {
+      toast(STILL_READING, 'info', 6000);
+      return undefined;
+    }
     openSettings();
     $('settings-import-link').value = text;
     $('settings-import-link').scrollIntoView({ block: 'center' });

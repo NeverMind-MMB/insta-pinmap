@@ -245,6 +245,16 @@ test('Settings → Import: three place links (ll=, address+auid, auid only) open
   assert.deepEqual(toasts, []);
 });
 
+test('the input bar hands two links over without waiting for the import to be read (its Go button is free again at once)', async () => {
+  const { ui } = fakeUi();
+  let finished = false;
+  const started = startAdd(`${LL_LINK}\n${AUID_LINK}`, {
+    ...ui, inputDone() {}, importPaste: () => new Promise((r) => setTimeout(() => { finished = true; r(); }, 200)),
+  });
+  await started;
+  assert.equal(finished, false, 'startAdd is done before the batch');
+});
+
 test('Settings → Import: place links with repeats and other lines give one row per place, the other lines ignored', async () => {
   const text = ['My places:', LL_LINK, '', AUID_LINK, `${LL_LINK} `, PLACE_ID_ONLY_LINK, 'see you there', PLACE_ID_LINK, AUID_LINK].join('\n');
   const { imports } = await readInSettings(text);

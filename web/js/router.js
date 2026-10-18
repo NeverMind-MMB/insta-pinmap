@@ -32,9 +32,10 @@ export async function startAdd(input, env) {
   // The place links the app copied for the Shortcut, pasted before it has run.
   if (reopenGuideFor(items, env)) return;
   // Two or more items (links of any kind, coordinates): one import list in Settings → Import.
+  // Not awaited: the batch is Settings' now, and the input bar is free again at once.
   if (items.length >= 2 && !isGuideWithOwnPlaces(text)) {
     env.inputDone?.();
-    await env.importPaste?.(text);
+    env.importPaste?.(text);
     return;
   }
 

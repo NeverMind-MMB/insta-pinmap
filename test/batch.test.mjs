@@ -195,3 +195,55 @@ test('pasteItems: each different link once, and lines without a link that hold c
   ].join('\n'));
   assert.deepEqual(items.map((i) => i.link || i.coords.kind), [LL_LINK, 'point', 'point', 'point', IG_TAGGED, IG_TEXT]);
 });
+
+/* ---------- A batch that runs: one at a time, stopped by closing Settings ---------- */
+
+const { batchRunning, cancelBatch } = await import('../web/js/batch.js');
+
+test('while a batch reads, a second Read is refused; closing Settings stops it before the next item, and no import list opens', async () => {
+  quick();
+  try {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const calls = stubNetwork({ ig: async (code) => { await gate; return json(IG_ANSWERS[code]); } });
+    store.db = normalizeDb({});
+    const toasts = [];
+    const opened = [];
+    const env = { toast: (t, kind) => toasts.push([t, kind]), hideToast: () => toasts.push(['hidden']), showImport: (e) => opened.push(e) };
+    const first = addFromSettings({ value: `${IG_TAGGED}\n${IG_TEXT}\n${LL_LINK}` }, env, () => {});
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(batchRunning(), true);
+    const second = { value: LL_LINK };
+    await addFromSettings(second, env, () => {});
+    assert.match(toasts.at(-1)[0], /still being read/);
+    assert.equal(second.value, LL_LINK, 'kept');
+    cancelBatch(); // Settings closed
+    release();
+    await first;
+    assert.equal(batchRunning(), false);
+    assert.equal(calls.filter((c) => c.u.startsWith('/api/ig')).length, 1, 'the second post is not read');
+    assert.deepEqual(opened, [], 'no import list after the stop');
+    assert.deepEqual(toasts.at(-1), ['hidden'], 'the progress toast goes');
+  } finally {
+    restore();
+  }
+});
+
+test('a finished batch never replaces an import list that is open by then', async () => {
+  quick();
+  try {
+    stubNetwork();
+    store.db = normalizeDb({});
+    const toasts = [];
+    const opened = [];
+    const field = { value: `${LL_LINK}\n48.2001, 11.6001` };
+    await addFromSettings(field, {
+      toast: (t, kind) => toasts.push([t, kind]), hideToast() {}, showImport: (e) => opened.push(e), importOpen: () => true,
+    }, () => {});
+    assert.deepEqual(opened, []);
+    assert.match(toasts.at(-1)[0], /import list is still open/);
+    assert.match(field.value, /48\.2001/, 'the text stays for later');
+  } finally {
+    restore();
+  }
+});
