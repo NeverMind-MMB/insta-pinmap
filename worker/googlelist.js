@@ -14,9 +14,49 @@
 const GETLIST = 'https://www.google.com/maps/preview/entitylist/getlist';
 const MAX_LENGTH = { title: 200, name: 200, address: 300, note: 2000 };
 
-/** getlist's address for a list (the caller checks the ID): up to 3,000 places, the most a list holds. */
+/**
+ * getlist's address for a list (the caller checks the ID): up to 1,000 places (a list holds up
+ * to 3,000), so the answer stays small enough for the Worker to read and parse; the list's
+ * total still comes along, and the app says how many of them Google sent.
+ */
 export function getlistUrl(listId) {
-  return `${GETLIST}?authuser=0&hl=en&gl=us&pb=!1m4!1s${listId}!2e1!3m1!1e1!2e2!3e2!4i3000!16b1`;
+  return `${GETLIST}?authuser=0&hl=en&gl=us&pb=!1m4!1s${listId}!2e1!3m1!1e1!2e2!3e2!4i1000!16b1`;
+}
+
+/** The most of getlist's answer the Worker reads (bytes): 1,000 places with long notes stay below it. */
+export const MAX_ANSWER_BYTES = 1_500_000;
+
+/**
+ * The answer's text, or null when it is bigger than `max` bytes: then reading stops there
+ * and the rest is cancelled, so an oversized (or endless) answer never fills the Worker.
+ */
+export async function readCapped(res, max = MAX_ANSWER_BYTES) {
+  const declared = Number(res.headers.get('Content-Length'));
+  if (Number.isFinite(declared) && declared > max) {
+    res.body?.cancel().catch(() => {});
+    return null;
+  }
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 /** getlist's JSON, or undefined when the text is none. */

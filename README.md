@@ -13,7 +13,7 @@ check what it found before anything is saved.
 |---|---|
 | Apple Guides and Apple Maps places | The link itself. Places a guide names only by an Apple Maps ID are looked up from your phone or computer (see "Apple Guides"). |
 | Google Maps links | The link itself; short links are expanded by the app's helper. |
-| Google Maps shared lists (only lists shared with "Anyone with the link") | The list, read by the app's helper; all its places open in one import list. |
+| Google Maps shared lists (only lists shared with "Anyone with the link") | The list, read by the app's helper; its places (up to 1,000) open in one import list. |
 | Links from other map apps: OpenStreetMap, Organic Maps / CoMaps, Waze, HERE WeGo, Mapy, Bing Maps | The link itself. An OpenStreetMap object (node, way, relation) is looked up on OpenStreetMap; Mapy short links are expanded by the app's helper. |
 | Coordinates, `geo:` links and Plus Codes, typed or pasted | The text itself: the exact point. A short Plus Code with a town ("4HX8+QH Munich") is placed near that town. |
 | Google Maps saved places and lists (the GeoJSON and CSV files from the Google Takeout zip, not the zip itself; older and newer Takeout files) | The file itself; places without coordinates are searched by name on import, never put at 0,0. |
@@ -392,10 +392,11 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   `iglocation.js` (an Instagram post's location tag, which `/api/ig` now returns
   as `locationTag`; `location` stays the tag's name, as older apps expect it),
   `googlelist.js` and `post.js`.
-- `GET /api/list?link=<list link>` answers the list's title and places as JSON
-  (one request to Google by the list's ID); 400 for a link without a list ID, 404
-  for a list not shared with "Anyone with the link", 502 when Google doesn't send
-  it, 429 over the rate limit.
+- `GET /api/list?link=<list link>` answers the list's title, its total and up to
+  1,000 of its places as JSON (one request to Google by the list's ID, read up to
+  1.5 MB); 400 for a link without a list ID, 404 for a list not shared with
+  "Anyone with the link", 502 when Google doesn't send it or its answer is too
+  big, 429 over the rate limit.
 - `GET /api/post?url=<link>&m=<minute>&n=<nonce>` answers a YouTube video's text
   and location tag, a Facebook post's text or a Facebook page's map pin, as JSON.
   Its work ticket is computed over the link's post key (`yt:…`, `fb:…`), as

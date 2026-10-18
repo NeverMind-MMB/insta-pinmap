@@ -90,7 +90,8 @@ test('/api/list: a placelists link — one getlist request to www.google.com, th
   assert.equal(new URL(url).origin, 'https://www.google.com');
   assert.equal(new URL(url).pathname, '/maps/preview/entitylist/getlist');
   assert.ok(url.includes(`!1s${LIST_ID}!`), url);
-  assert.ok(url.includes('!4i3000'), 'asks for up to 3,000 places');
+  assert.ok(url.includes('!4i1000!'), 'asks for up to 1,000 places');
+  assert.ok(!url.includes('!4i3000'), url);
   assert.equal(init.redirect, 'manual', 'never follows Google elsewhere');
   assert.deepEqual(await res.json(), {
     ok: true,
@@ -170,6 +171,62 @@ test('/api/list: Google failing (error status, a redirect, junk, no network) is 
     assert.ok(body.message && !body.message.includes('secret'));
     assert.ok(deps.calls.length <= 1, 'one request, no retry');
   }
+});
+
+test('/api/list: 1,000 places of a longer list come through with its total, so the app can say "Google sent 1000 of the 2500"', async () => {
+  const places = Array.from({ length: 1000 }, (_, i) =>
+    gPlace({ name: `Synthetic Place ${i}`, note: 'Synthetic note '.repeat(8), address: `Teststreet ${i}, Testtown`, lat: 47 + i / 10000, lon: 11 + i / 10000 }));
+  const answer = gAnswer({ places, total: 2500 });
+  assert.ok(answer.length > 300000, `a realistic size (${answer.length})`);
+  const res = await handleRequest(listRequest(PLACELIST_LINK), bindings(), googleFetch(answer));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.places.length, 1000);
+  assert.equal(body.total, 2500);
+});
+
+const SIZE_LIMIT = 1_500_000;
+
+test('/api/list: an answer bigger than about 1.5 MB is not read whole: 502 with a message, nothing parsed', async () => {
+  const note = 'x'.repeat(1900);
+  const places = Array.from({ length: 1000 }, (_, i) => gPlace({ name: `Synthetic Place ${i}`, note, lat: 47, lon: 11 }));
+  const answer = gAnswer({ places });
+  assert.ok(answer.length > SIZE_LIMIT, String(answer.length));
+  for (const headers of [{}, { 'Content-Length': String(answer.length) }]) {
+    const res = await handleRequest(listRequest(PLACELIST_LINK), bindings(), googleFetch(answer, 200, headers));
+    assert.equal(res.status, 502);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.reason, 'too-big');
+    assert.match(body.message, /too big/);
+    assert.match(body.message, /Takeout/);
+  }
+});
+
+test('/api/list: an endless answer is cut off after about 1.5 MB (the stream is cancelled, not read to its end)', async () => {
+  let sent = 0;
+  let cancelled = false;
+  const chunk = new TextEncoder().encode(`)]}'\n[[${'"x",'.repeat(16000)}`);
+  const stream = new ReadableStream({
+    pull(controller) { sent += chunk.length; controller.enqueue(chunk); },
+    cancel() { cancelled = true; },
+  });
+  const fetch = async () => new Response(stream, { status: 200 });
+  const res = await handleRequest(listRequest(PLACELIST_LINK), bindings(), { fetch });
+  assert.equal(res.status, 502);
+  assert.equal((await res.json()).reason, 'too-big');
+  assert.ok(cancelled, 'the rest of the answer is refused');
+  assert.ok(sent < SIZE_LIMIT + 4 * chunk.length, `read ${sent} bytes`);
+});
+
+test('/api/list: an answer just under the size limit is read', async () => {
+  const note = 'x'.repeat(1900);
+  const places = Array.from({ length: 600 }, (_, i) => gPlace({ name: `Synthetic Place ${i}`, note, lat: 47, lon: 11 }));
+  const answer = gAnswer({ places });
+  assert.ok(answer.length < SIZE_LIMIT && answer.length > 1_000_000, String(answer.length));
+  const res = await handleRequest(listRequest(PLACELIST_LINK), bindings(), googleFetch(answer));
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).places.length, 600);
 });
 
 test('/api/list: its own per-address limit (LIST_LIMIT) gives 429', async () => {

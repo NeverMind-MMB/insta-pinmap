@@ -21,7 +21,7 @@ import { ticketMinute } from '../web/js/ticket.js';
 import versionInfo from '../web/version.json' with { type: 'json' };
 import { readAppleGuide, isAppleGuideLink, appleIdLink } from '../web/js/importers.js';
 import { googleListId } from '../web/js/googlelist.js';
-import { getlistUrl, parseGoogleList, isMissingList } from './googlelist.js';
+import { getlistUrl, parseGoogleList, isMissingList, readCapped } from './googlelist.js';
 import { readPost } from './post.js';
 import { postRequestKey } from '../web/js/postlinks.js';
 
@@ -237,9 +237,15 @@ async function handleList(url, request, bindings, deps) {
       res.body?.cancel().catch(() => {});
       return failed();
     }
-    answer = await res.text();
+    answer = await readCapped(res);
   } catch {
     return failed();
+  }
+  if (answer === null) {
+    return json({
+      ok: false, reason: 'too-big',
+      message: "This Google Maps list is too big to read here. Import the list's file from Google Takeout in Settings → Import.",
+    }, 502);
   }
   const list = parseGoogleList(answer);
   if (list) return json({ ok: true, ...list });

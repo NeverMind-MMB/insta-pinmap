@@ -100,7 +100,7 @@ export async function addFromGoogleList(link, env) {
   }
   env.showImport?.(entries, String(list.title || ''), null);
   env.inputDone?.();
-  // Google sends up to 3,000 places at once; a longer list comes back cut.
+  // The Worker asks Google for up to 1,000 places; a longer list comes back cut.
   if (Number.isInteger(list.total) && list.total > entries.length) {
     env.toast(`Google sent ${entries.length} of the ${list.total} places in this list.`, 'info', 8000);
   }
