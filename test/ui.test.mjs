@@ -39,7 +39,7 @@ test('Shortcut help: both install links get SHORTCUT_INSTALL_URL, the shared "Fe
   const links = [{}, {}];
   linkShortcutInstall({ querySelectorAll: (sel) => (sel === 'a[data-shortcut-install]' ? links : []) });
   assert.deepEqual(links.map((a) => a.href), [SHORTCUT_INSTALL_URL, SHORTCUT_INSTALL_URL]);
-  assert.equal(SHORTCUT_INSTALL_URL, 'https://www.icloud.com/shortcuts/6aeae7fdbdc94bffb0273030edffdd92');
+  assert.equal(SHORTCUT_INSTALL_URL, 'https://www.icloud.com/shortcuts/e24cec9d7c184ac78151fe8a8d24c1f9');
 });
 
 /* ---------- Import tag from the guide or list name (2.0.10) ---------- */

@@ -150,7 +150,7 @@ guide link straight into the app and the import dialog lists them as unchecked
 ### Option A — iPhone Shortcut
 
 One Shortcut does it all: **Fetch Apple Guide**. Open
-<https://www.icloud.com/shortcuts/6aeae7fdbdc94bffb0273030edffdd92> on your
+<https://www.icloud.com/shortcuts/e24cec9d7c184ac78151fe8a8d24c1f9> on your
 iPhone and tap **Add Shortcut**. Keep the name: the app's **Look up with iPhone
 Shortcut** button starts it by that name. The app has the same link, plus the
 tips below, under **Shortcut help** in the import dialog and in **Settings →

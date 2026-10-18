@@ -134,15 +134,9 @@ body {
 }
 .iconbtn:hover { background: var(--surface-2); color: var(--text); }
 .iconbtn svg { width: 22px; height: 22px; fill: currentColor; }
-/* Settings: the owner's pin-gear drawing twice (big, and small turned by 30°), red, turning against each other on hover/focus. */
-#btn-settings .cog { transform-box: view-box; }
+/* Settings: the owner's pin-gear drawing twice, interlocked (a ring of the small one sits in a gap of the
+   big one). Static on purpose: two six-ring gears of different sizes can't turn together without overlapping. */
 #btn-settings svg { fill: #e22222; }
-#btn-settings .cog--big { transform-origin: 8.8px 8.8px; }
-#btn-settings .cog--small { transform-origin: 17.6px 17.6px; }
-#btn-settings:hover .cog--big, #btn-settings:focus-visible .cog--big { animation: cog-turn 4s linear infinite; }
-#btn-settings:hover .cog--small, #btn-settings:focus-visible .cog--small { animation: cog-turn 3s linear infinite reverse; }
-@keyframes cog-turn { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { #btn-settings .cog { animation: none !important; } }
 .iconbtn img { width: 24px; height: 24px; }
 
 /* ---------- Toggle ---------- */

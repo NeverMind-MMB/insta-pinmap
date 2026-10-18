@@ -137,8 +137,8 @@ test('index.html: the pinwheel as favicon, touch icon and top-bar logo, a six-to
   assert.deepEqual(manifest.icons.map((i) => i.src), ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png']);
   assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
   assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
-  // Owner: his pin-gear drawing twice — a big one and a smaller one turned by 30° — as cogs that turn
-  // against each other on hover/focus (app.css); vector, so it stays sharp.
+  // Owner: his pin-gear drawing twice — a big one and a smaller one — interlocked like cogs (static: two
+  // six-ring gears of different sizes can't turn together); vector, so it stays sharp.
   const settings = html.match(/id="btn-settings"[^>]*>\s*(<svg viewBox="0 0 24 24" aria-hidden="true">.*?<\/svg>)\s*<\/button>/s);
   assert.ok(settings, 'the settings button holds one inline SVG');
   assert.match(settings[1], /<path id="opin-pin" fill-rule="evenodd" d="[^"]+"\/>/);
