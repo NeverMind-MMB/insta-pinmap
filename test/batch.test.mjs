@@ -64,7 +64,7 @@ async function importInSettings(text, { pins = [] } = {}) {
   await addFromSettings(field, {
     toast: (t, kind) => toasts.push([t, kind]), hideToast() {},
     showImport: (e, n, g, notes) => opened.push({ e, n, g, notes }),
-    showUnsupported: (link, what) => opened.push({ unsupported: link, what }),
+    showUnsupported: (...args) => opened.push({ unsupported: args }),
   }, () => {});
   return { opened, toasts, field };
 }
@@ -183,9 +183,9 @@ test('a YouTube video whose location tag is found by its address is checked: the
 test('only links of sites this version doesn\'t read: the unsupported dialog (naming every site), nothing imported, the text kept', async () => {
   stubNetwork();
   let r = await importInSettings('https://www.pinterest.com/pin/123456789/');
-  assert.deepEqual(r.opened, [{ unsupported: 'https://www.pinterest.com/pin/123456789/', what: '' }]);
+  assert.deepEqual(r.opened, [{ unsupported: ['https://www.pinterest.com/pin/123456789/'] }]);
   r = await importInSettings('https://www.pinterest.com/pin/1/\nhttps://vimeo.com/2');
-  assert.deepEqual(r.opened, [{ unsupported: 'https://www.pinterest.com/pin/1/', what: 'Links from pinterest.com and vimeo.com' }]);
+  assert.deepEqual(r.opened, [{ unsupported: ['https://www.pinterest.com/pin/1/', 'Links from pinterest.com and vimeo.com', ''] }], 'several sites: no sentence as a GitHub search');
   assert.match(r.field.value, /vimeo/);
 });
 
@@ -243,6 +243,31 @@ test('a finished batch never replaces an import list that is open by then', asyn
     assert.deepEqual(opened, []);
     assert.match(toasts.at(-1)[0], /import list is still open/);
     assert.match(field.value, /48\.2001/, 'the text stays for later');
+  } finally {
+    restore();
+  }
+});
+
+test('Worker routes are paced in a batch too: /api/resolve and /api/list calls each at most once per BATCH_PACE gap', async () => {
+  Object.assign(BATCH_PACE, { gapMs: 60, limitWaitMs: 0 });
+  try {
+    const calls = [];
+    globalThis.fetch = async (url) => {
+      const u = String(url);
+      calls.push({ u, at: Date.now() });
+      if (u.startsWith('/api/resolve')) return json({ ok: true, url: `https://www.google.com/maps/place/Synthetic+Spot/@45.4,9.2,17z/data=!3d45.${calls.length}!4d9.1` });
+      if (u.startsWith('/api/list')) return json({ ok: true, title: 'L', total: 1, places: [{ name: `Synthetic ${calls.length}`, lat: 40 + calls.length, lon: 9 }] });
+      return json([]);
+    };
+    await importInSettings([
+      'https://maps.app.goo.gl/synthA', 'https://maps.app.goo.gl/synthB',
+      'https://www.google.com/maps/placelists/list/SyntheticListId_000000001', 'https://www.google.com/maps/placelists/list/SyntheticListId_000000002',
+    ].join('\n'));
+    for (const route of ['/api/resolve', '/api/list']) {
+      const at = calls.filter((c) => c.u.startsWith(route)).map((c) => c.at);
+      assert.equal(at.length, 2, route);
+      assert.ok(at[1] - at[0] >= 55, `${route}: gap ${at[1] - at[0]} ms`);
+    }
   } finally {
     restore();
   }

@@ -14,11 +14,12 @@
  * "Import selected".
  */
 
-import { readLink, isAppleGuideLink, appleIdEntries } from './importers.js';
+import { readLink, isAppleGuideLink, appleIdEntries, isGoogleShortLink } from './importers.js';
 import { isGoogleList, googleListId, fetchGoogleList, googleListEntries } from './googlelist.js';
 import { readCoords, placeShortCode } from './coords.js';
 import { makeQueue } from './geocode.js';
-import { findLinks, siteOf } from './sources.js';
+import { findLinks, siteOf, sourceOf } from './sources.js';
+import { resolveShortLink } from './api.js';
 import { isInstagramLink, postKey } from './dedupe.js';
 import { isPostSource, postRow } from './postflow.js';
 import { isMapLink, appleIdOnly, guideOf } from './mapflow.js';
@@ -163,6 +164,17 @@ async function listRows(link) {
   return { rows, title: String(list.title || ''), cut };
 }
 
+/** The rows readLink gives a map link, or one row with the reason why it gives none. */
+function linkRows(link) {
+  try {
+    const { entries } = readLink(link);
+    if (entries.length) return entries.map((e) => ({ ...e }));
+  } catch (e) {
+    return [unreadRow(link, e.message)];
+  }
+  return [unreadRow(link, 'This link contains no place.')];
+}
+
 /** A row for a map link readLink can't read (it says why); never imported. */
 function unreadRow(link, warning) {
   return { name: 'Map link', address: link, lat: null, lon: null, url: link, source: '', note: '', warning, checked: false, unplaced: true };
@@ -173,21 +185,39 @@ function joinSites(sites) {
   return sites.length < 2 ? sites.join('') : `${sites.slice(0, -1).join(', ')} and ${sites.at(-1)}`;
 }
 
+/** A Google short link (maps.app.goo.gl, goo.gl/maps): only the helper can say what it leads to. */
+function isGoogleShort(link) {
+  return sourceOf(link) === 'google' && isGoogleShortLink(link);
+}
+
 /**
- * The items as one import list. Posts are read one after another at BATCH_PACE, with a
- * "Reading 2 of 5 …" toast; lists are read through the Worker; Google short links, OpenStreetMap
- * objects and Mapy short links wait for the import, as in a file import.
+ * The items as one import list. Posts, Google short links and lists go through the Worker one
+ * after another, each route at BATCH_PACE, with a "Reading 2 of 5 …" toast; a short link that
+ * turns out to be a list brings the list's places. OpenStreetMap objects and Mapy short links
+ * wait for the import, as in a file import.
  */
-async function importItems(items, env) {
+async function importItems(given, env) {
   const rows = [];
   const appleIds = [];
   const unsupported = [];
   const guides = [];
   const lists = [];
   const notes = [];
-  const pace = { ig: makeQueue(BATCH_PACE.gapMs), post: makeQueue(BATCH_PACE.gapMs) };
+  const pace = {
+    ig: makeQueue(BATCH_PACE.gapMs), post: makeQueue(BATCH_PACE.gapMs),
+    resolve: makeQueue(BATCH_PACE.gapMs), list: makeQueue(BATCH_PACE.gapMs),
+  };
+  // The same post in two link forms is one item, before anything is counted or read.
   const seenPosts = new Set();
-  const slow = items.filter((i) => (i.link && (isPostSource(i.link) || isGoogleList(i.link))) || (i.coords?.kind === 'short' && i.coords.place)).length;
+  const items = given.filter((i) => {
+    const key = i.link && isPostSource(i.link) ? postKey(i.link) : '';
+    if (!key) return true;
+    if (seenPosts.has(key)) return false;
+    seenPosts.add(key);
+    return true;
+  });
+  const slow = items.filter((i) => (i.link && (isPostSource(i.link) || isGoogleList(i.link) || isGoogleShort(i.link))) ||
+    (i.coords?.kind === 'short' && i.coords.place)).length;
   let step = 0;
   const progress = () => env.toast(`Reading ${Math.min(step, slow)} of ${slow} …`, 'busy', 0);
   const waiting = () => env.toast(`The helper's limit: waiting a minute (${Math.min(step, slow)} of ${slow}) …`, 'busy', 0);
@@ -200,22 +230,44 @@ async function importItems(items, env) {
       rows.push(await coordsRow(item));
       continue;
     }
-    const { link } = item;
+    let { link } = item;
     if (isPostSource(link)) {
       const key = postKey(link);
-      if (key && seenPosts.has(key)) continue;
       step++;
       progress();
       const row = await readPost(link, pace, waiting, stopped);
+      // A share link can turn out to be a post met before.
       const keyRead = row.post ? postKey(row.post.url) || row.post.url : '';
-      if (keyRead && seenPosts.has(keyRead)) continue;
-      for (const k of [key, keyRead]) if (k) seenPosts.add(k);
+      if (keyRead && keyRead !== key && seenPosts.has(keyRead)) continue;
+      if (keyRead) seenPosts.add(keyRead);
       rows.push(row);
       continue;
+    }
+    if (isGoogleShort(link)) {
+      step++;
+      progress();
+      await pace.resolve(() => {});
+      const j = await resolveShortLink(link);
+      // Not expanded now: the row waits for the import, which tries again.
+      if (!j.ok || !j.url || j.url === link || isGoogleShort(j.url)) {
+        rows.push(...linkRows(link));
+        continue;
+      }
+      if (!isGoogleList(j.url)) {
+        let entries = [];
+        try {
+          entries = readLink(j.url).entries;
+        } catch { /* a Google link readLink doesn't know: the short link's row instead */ }
+        rows.push(...(entries.length ? entries.map((e) => ({ ...e })) : linkRows(link)));
+        continue;
+      }
+      link = j.url;
+      step--; // the list is the same item
     }
     if (isGoogleList(link)) {
       step++;
       progress();
+      await pace.list(() => {});
       const list = await listRows(link);
       rows.push(...list.rows);
       if (list.title !== undefined) lists.push(list.title);
@@ -260,7 +312,9 @@ async function importItems(items, env) {
   if (!all.length) {
     if (unsupported.length) {
       const sites = [...new Set(unsupported.map(siteOf))];
-      env.showUnsupported?.(unsupported[0], sites.length > 1 ? `Links from ${joinSites(sites)}` : '');
+      // Several sites: the issue list itself, not a sentence as a search.
+      if (sites.length > 1) env.showUnsupported?.(unsupported[0], `Links from ${joinSites(sites)}`, '');
+      else env.showUnsupported?.(unsupported[0]);
     } else {
       env.toast('No place, post, guide or list found in this text.', 'error', 6000);
     }

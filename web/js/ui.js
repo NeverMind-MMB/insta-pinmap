@@ -719,13 +719,14 @@ export function pickedColor(box) {
 /**
  * The dialog for a link to a site this version doesn't read: which site (or
  * `what`, a kind of link such as "Google Maps lists"), a GitHub issue search
- * for it, and (collapsed) every supported link and file.
+ * for `search` (the site or `what`; '' for the issue list itself), and
+ * (collapsed) every supported link and file.
  */
-export function showUnsupported(link, what = '') {
+export function showUnsupported(link, what = '', search = what || siteOf(link)) {
   const site = siteOf(link);
   $('unsupported-text').textContent =
     `${what || `${site} links`} don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.`;
-  $('unsupported-issues').href = issuesSearchUrl(what || site);
+  $('unsupported-issues').href = search ? issuesSearchUrl(search) : ISSUES_URL;
   $('unsupported-list').replaceChildren(...SUPPORTED_SOURCES.map((group) => {
     const p = document.createElement('p');
     const title = document.createElement('strong');

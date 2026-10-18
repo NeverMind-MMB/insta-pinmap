@@ -339,6 +339,10 @@ test('the unsupported-link dialog can name a kind of link instead of a site (Goo
       "Google Maps lists don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.");
     assert.equal(doc.getElementById('unsupported-issues').href,
       'https://github.com/NeverMind-MMB/opin/issues?q=is%3Aissue%20Google%20Maps%20lists');
+    // Links from several sites (Settings → Import): named in the text, the issue list itself as the link.
+    showUnsupported('https://www.pinterest.com/pin/1/', 'Links from pinterest.com and vimeo.com', '');
+    assert.match(doc.getElementById('unsupported-text').textContent, /^Links from pinterest\.com and vimeo\.com don't work/);
+    assert.equal(doc.getElementById('unsupported-issues').href, 'https://github.com/NeverMind-MMB/opin/issues');
   } finally {
     delete globalThis.document;
   }

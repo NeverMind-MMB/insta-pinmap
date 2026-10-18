@@ -264,19 +264,32 @@ test('Settings → Import: place links with repeats and other lines give one row
   assert.deepEqual(g.appleIds, ['987654321'], 'the auid and the place-id link name the same place');
 });
 
-test('Settings → Import: Google Maps links open one import dialog without the Apple lookup, nothing fetched yet', async () => {
+test('Settings → Import: Google short links are expanded by the helper first: a place gives its row, a list all its places', async () => {
+  const LIST_ID = 'SyntheticListId_0123456789';
   const calls = [];
-  globalThis.fetch = async (url) => { calls.push(String(url)); return new Response('{}'); };
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    const answer = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    if (u.includes('synthetic1')) return answer({ ok: true, url: 'https://www.google.com/maps/place/Synthetic+Inn/@45.5,9.3,17z/data=!3d45.5123!4d9.3123' });
+    if (u.includes('synthetic2')) return answer({ ok: true, url: `https://www.google.com/maps/@/data=!3m1!4b1!4m3!11m2!2s${LIST_ID}!3e3` });
+    if (u.includes('synthetic3')) return answer({ ok: false, message: "This short link doesn't lead anywhere." });
+    if (u.startsWith('/api/list')) return answer({ ok: true, title: 'Synthetic Trip', total: 1, places: [{ name: 'Synthetic Gelato', lat: 41.9, lon: 12.5, address: 'Rome' }] });
+    return new Response('{}', { status: 404 });
+  };
   const { imports } = await readInSettings([
     'https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721',
     'https://maps.app.goo.gl/synthetic1',
+    'https://maps.app.goo.gl/synthetic2',
+    'https://maps.app.goo.gl/synthetic3',
   ].join('\n'));
-  assert.equal(imports.length, 1);
   const { e, g } = imports[0];
   assert.equal(g, null);
-  assert.deepEqual(e.map((r) => [r.name, r.lat, r.checked !== false]), [['Synthetic Bar', 45.4719, true], ['Google place', null, true]]);
-  assert.match(e[1].warning, /resolved on import/);
-  assert.deepEqual(calls, [], 'the short link is resolved on import, as in a list import');
+  assert.deepEqual(e.map((r) => [r.name, r.lat, r.checked !== false]), [
+    ['Synthetic Bar', 45.4719, true], ['Synthetic Inn', 45.5123, true], ['Synthetic Gelato', 41.9, true], ['Google place', null, true],
+  ]);
+  assert.match(e[3].warning, /resolved on import/, 'a short link the helper can\'t expand now is tried again on import');
+  assert.deepEqual(calls.map((u) => u.split('?')[0]), ['/api/resolve', '/api/resolve', '/api/list', '/api/resolve']);
 });
 
 test('one place link alone still opens the confirm dialog, not the import', async () => {
