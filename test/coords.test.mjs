@@ -295,3 +295,188 @@ test('placeShortCode: a town the search doesn\'t know, a search that is down, or
   assert.match(p.message, /town/);
   assert.deepEqual(queries, [], 'nothing searched');
 });
+
+/* ---------- The input bar (addflow.startAdd) ---------- */
+
+const { startAdd, wireConfirm } = await import('../web/js/addflow.js');
+const { store, normalizeDb } = await import('../web/js/store.js');
+
+/** A document just big enough for the confirm dialog; without #confirm-map the preview map stays off. */
+function confirmDocument() {
+  const make = (tag = '') => {
+    const on = {};
+    return {
+      tag, hidden: false, open: false, disabled: false, checked: false, value: '', textContent: '', innerHTML: '', scrollTop: 0,
+      style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, children: [],
+      setAttribute() {}, focus() {}, select() {},
+      appendChild(kid) { this.children.push(kid); return kid; },
+      append(...kids) { this.children.push(...kids); },
+      replaceChildren(...kids) { this.children = kids; },
+      querySelector: () => make(),
+      querySelectorAll: () => [],
+      addEventListener(type, fn) { (on[type] ??= []).push(fn); },
+      fire(type) { for (const fn of on[type] || []) fn({ preventDefault() {} }); },
+      showModal() { this.open = true; },
+      close() { this.open = false; this.fire('close'); },
+    };
+  };
+  const els = new Map();
+  return {
+    getElementById: (id) => (id === 'confirm-map' ? null : els.get(id) ?? els.set(id, make()).get(id)),
+    createElement: (tag) => make(tag), createTextNode: () => ({}), querySelectorAll: () => [],
+  };
+}
+
+/**
+ * Runs startAdd(text) with the confirm dialog wired; fetch answers like Photon with `photon` features.
+ * Returns the dialog's fields, the requests, the toasts and the dialogs shown; `save` presses Drop pin.
+ */
+async function addInBar(text, { photon = [] } = {}) {
+  const doc = confirmDocument();
+  globalThis.document = doc;
+  store.db = normalizeDb({});
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    const body = String(url).includes('photon') ? { features: photon } : [];
+    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  };
+  const toasts = [];
+  const shown = [];
+  const env = {
+    toast: (t, kind) => toasts.push([t, kind]), hideToast() {}, redraw() {}, inputDone() {},
+    showUnsupported: (l) => shown.push(['unsupported', l]), showImport: () => shown.push(['import']),
+  };
+  wireConfirm(env);
+  await startAdd(text, env);
+  const field = (id) => doc.getElementById(id);
+  return {
+    open: field('dlg-confirm').open, title: field('confirm-title').value, coords: field('confirm-coords').textContent,
+    status: field('confirm-status').textContent, calls, toasts, shown,
+    save() { field('confirm-save').fire('click'); return store.db.pins; },
+  };
+}
+
+/** Drops addInBar's fake document and the store's pending save. */
+function cleanUp() {
+  delete globalThis.document;
+  clearTimeout(store._saveTimer);
+  store._saveTimer = null;
+}
+
+test('the input bar: coordinates open Confirm place with the exact point, no place search, and say latitude comes first', async () => {
+  try {
+    const r = await addInBar('48.1372, 11.5755');
+    assert.equal(r.open, true);
+    assert.deepEqual(r.calls, [], 'nothing searched');
+    assert.equal(r.coords, '48.13720, 11.57550');
+    assert.equal(r.title, '48.13720, 11.57550');
+    assert.match(r.status, /latitude, longitude/);
+    const pins = r.save();
+    assert.equal(pins.length, 1);
+    assert.equal(pins[0].source, 'coords');
+    assert.equal(pins[0].lat, 48.1372);
+    assert.equal(pins[0].lon, 11.5755);
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: DMS, a geo: URI with a label and a full Plus Code each open Confirm place without searching', async () => {
+  try {
+    for (const [text, coords, title] of [
+      [`48°08'14"N 11°34'32"E`, '48.13722, 11.57556', '48.13722, 11.57556'],
+      ['geo:0,0?q=48.1372,11.5755(Synthetic%20Cafe)', '48.13720, 11.57550', 'Synthetic Cafe'],
+      ['8FWH4HPM+QR', '48.13694, 11.58456', '8FWH4HPM+QR'],
+      ['Synthetic Bar 48.1372, 11.5755', '48.13720, 11.57550', 'Synthetic Bar'],
+    ]) {
+      const r = await addInBar(text);
+      assert.equal(r.open, true, text);
+      assert.deepEqual(r.calls, [], `${text}: nothing searched`);
+      assert.equal(r.coords, coords, text);
+      assert.equal(r.title, title, text);
+      cleanUp();
+    }
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: coordinates next to a link this version doesn\'t read: the coordinates, not the unsupported-link dialog', async () => {
+  try {
+    const r = await addInBar('Synthetic Spot 41.9900N, 6.1200W https://mapy.com/s/abcdef');
+    assert.deepEqual(r.shown, []);
+    assert.equal(r.open, true);
+    assert.equal(r.coords, '41.99000, -6.12000');
+    assert.equal(r.title, 'Synthetic Spot');
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: a link with coordinates only inside it still opens the unsupported-link dialog', async () => {
+  try {
+    const r = await addInBar('https://example.com/?ll=48.1372,11.5755');
+    assert.deepEqual(r.shown, [['unsupported', 'https://example.com/?ll=48.1372,11.5755']]);
+    assert.equal(r.open, false);
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: a short Plus Code with a town: the town from the place search, then the exact point', async () => {
+  try {
+    const photon = [{ geometry: { coordinates: [11.575, 48.137] }, properties: { name: 'Synthetic Town', countrycode: 'de' } }];
+    const r = await addInBar('4HX8+QH Synthetic Town', { photon });
+    assert.equal(r.calls.length, 1);
+    assert.match(r.calls[0], /photon\.komoot\.io\/api\/\?q=Synthetic\+Town/);
+    assert.equal(r.open, true);
+    assert.equal(r.coords, '48.14944, 11.56644');
+    assert.equal(r.title, '4HX8+QH Synthetic Town');
+    assert.match(r.status, /Synthetic Town/);
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: a short Plus Code whose town can\'t be found, or without a town: an error, no dialog', async () => {
+  try {
+    let r = await addInBar('4HX8+QH Atlantis');
+    assert.equal(r.open, false);
+    assert.equal(r.toasts.at(-1)[1], 'error');
+    assert.match(r.toasts.at(-1)[0], /Couldn't find "Atlantis"/);
+    cleanUp();
+    r = await addInBar('4HX8+QH');
+    assert.equal(r.open, false);
+    assert.deepEqual(r.calls, []);
+    assert.match(r.toasts.at(-1)[0], /town/);
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: geo:0,0?q=Name searches for the name; a geo: link without a place says so', async () => {
+  try {
+    let r = await addInBar('geo:0,0?q=Synthetic+Cafe+Munich');
+    assert.equal(r.open, true);
+    assert.ok(r.calls.some((u) => /photon.*q=Synthetic\+Cafe\+Munich/.test(u)), r.calls.join(' '));
+    cleanUp();
+    r = await addInBar('geo:0,0');
+    assert.equal(r.open, false);
+    assert.match(r.toasts.at(-1)[0], /geo:/);
+    assert.equal(r.toasts.at(-1)[1], 'error');
+  } finally {
+    cleanUp();
+  }
+});
+
+test('the input bar: an out-of-range number pair is no coordinates: it goes to the place search', async () => {
+  try {
+    const r = await addInBar('120.5, 45.2');
+    assert.equal(r.open, true);
+    assert.ok(r.calls.some((u) => /photon/.test(u)), 'searched as text');
+    assert.equal(r.coords, '', 'no point chosen');
+  } finally {
+    cleanUp();
+  }
+});

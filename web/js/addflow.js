@@ -23,6 +23,7 @@ import {
   loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
+import { readCoords, placeShortCode } from './coords.js';
 import { fetchPost, resolveShortLink } from './api.js';
 import { siteOf, sourceOf, sourceColor, findLinks, pinLook } from './sources.js';
 import { colorPicker, pickedColor } from './ui.js';
@@ -72,6 +73,11 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   if (isMapLink(candidateLink)) {
     return addFromMapLink(candidateLink, env);
   }
+
+  // Coordinates, a geo: link or a Plus Code (coords.js; also next to a link this version
+  // doesn't read): the exact point instead of a place search.
+  const coords = readCoords(text);
+  if (coords) return addFromCoords(coords, env);
 
   // A link from no source this version reads: say so instead of searching for its address.
   if (linkInText && siteOf(candidateLink)) {
@@ -440,6 +446,46 @@ async function addFromMapLink(link, env, resolved = false) {
 }
 
 /* ================================================================== *
+ * Coordinates, geo: links and Plus Codes
+ * ================================================================== */
+
+/** readCoords' answer: Confirm place with the exact point (a short Plus Code finds its town first). */
+async function addFromCoords(found, env) {
+  if (found.kind === 'error') {
+    env.toast(found.message, 'error', 6000);
+    return;
+  }
+  // geo:0,0?q=Name names its place only: search for the name.
+  if (found.kind === 'search') {
+    return openConfirm({
+      source: 'manual', titleSuggestion: found.query, candidates: [{ text: found.query, points: 60, source: 'input' }], countries: [], env,
+    });
+  }
+  let point = found;
+  if (found.kind === 'short') {
+    if (found.place) env.toast('Finding the Plus Code\'s town …', 'busy', 8000);
+    try {
+      point = await placeShortCode(found);
+    } finally {
+      if (found.place) env.hideToast?.();
+    }
+    if (!point.ok) {
+      env.toast(point.message, 'error', 8000);
+      return;
+    }
+  }
+  return openConfirm({
+    source: 'coords',
+    titleSuggestion: point.name,
+    readyPlace: { lat: point.lat, lon: point.lon, name: point.name, address: '', source: 'coords' },
+    readyStatus: point.status,
+    candidates: [],
+    countries: [],
+    env,
+  });
+}
+
+/* ================================================================== *
  * The confirmation dialog
  * ================================================================== */
 
@@ -503,7 +549,7 @@ export async function openConfirm(cfg) {
   if (cfg.readyPlace) {
     choosePlace(cfg.readyPlace);
     $('confirm-candidates').innerHTML = '';
-    $('confirm-status').textContent = 'The place came straight from the link. Please give it a quick check anyway.';
+    $('confirm-status').textContent = cfg.readyStatus || 'The place came straight from the link. Please give it a quick check anyway.';
   } else {
     $('confirm-preview').hidden = true;
     $('confirm-save').disabled = true;
