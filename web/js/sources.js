@@ -6,7 +6,7 @@
  */
 
 /** The project's GitHub issues: where people ask for a site the app doesn't read yet. */
-export const ISSUES_URL = 'https://github.com/NeverMind-MMB/insta-pinmap/issues';
+export const ISSUES_URL = 'https://github.com/NeverMind-MMB/opin/issues';
 
 /**
  * The app moved from insta-pinmap.… to opin.… in 2.1.0: on the old address it shows a banner

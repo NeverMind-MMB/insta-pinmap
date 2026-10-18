@@ -213,7 +213,7 @@ test('showUnsupported: names the site, searches GitHub issues for it, lists what
     assert.equal(doc.getElementById('unsupported-text').textContent,
       "pinterest.com links don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.");
     assert.equal(doc.getElementById('unsupported-issues').href,
-      'https://github.com/NeverMind-MMB/insta-pinmap/issues?q=is%3Aissue%20pinterest.com');
+      'https://github.com/NeverMind-MMB/opin/issues?q=is%3Aissue%20pinterest.com');
     const lines = doc.getElementById('unsupported-list').children
       .map((p) => p.children.map((c) => (typeof c === 'string' ? c : c.textContent)).join(''));
     assert.equal(lines.length, 3);
@@ -317,7 +317,7 @@ test('the unsupported-link dialog can name a kind of link instead of a site (Goo
     assert.equal(doc.getElementById('unsupported-text').textContent,
       "Google Maps lists don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.");
     assert.equal(doc.getElementById('unsupported-issues').href,
-      'https://github.com/NeverMind-MMB/insta-pinmap/issues?q=is%3Aissue%20Google%20Maps%20lists');
+      'https://github.com/NeverMind-MMB/opin/issues?q=is%3Aissue%20Google%20Maps%20lists');
   } finally {
     delete globalThis.document;
   }

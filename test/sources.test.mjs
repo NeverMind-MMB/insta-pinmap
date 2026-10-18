@@ -91,8 +91,8 @@ test('a Takeout zip itself is not read (only the files in it), so the list names
 });
 
 test('the GitHub issues search for a site', () => {
-  assert.equal(ISSUES_URL, 'https://github.com/NeverMind-MMB/insta-pinmap/issues');
-  assert.equal(issuesSearchUrl('pinterest.com'), 'https://github.com/NeverMind-MMB/insta-pinmap/issues?q=is%3Aissue%20pinterest.com');
+  assert.equal(ISSUES_URL, 'https://github.com/NeverMind-MMB/opin/issues');
+  assert.equal(issuesSearchUrl('pinterest.com'), 'https://github.com/NeverMind-MMB/opin/issues?q=is%3Aissue%20pinterest.com');
 });
 
 test('siteOf: the host a dialog names, without "www."', () => {
