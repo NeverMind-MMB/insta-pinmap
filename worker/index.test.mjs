@@ -119,7 +119,7 @@ test('resolve: on Mapy only /s/ links are short links; other Mapy addresses and 
     const res = await handleRequest(apiRequest(resolvePath(link)), BINDINGS, { fetch });
     const body = await res.json();
     assert.equal(body.ok, false, link);
-    assert.equal(body.message, 'Only short map links can be resolved.', link);
+    assert.equal(body.message, 'Only short map and TikTok links can be resolved.', link);
   }
   assert.equal(fetch.calls.length, 0);
 });

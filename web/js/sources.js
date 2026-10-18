@@ -66,6 +66,20 @@ export const SOURCE_GROUPS = [
     short: ['maps.app.goo.gl/', 'goo.gl/maps/'],
     lists: ['google.*/maps/placelists/'],
   },
+  {
+    // Videos and photo posts: their caption comes from TikTok's oEmbed (tiktok.js).
+    id: 'tiktok',
+    name: 'TikTok',
+    color: '#5a5f8f',
+    sources: ['tiktok'],
+    prefixes: [
+      'tiktok.com/@', 'tiktok.com/t/', 'vm.tiktok.com/', 'vt.tiktok.com/',
+      // Any other tiktok.com link is TikTok's too (also m.tiktok.com/v/<id>.html): the
+      // TikTok reader tells a video from the rest.
+      'tiktok.com/',
+    ],
+    short: ['tiktok.com/t/', 'vm.tiktok.com/', 'vt.tiktok.com/'],
+  },
   { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
   { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson', 'csv'] },
   { id: 'search', name: 'Place search', color: '#b8543f', sources: ['manual'] },
@@ -164,6 +178,11 @@ export function sourceOf(link) {
   return matchPrefix(link)?.group.id ?? null;
 }
 
+/** The name of the source a link belongs to ("TikTok"), by its prefix; '' for none. */
+export function linkSourceName(link) {
+  return matchPrefix(link)?.group.name ?? '';
+}
+
 /** True when the longest prefix `link` starts with is one of its source's `kind` prefixes ("guides", "short", "lists"). */
 export function linkIs(link, kind) {
   const m = matchPrefix(link);
@@ -197,6 +216,7 @@ export const SUPPORTED_SOURCES = [
       'instagram.com/p/…', 'instagram.com/reel/…', 'maps.apple.com/… (places and guides)', 'guides.apple.com/…',
       'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…',
       'google.com/maps/placelists/… (shared lists)',
+      'tiktok.com/@…/video/…', 'vm.tiktok.com/…', 'vt.tiktok.com/…', 'tiktok.com/t/…',
       ...MAP_APP_LINKS,
     ],
     note: 'or type a place name to search',
