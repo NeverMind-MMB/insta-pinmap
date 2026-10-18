@@ -157,6 +157,20 @@ test('resolve: on Mapy only /s/ links are short links; other Mapy addresses and 
   assert.equal(fetch.calls.length, 0);
 });
 
+test('resolve: Bing short links (binged.it) stop at the bing.com/maps address without fetching it; lookalikes are refused', async () => {
+  const final = 'https://www.bing.com/maps?ppois=47.123_11.456_Synthetic%20Cafe_YN0000x1~&cp=47.1~11.4&lvl=16';
+  const fetch = fakeFetch({ 'https://binged.it/3SynThX': [301, final] });
+  const res = await handleRequest(apiRequest(resolvePath('https://binged.it/3SynThX')), BINDINGS, { fetch });
+  assert.deepEqual(await res.json(), { ok: true, url: final });
+  assert.deepEqual(fetch.calls.map((c) => c.url), ['https://binged.it/3SynThX']);
+  const none = fakeFetch({});
+  for (const link of ['https://binged.it.evil.example/3SynThX', 'https://notbinged.it/3SynThX']) {
+    const body = await (await handleRequest(apiRequest(resolvePath(link)), BINDINGS, { fetch: none })).json();
+    assert.equal(body.ok, false, link);
+  }
+  assert.equal(none.calls.length, 0);
+});
+
 test('resolve: per-address limit, counted apart from /api/ig', async () => {
   const fetch = fakeFetch({ 'https://goo.gl/a': [302, 'https://www.google.com/maps/@1,2,3z'] });
   const headers = { 'CF-Connecting-IP': '10.9.9.9' };

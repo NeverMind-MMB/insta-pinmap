@@ -423,3 +423,56 @@ test('lookup: a Mapy short link that leads nowhere, or somewhere unreadable, fai
     assert.match(done.message, /short link/, JSON.stringify(answer));
   }
 });
+
+/* ---------- Scheme links (ge0://, om://, cm://) and Bing short links (binged.it) ---------- */
+
+test('ge0://, om:// and cm:// links are Organic Maps and CoMaps links, read on the phone like their https forms', () => {
+  const code = ge0Code(47.123456, 11.654321);
+  for (const [link, source, url] of [
+    [`ge0://${code}/Synthetic_Cafe`, 'organic-maps-link', `https://omaps.app/${code}/Synthetic_Cafe`],
+    [`om://${code}/Synthetic_Cafe`, 'organic-maps-link', `https://omaps.app/${code}/Synthetic_Cafe`],
+    [`cm://${code}/Synthetic_Cafe`, 'comaps-link', `https://comaps.at/${code}/Synthetic_Cafe`],
+    [`GE0://${code}/Synthetic_Cafe`, 'organic-maps-link', `https://omaps.app/${code}/Synthetic_Cafe`],
+  ]) {
+    assert.equal(sourceOf(link), 'maps', link);
+    const e = read(link);
+    assert.deepEqual([e.name, e.source, e.warning, e.url], ['Synthetic Cafe', source, '', url], link);
+    near(e.lat, 47.123456, 2e-6);
+    near(e.lon, 11.654321, 2e-6);
+    assert.equal(readLink(link).entries.length, 1, link);
+  }
+  assert.equal(read(`om://${code}`).name, 'Organic Maps place');
+  assert.throws(() => read('cm://abc'), /CoMaps link has no coordinates or place name/);
+  // Only the scheme with "//" counts: "om: …" in a sentence is no link.
+  for (const text of ['om: lunch at noon', 'cm:5', 'ge0:abc']) assert.equal(sourceOf(text), null, text);
+  assert.equal(sourceOf('geo:47.1,11.2'), 'coords', 'geo: stays the coordinates group');
+});
+
+test('a ge0:// link inside share text is found like an https link', async () => {
+  const { findLinks } = await import('../web/js/sources.js');
+  const code = ge0Code(47.1, 11.2);
+  assert.deepEqual(findLinks(`Look at my mark on the map. ge0://${code}/Synthetic_Cafe https://omaps.app/${code}/Synthetic_Cafe`),
+    [`ge0://${code}/Synthetic_Cafe`, `https://omaps.app/${code}/Synthetic_Cafe`]);
+  assert.deepEqual(findLinks('geo:47.1,11.2'), [], 'geo: links are read by the coordinate reader, not as links');
+});
+
+test('Bing short links (binged.it) are short links the helper expands, then read as a Bing Maps link', async () => {
+  for (const link of ['https://binged.it/3SynThX', 'binged.it/3SynThX', 'http://www.binged.it/3SynThX']) {
+    assert.equal(sourceOf(link), 'maps', link);
+    assert.equal(linkIs(link, 'short'), true, link);
+  }
+  const e = read('https://binged.it/3SynThX');
+  assert.deepEqual([e.name, e.lat, e.source], ['Bing Maps place', null, 'bing-link']);
+  assert.match(e.warning, /Short link/);
+  assert.equal(needsMapAppLookup(e), true);
+  const sent = [];
+  const resolve = async (url) => {
+    sent.push(url);
+    return { ok: true, url: 'https://www.bing.com/maps?ppois=47.123_11.456_Synthetic%20Cafe_YN0000x1~&cp=47.1~11.4&lvl=16' };
+  };
+  const done = await lookUpMapAppEntry(e, { resolve });
+  assert.deepEqual([done.ok, done.entry.name, done.entry.lat, done.entry.lon, done.entry.url],
+    [true, 'Synthetic Cafe', 47.123, 11.456, 'https://binged.it/3SynThX']);
+  assert.deepEqual(sent, ['https://binged.it/3SynThX']);
+  for (const link of ['https://binged.it.evil.example/3SynThX', 'https://notbinged.it/3SynThX']) assert.equal(sourceOf(link), null, link);
+});

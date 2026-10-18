@@ -14,7 +14,7 @@ check what it found before anything is saved.
 | Apple Guides and Apple Maps places | The link itself. Places a guide names only by an Apple Maps ID are looked up from your phone or computer (see "Apple Guides"). |
 | Google Maps links | The link itself; short links are expanded by the app's helper. |
 | Google Maps shared lists (only lists shared with "Anyone with the link") | The list, read by the app's helper; its places (up to 1,000) open in one import list. |
-| Links from other map apps: OpenStreetMap, Organic Maps / CoMaps, Waze, HERE WeGo, Mapy, Bing Maps | The link itself. An OpenStreetMap object (node, way, relation) is looked up on OpenStreetMap; Mapy short links are expanded by the app's helper. |
+| Links from other map apps: OpenStreetMap, Organic Maps / CoMaps (also their `ge0://`, `om://` and `cm://` app links), Waze, HERE WeGo, Mapy, Bing Maps | The link itself. An OpenStreetMap object (node, way, relation) is looked up on OpenStreetMap; Mapy and Bing short links are expanded by the app's helper. |
 | Coordinates, `geo:` links and Plus Codes, typed or pasted | The text itself: the exact point. A short Plus Code with a town ("4HX8+QH Munich") is placed near that town. |
 | Google Maps saved places and lists (the GeoJSON and CSV files from the Google Takeout zip, not the zip itself; older and newer Takeout files) | The file itself; places without coordinates are searched by name on import, never put at 0,0. |
 | Spreadsheets (CSV, TSV, Excel files saved with `;` and decimal commas) with coordinate or address columns | The file itself; rows without coordinates are searched by name on import. |
@@ -76,7 +76,7 @@ The app runs on your phone. Its helper is the small server part on Cloudflare
 - reading YouTube videos and Facebook posts, reels and pages (`/api/post`),
 - reading shared Google Maps lists (`/api/list`),
 - expanding short links (`/api/resolve`): Google Maps ones such as maps.app.goo.gl,
-  pasted or in an imported file; Mapy ones (mapy.com/s/…); and TikTok ones
+  pasted or in an imported file; Mapy ones (mapy.com/s/…); Bing ones (binged.it); and TikTok ones
   (vm.tiktok.com, vt.tiktok.com, tiktok.com/t/…) when TikTok's oEmbed won't take them,
 - a guide shared from the Maps app to the iPhone Shortcut (`/api/guide`).
 

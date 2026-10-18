@@ -5,7 +5,7 @@
  * Their links carry the point itself (as coordinates or as a code), and often
  * the name, so they decode on the phone without any request. Two kinds need
  * one: an OpenStreetMap object (node/way/relation) is looked up on Nominatim
- * (CORS open, the place search's 1/s queue), and a Mapy short link is expanded
+ * (CORS open, the place search's 1/s queue), and a Mapy or Bing short link is expanded
  * by the app's helper (/api/resolve).
  *
  * Entries have the importers.js form: { name, address, lat, lon, url, source, note, warning }.
@@ -27,8 +27,14 @@ const HOST_SOURCES = {
   'waze.com': 'waze-link', 'ul.waze.com': 'waze-link',
   'share.here.com': 'here-link', 'wego.here.com': 'here-link',
   'mapy.com': 'mapy-link', 'mapy.cz': 'mapy-link', 'en.mapy.cz': 'mapy-link',
-  'bing.com': 'bing-link',
+  'bing.com': 'bing-link', 'binged.it': 'bing-link',
 };
+
+/**
+ * The apps' own links (ge0://, om://, cm://) and the https form each stands for: the same
+ * path after the host, so they are read, and kept on the pin, as that link.
+ */
+const SCHEME_HOSTS = { 'ge0://': 'omaps.app', 'om://': 'omaps.app', 'cm://': 'comaps.at' };
 
 /** Same wording as for Google's map-center links (importers.js). */
 const CENTER = 'Coordinate comes from the map center.';
@@ -280,8 +286,9 @@ function readMapy(u, link) {
   return at ? { ...at, warning: CENTER } : null;
 }
 
-function readBing(u) {
+function readBing(u, link) {
   const q = u.searchParams;
+  if (linkIs(link, 'short')) return { warning: SHORT };
   const [lat, lon, name] = (q.get('ppois') || '').split('~')[0].split('_');
   const poi = point(lat, lon);
   if (poi) return { ...poi, name: (name || '').trim() };
@@ -302,8 +309,10 @@ const READERS = {
 
 /** URL and pin source of a map app link; null for a link of no map app. */
 function mapAppUrl(link) {
-  const s = String(link ?? '').trim();
+  let s = String(link ?? '').trim();
   if (sourceOf(s) !== 'maps') return null;
+  const scheme = Object.keys(SCHEME_HOSTS).find((p) => s.toLowerCase().startsWith(p));
+  if (scheme) s = `https://${SCHEME_HOSTS[scheme]}/${s.slice(scheme.length)}`;
   let u;
   try {
     u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(s) ? s : `https://${s}`);

@@ -30,6 +30,7 @@ const SHORT_LINK_HOSTS = [
   'maps.app.goo.gl', 'goo.gl', 'g.co',
   'maps.apple', 'maps.apple.com', 'guides.apple.com', 'share.apple.com',
   'vm.tiktok.com', 'vt.tiktok.com',
+  'binged.it',
 ];
 /**
  * Short links on a host that serves other pages too: only these paths are followed (host, path start);

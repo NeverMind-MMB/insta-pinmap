@@ -24,7 +24,7 @@ export function issuesSearchUrl(site) {
  * The sources a link can come from. Which one a link belongs to is decided by
  * its prefix and nothing else (sourceOf): a host and the start of a path,
  * where "*" in the host stands for a domain ending ("com", "de", "co.uk"),
- * or a scheme other than http(s) such as "geo:".
+ * or a scheme other than http(s) such as "geo:" or "ge0://".
  * Reading the link (post codes, coordinates, guides) comes after, in that
  * source's reader. A new source is one more entry.
  *   name: what the add-pin animation says for it; logo: the image it shows instead (256 px box,
@@ -111,9 +111,12 @@ export const SOURCE_GROUPS = [
     prefixes: [
       'openstreetmap.org/', 'osm.org/', 'omaps.app/', 'ge0.me/', 'comaps.at/', 'waze.com/', 'ul.waze.com/',
       'share.here.com/', 'wego.here.com/', 'mapy.com/', 'mapy.cz/', 'en.mapy.cz/', 'bing.com/maps',
-      'mapy.com/s/', 'mapy.cz/s/', 'en.mapy.cz/s/',
+      'mapy.com/s/', 'mapy.cz/s/', 'en.mapy.cz/s/', 'binged.it/',
+      // Organic Maps / MAPS.ME and CoMaps app links: scheme prefixes, like "geo:" (with "//", so
+      // "om: …" in a sentence is no link).
+      'ge0://', 'om://', 'cm://',
     ],
-    short: ['mapy.com/s/', 'mapy.cz/s/', 'en.mapy.cz/s/'],
+    short: ['mapy.com/s/', 'mapy.cz/s/', 'en.mapy.cz/s/', 'binged.it/'],
   },
   // Coordinates, geo: links and Plus Codes typed or pasted into the input bar (coords.js).
   // "geo:" is a scheme prefix: every geo: link is theirs.
@@ -167,13 +170,18 @@ export function findLinks(text) {
     if (!token) continue;
     if (at !== -1) links.push(token);
     else if (token.includes('/') && linkParts(token) && sourceOf(token)) links.push(`https://${token}`);   // not "https://geo:…"
+    else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(token) && schemeMatch(token)) links.push(token);   // "ge0://…", as it is
   }
   return links;
 }
 
+/** A prefix that is a scheme ("geo:", "ge0://"), not a host and path. */
+const SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:(?:\/\/)?$/;
+
 function prefixMatches(prefix, { host, path }) {
+  if (SCHEME_PREFIX.test(prefix)) return false;   // a scheme prefix: schemeMatch
   const slash = prefix.indexOf('/');
-  if (slash === -1) return false;   // a scheme prefix ("geo:"): schemeMatch
+  if (slash === -1) return false;
   const wantHost = prefix.slice(0, slash);
   if (wantHost.endsWith('*')) {
     const stem = wantHost.slice(0, -1);
@@ -197,11 +205,11 @@ function matchPrefix(link) {
   return best;
 }
 
-/** A link that isn't http(s) whose scheme is a group's scheme prefix ("geo:…", in any case), and that group; null otherwise. */
+/** A link that isn't http(s) whose scheme is a group's scheme prefix ("geo:…", "ge0://…", in any case), and that group; null otherwise. */
 function schemeMatch(link) {
   const s = String(link ?? '').trim().toLowerCase();
   for (const group of SOURCE_GROUPS) {
-    const prefix = (group.prefixes || []).find((p) => !p.includes('/') && p.endsWith(':') && s.startsWith(p));
+    const prefix = (group.prefixes || []).find((p) => SCHEME_PREFIX.test(p) && s.startsWith(p));
     if (prefix) return { group, prefix };
   }
   return null;
@@ -236,6 +244,7 @@ export function siteOf(link) {
 const MAP_APP_LINKS = [
   'openstreetmap.org/…', 'osm.org/go/…', 'omaps.app/… (Organic Maps)', 'comaps.at/… (CoMaps)', 'waze.com/…',
   'share.here.com/…', 'wego.here.com/…', 'mapy.com/…', 'mapy.cz/…', 'bing.com/maps…',
+  'binged.it/… (Bing Maps short links)', 'ge0://…, om://…, cm://… (Organic Maps and CoMaps app links)',
 ];
 
 /**

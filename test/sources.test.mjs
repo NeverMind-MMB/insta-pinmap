@@ -40,6 +40,8 @@ const LINK_SAMPLES = {
   'mapy.com/…': ['https://mapy.com/en/zakladni?x=11.2&y=47.1&z=17', 'https://mapy.com/s/abcdefgh'],
   'mapy.cz/…': ['https://mapy.cz/turisticka?source=coor&id=11.2%2C47.1&x=11.2&y=47.1&z=17', 'https://mapy.cz/s/abcdefgh'],
   'bing.com/maps…': ['https://www.bing.com/maps?cp=47.1~11.2&where1=Synthetic%20Cafe', 'https://www.bing.com/maps?ppois=47.1_11.2_Synthetic%20Cafe_x~'],
+  'binged.it/… (Bing Maps short links)': ['https://binged.it/3SynThX'],
+  'ge0://…, om://…, cm://… (Organic Maps and CoMaps app links)': ['ge0://0yxdjqU7NK/Synthetic_Cafe', 'om://0yxdjqU7NK/Synthetic_Cafe', 'cm://0yxdjqU7NK/Synthetic_Cafe'],
   'tiktok.com/@…/video/…': ['https://www.tiktok.com/@synthetic.user/video/7560000000000004242'],
   'vm.tiktok.com/…': ['https://vm.tiktok.com/ZMsynth01/'],
   'vt.tiktok.com/…': ['https://vt.tiktok.com/ZSsynth02/'],
@@ -170,8 +172,8 @@ test('sourceOf: every prefix in the table maps to its group', () => {
   assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google', 'tiktok', 'youtube', 'facebook', 'maps', 'coords']);
   for (const g of linked) {
     for (const prefix of g.prefixes) {
-      // A scheme prefix ("geo:") stands for links of that scheme.
-      const link = prefix.endsWith(':') ? `${prefix}x` : `https://${prefix.replace('*', 'com')}x`;
+      // A scheme prefix ("geo:", "ge0://") stands for links of that scheme.
+      const link = /^[a-z0-9]+:(?:\/\/)?$/.test(prefix) ? `${prefix}x` : `https://${prefix.replace('*', 'com')}x`;
       assert.equal(sourceOf(link), g.id, prefix);
     }
   }
