@@ -6,6 +6,7 @@
     "/manifest.webmanifest",
     "/css/app.css",
     "/js/addflow.js",
+    "/js/csvcolumns.js",
     "/js/api.js",
     "/js/appleplace.js",
     "/js/address.js",

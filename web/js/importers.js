@@ -15,6 +15,7 @@ import { readBackupText } from './backup.js';
 import { sourceOf, linkIs } from './sources.js';
 import { unzipSync, strFromU8 } from '../vendor/fflate.js';
 import { kml, gpx } from '../vendor/togeojson.js';
+import { csvDialect, csvColumns, rowCoordinates, pairCoordinates, swappedColumns } from './csvcolumns.js';
 
 /* ================================================================== *
  * Apple Guides:  https://guides.apple.com/?ug=<base64url>
@@ -346,9 +347,37 @@ export function isGoogleShortLink(link) {
 
 /* ================================================================== *
  * Google Takeout: "Saved Places" as GeoJSON
+ *   older files: Title, "Google Maps URL", Location { Address, "Business Name", "Geo Coordinates" }
+ *   newer files: google_maps_url, location { name, address, country_code }, date
+ *   both put a point Google has no coordinates for at 0,0.
  * ================================================================== */
 
-export function readTakeoutGeoJSON(text) {
+/** Real coordinates: in range and not 0,0, the usual placeholder for "unknown". */
+function knownPoint(lat, lon) {
+  return Number.isFinite(lat) && Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 && Math.abs(lon) <= 180 &&
+    !(Math.abs(lat) < 1e-7 && Math.abs(lon) < 1e-7);
+}
+
+/** One sentence for the places a file names with neither coordinates nor a name; '' for none. */
+export function skippedPlacesNotice(skipped) {
+  if (!skipped) return '';
+  return `Skipped ${skipped} ${skipped === 1 ? 'place' : 'places'} with neither coordinates nor a name.`;
+}
+
+/** Saved places from Google Takeout, older or newer files: by their keys, never by the file name (Google translates it). */
+function isTakeout(j) {
+  const first = j?.features?.[0]?.properties || {};
+  if ('Google Maps URL' in first || 'Location' in first) return true;
+  return Array.isArray(j?.features) &&
+    j.features.some((f) => f?.properties && typeof f.properties === 'object' && 'google_maps_url' in f.properties);
+}
+
+/**
+ * @param {{skipped: number} | null} counts  counts the places with neither
+ *   coordinates nor a name (or address) to search by: they are left out.
+ */
+export function readTakeoutGeoJSON(text, counts = null) {
   const j = typeof text === 'string' ? JSON.parse(text) : text;
   const feats = j?.features || [];
   const result = [];
@@ -370,16 +399,25 @@ export function readTakeoutGeoJSON(text) {
     if (!Number.isFinite(lon) && geo.Longitude != null) lon = parseFloat(geo.Longitude);
 
     // 0,0 is the usual placeholder for "unknown" in Takeout exports.
-    const usable =
-      Number.isFinite(lat) && Number.isFinite(lon) &&
-      Math.abs(lat) <= 90 && Math.abs(lon) <= 180 &&
-      !(Math.abs(lat) < 1e-7 && Math.abs(lon) < 1e-7);
+    let usable = knownPoint(lat, lon);
 
-    const name = p.Title || p.Location?.['Business Name'] || p.Location?.Name || '';
-    const address = p.Location?.Address || '';
-    const url = p['Google Maps URL'] || p.url || '';
+    const loc = p.location && typeof p.location === 'object' ? p.location : {}; // the newer files
+    const url = p['Google Maps URL'] || p.google_maps_url || p.url || '';
+    // An unknown point's link may still hold the spot (q=lat,lon).
+    const fromLink = usable ? null : googleCoordinates(url);
+    if (fromLink?.precise && knownPoint(fromLink.lat, fromLink.lon)) {
+      lat = fromLink.lat;
+      lon = fromLink.lon;
+      usable = true;
+    }
 
-    if (!name && !usable) continue;
+    const name = p.Title || p.Location?.['Business Name'] || p.Location?.Name || loc.name || googlePlaceName(url) || '';
+    const address = p.Location?.Address || loc.address || '';
+
+    if (!name && !address && !usable) {
+      if (counts) counts.skipped++;
+      continue;
+    }
 
     result.push({
       name: name || address.split(',')[0] || 'Untitled',
@@ -399,8 +437,11 @@ export function readTakeoutGeoJSON(text) {
  * Google lists as CSV  (Title, Note, URL)
  * ================================================================== */
 
-/** CSV per RFC 4180: quotes, doubled quotes, line breaks inside a field. */
-export function csvRows(text) {
+/**
+ * CSV per RFC 4180: quotes, doubled quotes, line breaks inside a field.
+ * `delimiter`: ',' by default; a tab for TSV, ';' for German Excel (csvDialect finds it).
+ */
+export function csvRows(text, delimiter = ',') {
   const rows = [];
   let field = '';
   let row = [];
@@ -417,7 +458,7 @@ export function csvRows(text) {
       continue;
     }
     if (c === '"') { inQuote = true; continue; }
-    if (c === ',') { row.push(field); field = ''; continue; }
+    if (c === delimiter) { row.push(field); field = ''; continue; }
     if (c === '\r') continue;
     if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue; }
     field += c;
@@ -426,12 +467,25 @@ export function csvRows(text) {
   return rows.filter((z) => z.some((x) => String(x).trim() !== ''));
 }
 
-export function readGoogleCsv(text, listName = '') {
-  const rows = csvRows(text);
+/**
+ * A CSV or TSV file: a Google list (Title, Note, URL) or any table with a
+ * name and coordinate columns (csvcolumns.js). Rows with usable coordinates
+ * import as they are; the others are found by their link or searched by name
+ * (and address) on import.
+ * @param {{skipped: number} | null} counts  in a file with coordinate columns, counts
+ *   the rows with neither usable coordinates nor a name, link or address: they are left out.
+ */
+export function readGoogleCsv(text, listName = '', counts = null) {
+  const { delimiter, text: body } = csvDialect(text);
+  const rows = csvRows(body, delimiter);
   if (!rows.length) return [];
 
   const header = rows[0].map((h) => h.trim().toLowerCase());
-  const hasHeader = header.some((h) => ['title', 'name', 'url', 'note', 'comment', 'titel'].includes(h));
+  // A coordinate or address header word counts as a header too.
+  const found = csvColumns(rows[0]);
+  const hasHeader = found.coordinates || found.address !== -1 ||
+    header.some((h) => ['title', 'name', 'url', 'note', 'comment', 'titel', 'label', 'place', 'ort'].includes(h));
+  const columns = hasHeader ? found : csvColumns([]);
   const column = (names) => {
     for (const n of names) {
       const i = header.indexOf(n);
@@ -439,47 +493,67 @@ export function readGoogleCsv(text, listName = '') {
     }
     return -1;
   };
-  const iTitle = hasHeader ? column(['title', 'titel', 'name']) : 0;
-  const iNote = hasHeader ? column(['note', 'comment', 'notiz', 'kommentar']) : 1;
+  const iTitle = hasHeader ? column(['title', 'titel', 'name', 'label', 'place', 'ort']) : 0;
+  const iNote = hasHeader ? column(['note', 'comment', 'notiz', 'kommentar', 'notes', 'description', 'beschreibung']) : 1;
   const iUrl = hasHeader ? column(['url', 'link']) : 2;
 
   const columnCount = header.length;
 
+  const lines = rows.slice(hasHeader ? 1 : 0);
+  // Decimal commas ("48,1372") only where the comma doesn't separate the columns.
+  const points = lines.map((z) => (columns.coordinates ? rowCoordinates(z, columns, delimiter !== ',') : null));
+  const swap = swappedColumns(points);
+  // A table with coordinate or address columns is no Google list: its rows are map-file pins.
+  const table = columns.coordinates || columns.address !== -1;
+  const source = table ? 'csv' : 'google-csv';
+
   const result = [];
-  for (const z of rows.slice(hasHeader ? 1 : 0)) {
+  for (const [r, z] of lines.entries()) {
     const name = (iTitle >= 0 ? z[iTitle] : '') || '';
     const note = (iNote >= 0 ? z[iNote] : '') || '';
+    let address = ((columns.address >= 0 ? z[columns.address] : '') || '').trim();
+    // A "location" column with words in it, not numbers, is the address to search with.
+    if (!address && columns.pair >= 0 && !pairCoordinates(z[columns.pair])) address = (z[columns.pair] || '').trim();
+    let point = points[r];
+    if (point && swap) point = [point[1], point[0]];
+    if (point && !knownPoint(point[0], point[1])) point = null;
 
     // Google Maps URLs contain commas (@45.4,9.2,17z). If they are not quoted
     // in the file, the link falls apart into several columns. If the last
     // header column is the URL, join everything from there back together;
     // otherwise exactly the coordinates get lost.
     let url = (iUrl >= 0 ? z[iUrl] : '') || '';
-    if (iUrl >= 0 && iUrl === columnCount - 1 && z.length > columnCount) {
+    if (delimiter === ',' && iUrl >= 0 && iUrl === columnCount - 1 && z.length > columnCount) {
       url = z.slice(iUrl).join(',');
     }
 
-    if (!name && !url) continue;
+    if (!name && !url && !address && !point) {
+      if (counts && table) counts.skipped++;
+      continue;
+    }
 
-    const coords = url ? googleCoordinates(url) : null;
+    const coords = point ? { lat: point[0], lon: point[1], precise: true } : url ? googleCoordinates(url) : null;
     let warning = '';
     if (!coords) {
-      warning = isGoogleShortLink(url)
-        ? 'Short link; it will be resolved on import.'
-        : 'No coordinates in the link; it will be searched by name.';
+      if (!url && table) warning = 'No coordinates in this row; it will be searched by name.';
+      else {
+        warning = isGoogleShortLink(url)
+          ? 'Short link; it will be resolved on import.'
+          : 'No coordinates in the link; it will be searched by name.';
+      }
     } else if (!coords.precise) {
       warning = 'Coordinate comes from the map center and may be slightly off.';
     }
 
     result.push({
-      name: name || googleName(url) || 'Untitled',
-      address: '',
+      name: name || googleName(url) || address.split(',')[0].trim() || 'Untitled',
+      address,
       lat: coords?.lat ?? null,
       lon: coords?.lon ?? null,
       url,
-      source: 'google-csv',
+      source,
       note,
-      tagSuggestion: listName ? listName.toLowerCase().replace(/\.csv$/, '') : '',
+      tagSuggestion: listName ? listName.toLowerCase().replace(/\.[ct]sv$/, '') : '',
       warning,
     });
   }
@@ -490,7 +564,11 @@ export function readGoogleCsv(text, listName = '') {
  * GeoJSON, KML, KMZ, GPX
  * ================================================================== */
 
-function fromGeoJSON(j, source) {
+/**
+ * @param {{skipped: number} | null} counts  counts the points at 0,0 (no
+ *   coordinates) without a name to search by: they are left out.
+ */
+function fromGeoJSON(j, source, counts = null) {
   const result = [];
   const feats = j?.type === 'FeatureCollection' ? j.features || [] : j?.type === 'Feature' ? [j] : [];
 
@@ -518,15 +596,24 @@ function fromGeoJSON(j, source) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
 
+    // 0,0 stands for "unknown", never a pin there: a named place is searched by its name.
+    const unknown = !knownPoint(lat, lon);
+    const name = p.name || p.Name || p.title || p.Title || '';
+    if (unknown && !name) {
+      if (counts) counts.skipped++;
+      continue;
+    }
+
     result.push({
-      name: p.name || p.Name || p.title || p.Title || 'Untitled',
+      name: name || 'Untitled',
       address: p.address || p.Address || p.vicinity || '',
-      lat, lon,
+      lat: unknown ? null : lat,
+      lon: unknown ? null : lon,
       url: p.url || p.link || '',
       source,
       note: (p.description || p.Description || p.desc || '')
         .replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 500),
-      warning: '',
+      warning: unknown ? 'No coordinates in the file; it will be searched by name.' : '',
     });
   }
   return result;
@@ -538,34 +625,53 @@ function xmlDoc(text) {
   return doc;
 }
 
-export function readKml(text) {
-  return fromGeoJSON(kml(xmlDoc(text)), 'kml');
+export function readKml(text, counts = null) {
+  return fromGeoJSON(kml(xmlDoc(text)), 'kml', counts);
 }
 
-export function readGpx(text) {
-  return fromGeoJSON(gpx(xmlDoc(text)), 'gpx');
+export function readGpx(text, counts = null) {
+  return fromGeoJSON(gpx(xmlDoc(text)), 'gpx', counts);
 }
 
-export function readKmz(bytes) {
+export function readKmz(bytes, counts = null) {
   const files = unzipSync(new Uint8Array(bytes));
   const name =
     Object.keys(files).find((n) => /^doc\.kml$/i.test(n)) ||
     Object.keys(files).find((n) => /\.kml$/i.test(n));
   if (!name) throw new Error('The KMZ file contains no KML file.');
-  return readKml(strFromU8(files[name]));
+  return readKml(strFromU8(files[name]), counts);
 }
 
 /* ================================================================== *
  * Read a file, detect the format automatically
  * ================================================================== */
 
+/**
+ * The text of a CSV/TSV file: UTF-8, else Windows-1252, the code page Excel
+ * saves a plain "CSV" in (so "Länge" and "Café" survive a German Excel file).
+ */
+function spreadsheetText(bytes) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
+/**
+ * @returns {Promise<{name: string, entries: Array, skipped?: number, backup?: object}>}
+ *   skipped: places the file names with neither coordinates nor a name (no pins at 0,0)
+ */
 export async function readFile(file) {
   const name = file.name || '';
   const ext = (name.split('.').pop() || '').toLowerCase();
+  const counts = { skipped: 0 };
+  const done = (entries) => ({ name, entries, skipped: counts.skipped });
 
   if (ext === 'kmz' || ext === 'zip') {
-    return { name, entries: readKmz(await file.arrayBuffer()) };
+    return done(readKmz(await file.arrayBuffer(), counts));
   }
+  if (ext === 'csv' || ext === 'tsv') return done(readGoogleCsv(spreadsheetText(await file.arrayBuffer()), name, counts));
 
   const text = await file.text();
 
@@ -573,9 +679,8 @@ export async function readFile(file) {
     return { name, entries: [], backup: readBackupText(text) };
   }
 
-  if (ext === 'kml') return { name, entries: readKml(text) };
-  if (ext === 'gpx') return { name, entries: readGpx(text) };
-  if (ext === 'csv' || ext === 'tsv') return { name, entries: readGoogleCsv(text, name) };
+  if (ext === 'kml') return done(readKml(text, counts));
+  if (ext === 'gpx') return done(readGpx(text, counts));
 
   if (ext === 'json' || ext === 'geojson' || !ext) {
     let j;
@@ -587,16 +692,13 @@ export async function readFile(file) {
     // Our own backup
     if (Array.isArray(j?.pins)) return { name, backup: j, entries: [] };
     // Takeout is recognized by its typical properties
-    const first = j?.features?.[0]?.properties || {};
-    if ('Google Maps URL' in first || 'Location' in first) {
-      return { name, entries: readTakeoutGeoJSON(j) };
-    }
-    return { name, entries: fromGeoJSON(j, 'geojson') };
+    if (isTakeout(j)) return done(readTakeoutGeoJSON(j, counts));
+    return done(fromGeoJSON(j, 'geojson', counts));
   }
 
   // Guess if necessary
   if (/^\s*</.test(text)) {
-    return { name, entries: /<gpx/i.test(text) ? readGpx(text) : readKml(text) };
+    return done(/<gpx/i.test(text) ? readGpx(text, counts) : readKml(text, counts));
   }
   throw new Error(`I can't do anything with the extension ".${ext}".`);
 }

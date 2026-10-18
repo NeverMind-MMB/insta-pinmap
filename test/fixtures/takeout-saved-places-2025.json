@@ -1,0 +1,59 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "geometry": { "coordinates": [0, 0], "type": "Point" },
+      "properties": {
+        "date": "2025-03-02T09:15:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1000000000000000004"
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": { "coordinates": [11.5755, 48.1372], "type": "Point" },
+      "properties": {
+        "date": "2025-04-11T17:02:41Z",
+        "google_maps_url": "http://maps.google.com/?cid=1000000000000000001",
+        "location": {
+          "address": "Teststrasse 1, 80000 Testtown, Germany",
+          "country_code": "DE",
+          "name": "Synthetic Cafe"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": { "coordinates": [0, 0], "type": "Point" },
+      "properties": {
+        "date": "2025-05-20T08:00:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1000000000000000002",
+        "location": {
+          "address": "Probeweg 7, 80001 Testtown, Germany",
+          "country_code": "DE",
+          "name": "Synthetic Museum"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": { "coordinates": [0, 0], "type": "Point" },
+      "properties": {
+        "date": "2025-06-01T12:30:00Z",
+        "google_maps_url": "http://maps.google.com/?q=Synthetic+Bakery,+Teststrasse+2&ftid=0x0:0x3"
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": { "coordinates": [12.1, 47.9], "type": "Point" },
+      "properties": {
+        "date": "2025-07-14T19:45:10Z",
+        "google_maps_url": "http://maps.google.com/?q=47.9,12.1",
+        "location": {
+          "address": "Feldweg 3, 83000 Testdorf, Germany",
+          "country_code": "DE"
+        }
+      },
+      "type": "Feature"
+    }
+  ]
+}
