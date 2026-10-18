@@ -1,34 +1,44 @@
 # oPin
 
-oPin is one map for places from many sources: Apple Maps, Google Maps, map files
-and Instagram posts. Free, no account, and your pins stay on your phone.
+oPin is one map for places from many sources: Apple Maps, Google Maps and other
+map apps, map files and spreadsheets, and posts from Instagram, TikTok, YouTube
+and Facebook. Free, no account, and your pins stay on your phone.
 
 ## What it does
 
-The app brings places from map apps and map files onto one map, and you check
-what it found before anything is saved.
+The app brings places from map apps, map files and posts onto one map, and you
+check what it found before anything is saved.
 
 | Import from | Where the places come from |
 |---|---|
 | Apple Guides and Apple Maps places | The link itself. Places a guide names only by an Apple Maps ID are looked up from your phone or computer (see "Apple Guides"). |
 | Google Maps links | The link itself; short links are expanded by the app's helper. |
-| Google Maps saved places and lists (the GeoJSON and CSV files from the Google Takeout zip, not the zip itself) | The file itself; places without coordinates are searched by name on import. |
+| Google Maps shared lists (only lists shared with "Anyone with the link") | The list, read by the app's helper; all its places open in one import list. |
+| Links from other map apps: OpenStreetMap, Organic Maps / CoMaps, Waze, HERE WeGo, Mapy, Bing Maps | The link itself. An OpenStreetMap object (node, way, relation) is looked up on OpenStreetMap; Mapy short links are expanded by the app's helper. |
+| Coordinates, `geo:` links and Plus Codes, typed or pasted | The text itself: the exact point. A short Plus Code with a town ("4HX8+QH Munich") is placed near that town. |
+| Google Maps saved places and lists (the GeoJSON and CSV files from the Google Takeout zip, not the zip itself; older and newer Takeout files) | The file itself; places without coordinates are searched by name on import, never put at 0,0. |
+| Spreadsheets (CSV, TSV, Excel files saved with `;` and decimal commas) with coordinate or address columns | The file itself; rows without coordinates are searched by name on import. |
 | My Maps (KML/KMZ), GPS files (GPX), GeoJSON | The file itself. |
-| Instagram posts | The post's text, read by the app's helper (see below). |
+| Instagram posts | The post's text and location tag, read by the app's helper (see below). |
+| TikTok videos | The video's caption, read from your phone through TikTok's oEmbed. |
+| YouTube videos and Shorts | The video's title, description and location tag, read by the app's helper. |
+| Public Facebook posts, reels and pages | A post's or reel's text, or a page's map pin and address, read by the app's helper. |
 
-The input bar takes one link at a time: an Instagram post, an Apple or Google
-Maps place, or an Apple Guide link. Several map links at once go in through
+The input bar takes one link at a time: an Instagram, TikTok, YouTube or
+Facebook link, a map app's place, an Apple Guide or a Google Maps list; or
+coordinates, a `geo:` link or a Plus Code. Several map links at once go in through
 **Settings → Import** (one per line; they open one import list), files through
 **Settings → Import → Choose files**. The import list puts a tag with the
 guide's, list's or file's name on every place it imports; change or clear it
 before you tap **Import selected**. With the tag filter you then show or hide a
 whole guide at once.
 
-A pin takes the colour of where it came from (Instagram, Apple Maps, Google Maps,
-GPS files, other map files, a typed search); pick another one in **Confirm
-place**, the import list or the pin's details (**Auto** goes back to it).
+A pin takes the colour of where it came from (Instagram, TikTok, YouTube,
+Facebook, Apple Maps, Google Maps, other map apps and coordinates, GPS files,
+other map files, a typed search); pick another one in **Confirm place**, the
+import list or the pin's details (**Auto** goes back to it).
 
-A link to a site the app doesn't read yet (Pinterest or YouTube, say) opens a
+A link to a site the app doesn't read yet (Pinterest, say) opens a
 dialog that says so, offers a search of the project's GitHub issues for that
 site, and lists every supported link and file.
 
@@ -37,12 +47,20 @@ suggests where the place is, you confirm, and the pin is on your map. Hashtags
 can become tags with one tap. It also reads country flags and country/region
 words in the caption to put the right place first, and shows each match's
 country flag. If a post mentions a date, the app suggests it; you can edit it.
-Each post also keeps the date it was published.
+Each post also keeps the date it was published. If the post has a location tag,
+that place comes first in **Confirm place** ("Tagged location"), with the
+caption's places below.
 
 - One post belongs to exactly one pin. Pasting the same link again jumps to it.
 - Several posts can share a pin. If a new place is close to pins you already
   have, the app asks whether to attach it to one of them.
 - You always confirm the place, even when there is only one match.
+
+**TikTok, YouTube and Facebook** go the same way: paste or share a link, the app
+reads the caption or description, suggests places, and you confirm. A YouTube
+video's location tag is searched first. A Facebook page with a map pin gives the
+exact place, and the page's link goes into the pin's note. Videos and posts stay
+on their pin like Instagram posts.
 
 Also: list with search, tag filter and notes (a new place without other tag
 suggestions offers the tag "want-to-go"). The only export is the app's own
@@ -52,19 +70,27 @@ brings them back (see "Your data and backups").
 ## What needs the helper
 
 The app runs on your phone. Its helper is the small server part on Cloudflare
-(a Worker, at the `/api/…` addresses of your copy). Only three things use it:
+(a Worker, at the `/api/…` addresses of your copy). Only these things use it:
 
 - reading Instagram posts (`/api/ig`),
-- expanding short Google Maps links such as maps.app.goo.gl, pasted or in an imported
-  file (`/api/resolve`),
+- reading YouTube videos and Facebook posts, reels and pages (`/api/post`),
+- reading shared Google Maps lists (`/api/list`),
+- expanding short links (`/api/resolve`): Google Maps ones such as maps.app.goo.gl,
+  pasted or in an imported file; Mapy ones (mapy.com/s/…); and TikTok ones
+  (vm.tiktok.com, vt.tiktok.com, tiktok.com/t/…) when TikTok's oEmbed won't take them,
 - a guide shared from the Maps app to the iPhone Shortcut (`/api/guide`).
 
-Everything else works without it: file imports, long Apple and Google Maps
-links, Apple Guide links, the Shortcut from Safari or from the app's button, and
-backups. Place search and map images go straight from your phone to Photon,
-Nominatim and the map servers.
+Everything else runs on your phone alone: file imports, coordinates, `geo:` links
+and Plus Codes, long Apple and Google Maps links, other map apps' links, Apple
+Guide links, the Shortcut from Safari or from the app's button, and backups.
+TikTok captions come straight from TikTok's oEmbed, and OpenStreetMap objects
+straight from OpenStreetMap (Nominatim). Place search and map images go straight
+from your phone to Photon, Nominatim and the map servers.
 
-So if Instagram blocks a Worker, only reading Instagram posts stops; everything
+So if Meta blocks a Worker, only reading Instagram and Facebook posts stops.
+YouTube, TikTok and Google can block a Worker separately; then only what the
+helper does for them stops (a YouTube video still gives its title, read straight
+from YouTube; a Google list can still come in as its Takeout file). Everything
 else keeps working. Even then you can save a post: the app shows it, and you
 search for the place yourself.
 
@@ -77,7 +103,7 @@ Open your copy's address (see "Run your own copy") in the browser once, then:
 - **Android (Chrome):** menu ⋮ → **Install app** (or "Add to Home screen").
 
 After the first start the app works without internet, except for map images,
-place search and reading Instagram posts.
+place search, reading posts and Google lists, and short links.
 
 ## Adding a place
 
@@ -85,8 +111,9 @@ place search and reading Instagram posts.
   use the iPhone way.
 - **iPhone:** in Instagram tap Share → **Copy link**, open oPin, tap the
   paste button next to the input field and confirm iPhone's "Paste" bubble.
-- You can also type a place name, or paste one Apple or Google Maps link (an
-  Apple Guide link too).
+- You can also type a place name, or paste one link from TikTok, YouTube,
+  Facebook or a map app (an Apple Guide or a Google Maps list too), coordinates
+  or a Plus Code.
 
 If the app can't read a post, it shows the post and you search for the place
 yourself. Everything else keeps working.
@@ -199,18 +226,36 @@ version exists. **Settings → App → Check for updates → Install.**
 ## Privacy
 
 - Pins, notes and tags never leave your phone.
-- Reading a post sends only the post's code to the app's helper on Cloudflare,
-  together with a small computed "work ticket" that keeps scripts from misusing it.
-- Short Google Maps links (maps.app.goo.gl, goo.gl/maps) are expanded by the same
-  helper; it sees the short link, where it points to, and your IP address.
+- Reading an Instagram post sends only the post's code to the app's helper on
+  Cloudflare, together with a small computed "work ticket" that keeps scripts from
+  misusing it.
+- Reading a YouTube video or a Facebook post, reel or page sends its link to the
+  same helper, with the same kind of work ticket. The helper fetches the page from
+  YouTube or Facebook (for a YouTube location tag, also that place's Google Maps
+  page). It sees the link and your IP address, and stores and logs neither.
+- A Google Maps list link goes to the helper too: it asks Google for the list by
+  its ID and passes on the places' names, addresses, coordinates and notes, never
+  who owns the list or added a place. It sees the list link and your IP address,
+  and stores and logs neither.
+- Short Google Maps links (maps.app.goo.gl, goo.gl/maps), Mapy short links and the
+  TikTok short links TikTok's oEmbed won't take are expanded by the same helper; it
+  sees the short link, where it points to, and your IP address.
+- A TikTok caption comes straight from your phone through TikTok's oEmbed, so
+  TikTok sees that request. If the helper can't read a YouTube video, the app asks
+  YouTube's oEmbed for its title the same way; a video's picture also comes
+  straight from YouTube.
+- OpenStreetMap objects from map links are looked up straight from your phone on
+  Nominatim (or the OpenStreetMap API).
 - Apple Maps places of an Apple Guide are looked up by the iPhone Shortcut or the
   computer script (see "Apple Guides"), straight from your own connection to Apple Maps.
 - A guide shared from the Maps app to the Shortcut goes to the app's helper once: it
   reads the place IDs out of the link and answers with the place links. It sees the
   guide link (title, your pins' names, addresses and coordinates) and your IP address,
-  and stores and logs neither; it only counts requests per address for a minute,
-  against misuse.
+  and stores and logs neither.
+- Against misuse, the helper only counts requests per address for a minute.
 - Opening a saved post shows Instagram's own embedded view, so Instagram sees that request.
+  If a post can't be read, **Confirm place** shows the site's own embedded view
+  (Instagram, TikTok, YouTube or Facebook), so that site sees the request.
 - Place search goes directly to Photon (komoot) and Nominatim (OpenStreetMap).
 - Map images come from OpenStreetMap (or OpenTopoMap, if you pick that map style).
 - Search engines are asked not to list the app (robots.txt and noindex).
@@ -230,9 +275,9 @@ says what is wrong.
 ## Run your own copy
 
 The public copy is the author's personal one, not a service. Your own copy
-matters most for Instagram: Instagram (Meta) can block a Worker's address at any
-time, and then reading posts stops for everyone who uses that copy (see "What
-needs the helper"). So everyone runs their **own** copy on their **own** free
+matters most for Instagram and Facebook: Meta can block a Worker's address at any
+time, and then reading their posts stops for everyone who uses that copy (see
+"What needs the helper"). So everyone runs their **own** copy on their **own** free
 Cloudflare account: your Worker, your limits. It takes about 15 minutes.
 
 1. Install Node.js (the LTS version) from <https://nodejs.org>.
@@ -247,7 +292,7 @@ Cloudflare account: your Worker, your limits. It takes about 15 minutes.
    that goes into git.
 5. Optional: change `name = "opin"` in `wrangler.toml` — the name is part
    of your address. If another Worker on your account already uses rate-limit
-   namespace `1001` or `1002`, change those numbers too (see "Rate limits").
+   namespace `1001`, `1002`, `1003` or `1004`, change those numbers too (see "Rate limits").
 6. Deploy: `npx --yes wrangler@4 deploy`. At the end it prints your address,
    `https://<name>.<your-subdomain>.workers.dev`.
 7. Open that address on your phone and install the app (see "Install").
@@ -277,24 +322,27 @@ Shortcut again later (say, a newer version), change the URL again.
 
 | Binding | `namespace_id` | Limit per address | For |
 |---|---|---|---|
-| `IG_LIMIT` | `1001` | 20 a minute | reading posts (`/api/ig`), and separately short links (`/api/resolve`) |
+| `IG_LIMIT` | `1001` | 20 a minute | reading Instagram posts (`/api/ig`), and separately short links (`/api/resolve`) |
 | `GUIDE_LIMIT` | `1002` | 30 a minute | guide place links (`/api/guide`) |
+| `LIST_LIMIT` | `1003` | 20 a minute | Google Maps lists (`/api/list`) |
+| `POST_LIMIT` | `1004` | 20 a minute | YouTube videos and Facebook posts (`/api/post`) |
 
 Over the limit, the helper answers "Too many requests. Wait a minute and try again."
 
 - `namespace_id` must be unique within your Cloudflare account: bindings with the
-  same number share their counters. If another Worker of yours already uses
-  `1001` or `1002`, pick other numbers (any positive whole number, in quotes).
+  same number share their counters. If another Worker of yours already uses one of
+  `1001` to `1004`, pick other numbers (any positive whole number, in quotes).
 - If `wrangler deploy` rejects the `[[ratelimits]]` blocks, delete them. The
   Worker then counts in its own memory, with the same limits; that is rougher,
   but it works.
 
 ### Good to know
 
-- Cloudflare's free plan allows 100,000 requests a day; one added post, short link
-  or guide shared from the Maps app is one request.
-- `WORK_DIFFICULTY` in `wrangler.toml` sets how much work a phone does per post
-  (about 1 second at 18 on a phone; raise it only if your phone is fast).
+- Cloudflare's free plan allows 100,000 requests a day; one added post, short link,
+  Google list or guide shared from the Maps app is one request.
+- `WORK_DIFFICULTY` in `wrangler.toml` sets how much work a phone does per
+  Instagram, YouTube or Facebook post (about 1 second at 18 on a phone; raise it
+  only if your phone is fast).
 - Search engines are already asked to stay away: `web/robots.txt` disallows
   everything, and every page and answer says "noindex" (`web/_headers`, the
   page's robots tag, the Worker). Nothing to set up. Your address still isn't a
@@ -320,13 +368,38 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   previews to search engines. It can stop working at any time and may not be in
   line with Instagram's terms. Use it only for posts you save for yourself, at
   personal volume, and respect the people who made them.
+- **YouTube, Facebook and TikTok:** these are read in unofficial ways too, much
+  like Instagram: the helper reads YouTube's and Facebook's public pages, and the
+  app asks TikTok's embed information. Any of it can stop working at any time and
+  may not be in line with their terms. The same rules apply: only posts you save
+  for yourself, at personal volume.
+- **Google Maps lists** are read through an undocumented address of Google Maps;
+  that, too, can stop working at any time.
 - **Map services:** respect the usage policies of OpenStreetMap, Nominatim and
   Photon. The app already keeps to their request limits; please don't change that.
 
 ## For developers
 
 - `web/` — the app: plain HTML, CSS and ES modules, no build step.
-- `worker/` — the Cloudflare Worker: `/api/ig`, `/api/resolve` and `/api/guide`.
+- `worker/` — the Cloudflare Worker: `/api/ig`, `/api/resolve`, `/api/guide`,
+  `/api/list` and `/api/post`.
+- `web/js/sources.js` lists every source: its link prefixes, pin colour and the
+  dialog's supported links and files. A new source is one more entry there.
+- Readers added in 2.2.0: `web/js/coords.js` (coordinates, `geo:`, Plus Codes),
+  `maplinks.js` (other map apps), `csvcolumns.js` (CSV/TSV columns),
+  `googlelist.js` (Google lists), `tiktok.js` (TikTok's oEmbed) and `postlinks.js`
+  (YouTube and Facebook links, shared with the Worker); in the Worker
+  `iglocation.js` (an Instagram post's location tag, which `/api/ig` now returns),
+  `googlelist.js` and `post.js`.
+- `GET /api/list?link=<list link>` answers the list's title and places as JSON
+  (one request to Google by the list's ID); 400 for a link without a list ID, 404
+  for a list not shared with "Anyone with the link", 502 when Google doesn't send
+  it, 429 over the rate limit.
+- `GET /api/post?url=<link>&m=<minute>&n=<nonce>` answers a YouTube video's text
+  and location tag, a Facebook post's text or a Facebook page's map pin, as JSON.
+  Its work ticket is computed over the link's post key (`yt:…`, `fb:…`), as
+  `/api/ig`'s is over the shortcode; 400 for another link, 403 for a missing or
+  expired ticket, 429 over the rate limit.
 - `GET /api/guide?link=<guide link>` (the Shortcut's Maps-app path; URL-encoded,
   or raw as the last parameter) answers, as plain text, one
   `https://maps.apple.com/place?auid=<id>` line per Apple Maps place, read from the
