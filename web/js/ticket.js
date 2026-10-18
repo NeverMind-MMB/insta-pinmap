@@ -2,12 +2,13 @@
  * ticket.js — the "work ticket" that keeps scripts from using /api/ig in bulk.
  *
  * For each request the app finds a nonce so that
- * SHA-256("<code, max 24 chars>:<minute>:<nonce>") starts with `difficulty`
- * zero bits. That costs the phone about a second and the Worker one hash to check.
+ * SHA-256("<key>:<minute>:<nonce>") starts with `difficulty` zero bits (the key:
+ * the code or post key itself up to 24 characters, else its hash; see ticketKey).
+ * That costs the phone about a second and the Worker one hash to check.
  * Same input format as worker/ticket.js — change both together.
  */
 
-import { firstWordOfSingleBlock } from './sha256.js';
+import { firstWordOfSingleBlock, sha256 } from './sha256.js';
 
 export const TICKET_WINDOW = 2; // minutes either side the Worker accepts
 
@@ -15,8 +16,23 @@ export function ticketMinute(nowMs = Date.now()) {
   return Math.floor(nowMs / 60000);
 }
 
+const MAX_KEY_BYTES = 24;
+
+/**
+ * What a ticket is computed over: the code as it is when it has at most 24 bytes (an
+ * Instagram post's shortcode, as apps from before 2.2.0 send it), else "~" and the first 23 hex
+ * digits of its SHA-256 — at most 24 characters either way, so two long keys that begin alike
+ * (fb:page:<name>, fb:pfbid…) never share a ticket, and the input stays one SHA-256 block.
+ */
+export function ticketKey(code) {
+  const s = String(code);
+  const bytes = new TextEncoder().encode(s);
+  if (bytes.length <= MAX_KEY_BYTES) return s;
+  return `~${[...sha256(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, MAX_KEY_BYTES - 1)}`;
+}
+
 export function ticketInput(code, minute, nonce) {
-  return `${String(code).slice(0, 24)}:${minute}:${nonce}`;
+  return `${ticketKey(code)}:${minute}:${nonce}`;
 }
 
 export function leadingZeroBits(bytes) {

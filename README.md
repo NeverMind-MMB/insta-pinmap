@@ -400,8 +400,9 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
 - `GET /api/post?url=<link>&m=<minute>&n=<nonce>` answers a YouTube video's text
   and location tag, a Facebook post's text or a Facebook page's map pin, as JSON.
   Its work ticket is computed over the link's post key (`yt:…`, `fb:…`), as
-  `/api/ig`'s is over the shortcode; 400 for another link, 403 for a missing or
-  expired ticket, 429 over the rate limit.
+  `/api/ig`'s is over the shortcode (a key longer than 24 characters as its
+  hash, `ticketKey` in `web/js/ticket.js`); 400 for another link, 403 for a
+  missing or expired ticket, 429 over the rate limit.
 - `GET /api/guide?link=<guide link>` (the Shortcut's Maps-app path; URL-encoded,
   or raw as the last parameter) answers, as plain text, one
   `https://maps.apple.com/place?auid=<id>` line per Apple Maps place, read from the
