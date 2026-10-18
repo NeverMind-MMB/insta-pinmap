@@ -28,7 +28,9 @@ import { readCoords, placeShortCode } from './coords.js';
 import { fetchPost, resolveShortLink, fetchSocialPost, fetchYouTubeOembed } from './api.js';
 import { siteOf, sourceOf, sourceColor, findLinks, pinLook, linkSourceName } from './sources.js';
 import { withShareText, needsMapAppLookup, lookUpMapAppEntry } from './maplinks.js';
-import { isTikTokLink, isTikTokShortLink, tiktokVideo, readTikTok, findTikTokPost, tiktokEmbed } from './tiktok.js';
+import {
+  isTikTokLink, isTikTokShortLink, tiktokVideo, readTikTok, findTikTokPost, tiktokEmbed, tiktokPostKey,
+} from './tiktok.js';
 import {
   isSocialLink, postRequestKey, socialPostKey, canonicalPostLink, facebookTarget, candidateText,
   postEmbedLink, postSiteName, postAuthorLabel,
@@ -258,13 +260,30 @@ async function addFromTikTok(link, env) {
   }
   if (!video && tellSaved(findTikTokPost(store.db, tt.id), env)) return;
 
-  const caption = tt.ok ? tt.caption : '';
-  const { candidates, countries, hintedCountries } = placeCandidates(caption, { username: tt.username });
+  // TikTok's location tag is only in the video page, which the Worker reads (best effort);
+  // without it (or without the Worker) the caption alone goes on, as before.
+  env.toast('Reading the video …', 'busy', 15000);
+  let page;
+  let tagged = null;
+  try {
+    page = await fetchSocialPost(tt.url, tiktokPostKey(tt.url));
+    tagged = await placeOfTikTokTag(page?.ok ? page.location : null);
+  } finally {
+    env.hideToast?.();
+  }
+  const tagName = page?.ok && typeof page.location?.name === 'string' ? page.location.name.trim() : '';
+
+  const caption = tt.ok ? tt.caption : (page?.ok && typeof page.text === 'string' ? page.text : '');
+  const { candidates, countries, hintedCountries } = placeCandidates(caption, {
+    username: tt.username,
+    location: !tagged && tagName ? tagName : undefined,
+  });
   return openConfirm({
     source: 'tiktok',
     post: { url: tt.url, caption, username: tt.username, thumb: '', postedAt: tt.postedAt },
-    igError: tt.ok ? null : tt,
-    titleSuggestion: candidates[0]?.text || '',
+    igError: tt.ok || caption ? null : tt,
+    taggedPlace: tagged,
+    titleSuggestion: tagged?.name || tagName || candidates[0]?.text || '',
     whenSuggestion: eventDate(caption, { postedAt: tt.postedAt })?.text || '',
     candidates,
     countries,
@@ -273,6 +292,20 @@ async function addFromTikTok(link, env) {
     tagSuggestions: tagSuggestions(caption, store.settings.customStopTags),
     env,
   });
+}
+
+/**
+ * A TikTok video's location tag as the tagged place of Confirm place: with coordinates as it
+ * is; without (TikTok sends name and address only) the place search's best match for
+ * "<name>, <address>", under the tag's name and address. null without a tag or a match.
+ */
+async function placeOfTikTokTag(tag) {
+  const exact = taggedPlace(tag);
+  if (exact || typeof tag?.name !== 'string' || !tag.name.trim()) return exact;
+  const name = tag.name.trim();
+  const address = typeof tag.address === 'string' ? tag.address.trim() : '';
+  const hit = (await searchPlaces([name, address].filter(Boolean).join(', '), { limit: 1 })).results?.[0];
+  return hit ? { name, lat: hit.lat, lon: hit.lon, address: address || hit.address || '', countryCode: hit.countryCode || '', tagged: true } : null;
 }
 
 /* ================================================================== *

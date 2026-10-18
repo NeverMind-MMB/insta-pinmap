@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
  * (and, for apps from before 2.2.0, the tag's name as `location`)
  * and Confirm place shows that place first, marked "Tagged location", with the caption's
  * places below. Nothing is saved before Drop pin. All names, codes and coordinates are made up.
+ * At the end: a TikTok video's tag, which /api/post reads from the video page (name and address).
  */
 
 const { startAdd, wireConfirm, taggedPlace } = await import('../web/js/addflow.js');
@@ -217,5 +218,124 @@ test('taggedPlace: only a named place with real coordinates', () => {
     { name: 'X', lat: 47, lon: 181 }, { name: 'X', lat: NaN, lon: 9 }, { name: 42, lat: 47.5, lon: 9.75 },
   ]) {
     assert.equal(taggedPlace(bad), null, JSON.stringify(bad));
+  }
+});
+
+/* ---------- TikTok's location tag, through the Worker's /api/post (2.2.0) ---------- */
+
+const { TIKTOK_OEMBED } = await import('../web/js/tiktok.js');
+const TT_ID = '7561234567890123456';
+const TT_VIDEO = `https://www.tiktok.com/@synthetic.user/video/${TT_ID}`;
+const TT_TAG = { name: 'Trattoria Sintetica', address: 'Via Finta 1, 40100, Testopoli, Italia' };
+
+/**
+ * oEmbed answers `caption` (or refuses with `oembedOk` false), /api/post answers `post`,
+ * the place search answers `places(query)` (Photon).
+ */
+function stubTikTok({ caption = 'Lunch 📍 Harbour Cafe #foodtok', oembedOk = true, post, places = () => [] }) {
+  const calls = [];
+  const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    if (u.startsWith(TIKTOK_OEMBED)) {
+      return oembedOk
+        ? json({ title: caption, author_unique_id: 'synthetic.user', embed_product_id: TT_ID, embed_type: 'video' })
+        : json({ code: 400 }, 400);
+    }
+    if (u.startsWith('/api/post')) return json(post);
+    if (u.includes('photon')) return json({ features: places(new URL(u).searchParams.get('q')) });
+    if (u.includes('nominatim')) return json([]);
+    return new Response('', { status: 404 });
+  };
+  return calls;
+}
+
+async function addTikTok(options) {
+  const doc = confirmDocument();
+  globalThis.document = doc;
+  store.db = normalizeDb({});
+  const calls = stubTikTok(options);
+  const ui = { toast() {}, hideToast() {}, redraw() {}, inputDone() {} };
+  wireConfirm(ui);
+  await startAdd(TT_VIDEO, ui);
+  const el = (id) => doc.getElementById(id);
+  const rows = el('confirm-candidates').children.map((li) => {
+    const btn = li.children[0];
+    return {
+      name: btn.querySelector('.candidate__name').textContent,
+      address: btn.querySelector('.candidate__address').textContent,
+      kind: btn.querySelector('.candidate__kind').textContent,
+      pressed: btn.getAttribute('aria-pressed'),
+    };
+  });
+  return { el, rows, calls, searched: calls.filter((u) => /photon|nominatim/.test(u)).map((u) => new URL(u).searchParams.get('q')) };
+}
+
+test('TikTok: the video\'s location tag from /api/post comes first as "Tagged location", the caption\'s places below', async () => {
+  try {
+    const places = (q) => (q.startsWith('Trattoria Sintetica') ? [feature('Via Finta 1', 44.4949, 11.3426)] : [feature('Harbour Cafe', 48.2, 11.6)]);
+    const { el, rows, calls, searched } = await addTikTok({ post: { ok: true, kind: 'tiktok', url: TT_VIDEO, title: '', text: 'x', location: TT_TAG }, places });
+    const asked = calls.filter((u) => u.startsWith('/api/post'));
+    assert.equal(asked.length, 1);
+    assert.equal(new URL(asked[0], 'https://app.example').searchParams.get('url'), TT_VIDEO, 'the video link, not the shared one');
+    assert.equal(searched[0], 'Trattoria Sintetica, Via Finta 1, 40100, Testopoli, Italia', 'the tag is searched first, with its address');
+    assert.deepEqual(rows[0], { name: 'Trattoria Sintetica', address: TT_TAG.address, kind: 'Tagged location', pressed: 'true' });
+    assert.deepEqual(rows.slice(1).map((r) => [r.name, r.kind === 'Tagged location']), [['Harbour Cafe', false]], 'caption places below');
+    assert.equal(el('confirm-title').value, 'Trattoria Sintetica');
+    assert.match(el('confirm-status').textContent, /location tag/);
+    assert.match(el('confirm-caption').textContent, /Harbour Cafe/, 'the caption still comes from oEmbed');
+    assert.equal(store.db.pins.length, 0, 'nothing is saved before Drop pin');
+
+    el('confirm-save').fire('click');
+    const pin = store.db.pins[0];
+    assert.deepEqual([pin.lat, pin.lon, pin.title, pin.address, pin.source], [44.4949, 11.3426, 'Trattoria Sintetica', TT_TAG.address, 'tiktok']);
+    assert.equal(pin.posts[0].url, TT_VIDEO);
+  } finally {
+    cleanUp();
+  }
+});
+
+test('TikTok: a tag with coordinates is the place as it is; a tag the search can\'t place is a search candidate, no tagged row', async () => {
+  try {
+    let r = await addTikTok({ post: { ok: true, location: { ...TT_TAG, lat: 44.5, lon: 11.3 } }, places: () => [feature('Harbour Cafe', 48.2, 11.6)] });
+    assert.deepEqual([r.rows[0].name, r.rows[0].kind], ['Trattoria Sintetica', 'Tagged location']);
+    assert.ok(!r.searched.some((q) => q.includes('Via Finta')), 'not searched');
+    cleanUp();
+    r = await addTikTok({ post: { ok: true, location: TT_TAG }, places: (q) => (q.includes('Via Finta') ? [] : [feature('Harbour Cafe', 48.2, 11.6)]) });
+    assert.ok(r.rows.every((row) => row.kind !== 'Tagged location'));
+    assert.equal(r.searched.find((q) => !q.includes('Via Finta')), 'Trattoria Sintetica', "after the tag's address, its name is the first candidate");
+  } finally {
+    cleanUp();
+  }
+});
+
+test('TikTok without a tag, or with /api/post failing: the caption flow as before', async () => {
+  try {
+    for (const post of [{ ok: true, kind: 'tiktok', text: 'x' }, { ok: false, reason: 'http-403', message: "Couldn't read this TikTok video." }]) {
+      const { el, rows, searched } = await addTikTok({ post, places: () => [feature('Harbour Cafe', 48.2, 11.6)] });
+      assert.ok(rows.every((r) => r.kind !== 'Tagged location'), JSON.stringify(post));
+      assert.equal(searched[0], 'Harbour Cafe');
+      assert.equal(el('confirm-title').value, 'Harbour Cafe');
+      assert.equal(el('confirm-error').hidden, true);
+      cleanUp();
+    }
+  } finally {
+    cleanUp();
+  }
+});
+
+test('TikTok: oEmbed refusing the video, the Worker\'s caption and tag still fill Confirm place', async () => {
+  try {
+    const { el, rows } = await addTikTok({
+      oembedOk: false,
+      post: { ok: true, kind: 'tiktok', text: 'Dinner 📍 Harbour Cafe', author: 'synthetic.user', location: { ...TT_TAG, lat: 44.5, lon: 11.3 } },
+      places: () => [feature('Harbour Cafe', 48.2, 11.6)],
+    });
+    assert.equal(rows[0].kind, 'Tagged location');
+    assert.match(el('confirm-caption').textContent, /Dinner/);
+    assert.equal(el('confirm-error').hidden, true, 'no "couldn\'t read" notice: the Worker read it');
+  } finally {
+    cleanUp();
   }
 });

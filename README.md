@@ -20,7 +20,7 @@ check what it found before anything is saved.
 | Spreadsheets (CSV, TSV, Excel files saved with `;` and decimal commas) with coordinate or address columns | The file itself; rows without coordinates are searched by name on import. |
 | My Maps (KML/KMZ), GPS files (GPX), GeoJSON | The file itself. |
 | Instagram posts | The post's text and location tag, read by the app's helper (see below). |
-| TikTok videos | The video's caption, read from your phone through TikTok's oEmbed. |
+| TikTok videos | The video's caption, read from your phone through TikTok's oEmbed, and its location tag, read by the app's helper when TikTok lets it. |
 | YouTube videos and Shorts | The video's title, description and location tag, read by the app's helper. |
 | Public Facebook posts, reels and pages | A post's or reel's text, or a page's map pin and address, read by the app's helper. |
 
@@ -58,7 +58,8 @@ caption's places below.
 
 **TikTok, YouTube and Facebook** go the same way: paste or share a link, the app
 reads the caption or description, suggests places, and you confirm. A YouTube
-video's location tag is searched first. A Facebook page with a map pin gives the
+video's location tag is searched first; a TikTok video's comes first as "Tagged
+location" when the search finds it. A Facebook page with a map pin gives the
 exact place, and the page's link goes into the pin's note. Videos and posts stay
 on their pin like Instagram posts.
 
@@ -73,7 +74,8 @@ The app runs on your phone. Its helper is the small server part on Cloudflare
 (a Worker, at the `/api/…` addresses of your copy). Only these things use it:
 
 - reading Instagram posts (`/api/ig`),
-- reading YouTube videos and Facebook posts, reels and pages (`/api/post`),
+- reading YouTube videos, Facebook posts, reels and pages, and TikTok videos'
+  location tags (`/api/post`),
 - reading shared Google Maps lists (`/api/list`),
 - expanding short links (`/api/resolve`): Google Maps ones such as maps.app.goo.gl,
   pasted or in an imported file; Mapy ones (mapy.com/s/…); Bing ones (binged.it); and TikTok ones
@@ -229,10 +231,10 @@ version exists. **Settings → App → Check for updates → Install.**
 - Reading an Instagram post sends only the post's code to the app's helper on
   Cloudflare, together with a small computed "work ticket" that keeps scripts from
   misusing it.
-- Reading a YouTube video or a Facebook post, reel or page sends its link to the
-  same helper, with the same kind of work ticket. The helper fetches the page from
-  YouTube or Facebook (for a YouTube location tag, also that place's Google Maps
-  page). It sees the link and your IP address, and stores and logs neither.
+- Reading a YouTube video, a Facebook post, reel or page, or a TikTok video's
+  location tag sends its link to the same helper, with the same kind of work ticket.
+  The helper fetches the page from YouTube, Facebook or TikTok (for a YouTube
+  location tag, also that place's Google Maps page). It sees the link and your IP address, and stores and logs neither.
 - A Google Maps list link goes to the helper too: it asks Google for the list by
   its ID and passes on the places' names, addresses, coordinates and notes, never
   who owns the list or added a place. It sees the list link and your IP address,
@@ -325,7 +327,7 @@ Shortcut again later (say, a newer version), change the URL again.
 | `IG_LIMIT` | `1001` | 20 a minute | reading Instagram posts (`/api/ig`), and separately short links (`/api/resolve`) |
 | `GUIDE_LIMIT` | `1002` | 30 a minute | guide place links (`/api/guide`) |
 | `LIST_LIMIT` | `1003` | 20 a minute | Google Maps lists (`/api/list`) |
-| `POST_LIMIT` | `1004` | 20 a minute | YouTube videos and Facebook posts (`/api/post`) |
+| `POST_LIMIT` | `1004` | 20 a minute | YouTube videos, Facebook posts and TikTok location tags (`/api/post`) |
 
 Over the limit, the helper answers "Too many requests. Wait a minute and try again."
 
@@ -369,8 +371,8 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   line with Instagram's terms. Use it only for posts you save for yourself, at
   personal volume, and respect the people who made them.
 - **YouTube, Facebook and TikTok:** these are read in unofficial ways too, much
-  like Instagram: the helper reads YouTube's and Facebook's public pages, and the
-  app asks TikTok's embed information. Any of it can stop working at any time and
+  like Instagram: the helper reads YouTube's, Facebook's and TikTok's public pages,
+  and the app asks TikTok's embed information. Any of it can stop working at any time and
   may not be in line with their terms. The same rules apply: only posts you save
   for yourself, at personal volume.
 - **Google Maps lists** are read through an undocumented address of Google Maps;
@@ -398,8 +400,9 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   "Anyone with the link", 502 when Google doesn't send it or its answer is too
   big, 429 over the rate limit.
 - `GET /api/post?url=<link>&m=<minute>&n=<nonce>` answers a YouTube video's text
-  and location tag, a Facebook post's text or a Facebook page's map pin, as JSON.
-  Its work ticket is computed over the link's post key (`yt:…`, `fb:…`), as
+  and location tag, a Facebook post's text, a Facebook page's map pin or a TikTok
+  video's caption and location tag (name and address), as JSON.
+  Its work ticket is computed over the link's post key (`yt:…`, `fb:…`, `tt:…`), as
   `/api/ig`'s is over the shortcode (a key longer than 24 characters as its
   hash, `ticketKey` in `web/js/ticket.js`); 400 for another link, 403 for a
   missing or expired ticket, 429 over the rate limit.
