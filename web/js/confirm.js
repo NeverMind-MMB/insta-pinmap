@@ -119,6 +119,30 @@ export async function openConfirm(cfg) {
 }
 
 /**
+ * The place search's matches for the best candidates (at most three, one after another, so
+ * the search is not overrun), scored and merged: the best six, best first, each with the
+ * candidate it was `searchedAs`. `tagged`: a place already chosen, never listed again.
+ * @returns {Promise<{top: Array, searchDown: boolean}>}
+ */
+export async function matchCandidates(candidates, countries, hintedCountries = [], tagged = null) {
+  const all = [];
+  const seen = new Set(tagged ? [`${tagged.lat.toFixed(4)},${tagged.lon.toFixed(4)}`] : []);
+  let searchDown = false;
+  for (const k of candidates.slice(0, 3)) {
+    const j = await searchPlaces(k.text, { limit: 5, countryCode: countries.length === 1 ? countries[0] : '' });
+    if (!j.ok) searchDown = true;
+    for (const t of scoreMatches(j.results || [], { candidatePoints: k.points, countries, hintedCountries })) {
+      const key = `${t.lat.toFixed(4)},${t.lon.toFixed(4)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push({ ...t, searchedAs: k.text });
+    }
+  }
+  all.sort((a, b) => b.points - a.points);
+  return { top: all.slice(0, 6), searchDown };
+}
+
+/**
  * Queries the best candidates one after another and merges the matches.
  * `tagged`: the post's location tag, which stays first and chosen; matches go below it.
  */
@@ -128,26 +152,7 @@ async function searchCandidates(candidates, countries, hintedCountries = [], tag
   status.textContent = 'Searching for matching places …';
   if (!tagged) list.innerHTML = '';
 
-  const all = [];
-  const seen = new Set(tagged ? [`${tagged.lat.toFixed(4)},${tagged.lon.toFixed(4)}`] : []);
-  let searchDown = false;
-
-  // At most three candidates, so the place search is not overrun.
-  for (const k of candidates.slice(0, 3)) {
-    const j = await searchPlaces(k.text, { limit: 5, countryCode: countries.length === 1 ? countries[0] : '' });
-    const matches = j.results || [];
-    if (!j.ok) searchDown = true;
-
-    for (const t of scoreMatches(matches, { candidatePoints: k.points, countries, hintedCountries })) {
-      const key = `${t.lat.toFixed(4)},${t.lon.toFixed(4)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      all.push({ ...t, searchedAs: k.text });
-    }
-  }
-
-  all.sort((a, b) => b.points - a.points);
-  const top = all.slice(0, 6);
+  const { top, searchDown } = await matchCandidates(candidates, countries, hintedCountries, tagged);
 
   if (tagged) {
     // The tagged place stays chosen; without matches it is simply the only one.
