@@ -7,18 +7,21 @@
  * only searches on button press or once per candidate. Please keep it that way.
  */
 
+/**
+ * Runs calls one after another, each at least `gapMs` after the one before started.
+ * Only the starts are spaced: a request that never answers doesn't hold up the next.
+ */
 export function makeQueue(gapMs) {
   let last = 0;
   let chain = Promise.resolve();
   return function queued(fn) {
-    const run = chain.then(async () => {
+    const start = chain.then(async () => {
       const wait = Math.max(0, last + gapMs - Date.now());
       if (wait) await new Promise((r) => setTimeout(r, wait));
       last = Date.now();
-      return fn();
     });
-    chain = run.catch(() => {});
-    return run;
+    chain = start;
+    return start.then(fn);
   };
 }
 

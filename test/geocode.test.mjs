@@ -28,6 +28,15 @@ test('makeQueue keeps the gap and survives a failing call', async () => {
   assert.ok(times[1] - times[0] >= 95 && times[2] - times[1] >= 95, `gaps ${times[1] - times[0]}, ${times[2] - times[1]}`);
 });
 
+test('makeQueue spaces the starts only: a call that never ends does not hold up the next one', async () => {
+  const q = makeQueue(30);
+  q(() => new Promise(() => {})); // a request that never answers
+  const t0 = Date.now();
+  const next = await Promise.race([q(async () => 'ran'), new Promise((r) => setTimeout(() => r('blocked'), 500))]);
+  assert.equal(next, 'ran');
+  assert.ok(Date.now() - t0 >= 25, 'still after the gap');
+});
+
 import { searchPlaces } from '../web/js/geocode.js';
 
 async function withFetch(stub, fn) {
