@@ -137,9 +137,9 @@ test('index.html: the pinwheel as favicon, touch icon and top-bar logo, a six-to
   assert.deepEqual(manifest.icons.map((i) => i.src), ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png']);
   assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
   assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
-  // Owner: the settings drawing no longer read as a settings symbol; a plain gear (six teeth like the
-  // pinwheel's six pins) in the theme colour instead.
-  assert.match(html, /id="btn-settings"[^>]*>\s*<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9\.30 4\.58[^"]+"\/><\/svg>\s*<\/button>/);
+  // Owner: the settings drawing no longer read as a settings symbol; two cogs in the theme colour
+  // instead, which turn against each other on hover/focus (app.css).
+  assert.match(html, /id="btn-settings"[^>]*>\s*<svg viewBox="0 0 24 24" aria-hidden="true"><path class="cog cog--big" fill-rule="evenodd" d="[^"]+"\/><path class="cog cog--small" fill-rule="evenodd" d="[^"]+"\/><\/svg>\s*<\/button>/);
   assert.ok(!html.includes('/icons/settings.png'));
 });
 
