@@ -347,7 +347,19 @@ test('/api/post: the ticket is computed over the post key (yt:<id>), not the lin
   assert.equal(body.ok, true);
   assert.equal(body.title, 'Pasta in Testopoli');
   assert.equal(ok.headers.get('X-Robots-Tag'), 'noindex, nofollow');
-  const wrong = await handleRequest(apiRequest(await ticketPath(link, 'yt:ZzZzZzZzZz9')), BINDINGS, { fetch });
+  // At difficulty 8, about one wrong nonce in 256 also fits the right key: take a wrong key whose nonce doesn't.
+  const { ticketInput, leadingZeroBits, ticketMinute } = await import('../web/js/ticket.js');
+  const { sha256 } = await import('../web/js/sha256.js');
+  const fits = (path) => {
+    const q = new URL(path, 'https://app.example').searchParams;
+    return leadingZeroBits(sha256(new TextEncoder().encode(ticketInput(`yt:${YT}`, ticketMinute(), q.get('n'))))) >= 8;
+  };
+  let path = '';
+  for (const other of ['yt:ZzZzZzZzZz9', 'yt:YyYyYyYyYy8', 'yt:XxXxXxXxXx7']) {
+    path = await ticketPath(link, other);
+    if (!fits(path)) break;
+  }
+  const wrong = await handleRequest(apiRequest(path), BINDINGS, { fetch });
   assert.equal(wrong.status, 403);
 });
 
