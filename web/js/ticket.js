@@ -3,7 +3,8 @@
  *
  * For each request the app finds a nonce so that
  * SHA-256("<key>:<minute>:<nonce>") starts with `difficulty` zero bits (the key:
- * the code or post key itself up to 24 characters, else its hash; see ticketKey).
+ * the code or post key itself up to 24 characters; a longer post key its hash, a
+ * longer shortcode its first 24 characters; see ticketKey).
  * That costs the phone about a second and the Worker one hash to check.
  * Same input format as worker/ticket.js — change both together.
  */
@@ -19,13 +20,16 @@ export function ticketMinute(nowMs = Date.now()) {
 const MAX_KEY_BYTES = 24;
 
 /**
- * What a ticket is computed over: the code as it is when it has at most 24 bytes (an
- * Instagram post's shortcode, as apps from before 2.2.0 send it), else "~" and the first 23 hex
- * digits of its SHA-256 — at most 24 characters either way, so two long keys that begin alike
- * (fb:page:<name>, fb:pfbid…) never share a ticket, and the input stays one SHA-256 block.
+ * What a ticket is computed over: the code as it is when it has at most 24 bytes. A longer
+ * post key ("yt:", "fb:", "tt:" … — it has a ":") becomes "~" and the first 23 hex digits of
+ * its SHA-256, so two long keys that begin alike (fb:page:<name>, fb:pfbid…) never share a
+ * ticket. An Instagram shortcode (no ":") keeps the cut to its first 24 characters that apps
+ * from before 2.2.0 make, so their tickets for long private-post codes still verify and they
+ * see the Worker's real answer. At most 24 characters either way: one SHA-256 block.
  */
 export function ticketKey(code) {
   const s = String(code);
+  if (!s.includes(':')) return s.slice(0, MAX_KEY_BYTES);
   const bytes = new TextEncoder().encode(s);
   if (bytes.length <= MAX_KEY_BYTES) return s;
   return `~${[...sha256(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, MAX_KEY_BYTES - 1)}`;

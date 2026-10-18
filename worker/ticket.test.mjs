@@ -25,7 +25,7 @@ test('ticket key: a longer key becomes a 24-character hash of all of it, so two 
   const pageB = 'fb:page:synthetic.restaurant.testtown.south';
   const pfbidA = `fb:pfbid${'0Synthetic'.repeat(4)}A`;
   const pfbidB = `fb:pfbid${'0Synthetic'.repeat(4)}B`;
-  for (const [a, b] of [[pageA, pageB], [pfbidA, pfbidB], ['A'.repeat(40), 'A'.repeat(41)]]) {
+  for (const [a, b] of [[pageA, pageB], [pfbidA, pfbidB], [`yt:${'A'.repeat(40)}`, `yt:${'A'.repeat(41)}`]]) {
     assert.equal(a.slice(0, 24), b.slice(0, 24));
     assert.equal(ticketKey(a).length, 24, a);
     assert.equal(ticketKey(b).length, 24, b);
@@ -35,6 +35,17 @@ test('ticket key: a longer key becomes a 24-character hash of all of it, so two 
   const hex = createHash('sha256').update(pageA).digest('hex');
   assert.equal(ticketKey(pageA), `~${hex.slice(0, 23)}`, 'the same on every phone and in the Worker');
   assert.equal(ticketKey(pageA), ticketKey(pageA));
+});
+
+test('ticket key: an Instagram shortcode (no ":") longer than 24 characters keeps the old cut, so old apps\' tickets still verify', async () => {
+  const long = `${'B'.repeat(24)}SyntheticPrivateTail`;
+  assert.equal(ticketKey(long), 'B'.repeat(24));
+  assert.equal(ticketInput(long, 7, 9), `${'B'.repeat(24)}:7:9`);
+  // What an app from before 2.2.0 computed: the first 24 characters.
+  const minute = 29000000;
+  let nonce = 0;
+  while (leadingZeroBits(sha256(enc.encode(`${long.slice(0, 24)}:${minute}:${nonce}`))) < 10) nonce++;
+  assert.equal(await verifyTicket({ code: long, minute, nonce, difficulty: 10, nowMinute: minute }), true);
 });
 
 test('ticket key: a ticket solved for one long key is refused for another with the same first 24 characters', async () => {

@@ -403,8 +403,9 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   and location tag, a Facebook post's text, a Facebook page's map pin or a TikTok
   video's caption and location tag (name and address), as JSON.
   Its work ticket is computed over the link's post key (`yt:…`, `fb:…`, `tt:…`), as
-  `/api/ig`'s is over the shortcode (a key longer than 24 characters as its
-  hash, `ticketKey` in `web/js/ticket.js`); 400 for another link, 403 for a
+  `/api/ig`'s is over the shortcode (a post key longer than 24 characters as its
+  hash, a shortcode cut to 24 characters as before; `ticketKey` in
+  `web/js/ticket.js`); 400 for another link, 403 for a
   missing or expired ticket, 429 over the rate limit.
 - `GET /api/guide?link=<guide link>` (the Shortcut's Maps-app path; URL-encoded,
   or raw as the last parameter) answers, as plain text, one
