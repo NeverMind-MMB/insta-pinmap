@@ -137,9 +137,14 @@ test('index.html: the pinwheel as favicon, touch icon and top-bar logo, a six-to
   assert.deepEqual(manifest.icons.map((i) => i.src), ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png']);
   assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
   assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
-  // Owner: the settings drawing no longer read as a settings symbol; two cogs in the theme colour
-  // instead, which turn against each other on hover/focus (app.css).
-  assert.match(html, /id="btn-settings"[^>]*>\s*<svg viewBox="0 0 24 24" aria-hidden="true"><path class="cog cog--big" fill-rule="evenodd" d="[^"]+"\/><path class="cog cog--small" fill-rule="evenodd" d="[^"]+"\/><\/svg>\s*<\/button>/);
+  // Owner: his pin-gear drawing twice — a big one and a smaller one turned by 30° — as cogs that turn
+  // against each other on hover/focus (app.css); vector, so it stays sharp.
+  const settings = html.match(/id="btn-settings"[^>]*>\s*(<svg viewBox="0 0 24 24" aria-hidden="true">.*?<\/svg>)\s*<\/button>/s);
+  assert.ok(settings, 'the settings button holds one inline SVG');
+  assert.match(settings[1], /<path id="opin-pin" fill-rule="evenodd" d="[^"]+"\/>/);
+  assert.match(settings[1], /<mask id="opin-hub"/);
+  assert.match(settings[1], /<g class="cog cog--big">.*<g class="cog cog--small">/s);
+  assert.equal((settings[1].match(/<use href="#opin-pin"/g) || []).length, 12, 'six pins per cog');
   assert.ok(!html.includes('/icons/settings.png'));
 });
 
