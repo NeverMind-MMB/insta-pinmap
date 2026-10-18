@@ -132,3 +132,15 @@ test('index.html: the pinwheel as favicon, touch icon and top-bar logo, the sett
   assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
   assert.match(html, /id="btn-settings"[^>]*>\s*<img src="\/icons\/settings\.png" alt="" width="24" height="24">\s*<\/button>/);
 });
+
+test('the app is called oPin: page title, top bar, manifest, self-test (internal names stay)', () => {
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<title>oPin<\/title>/);
+  assert.match(html, /<span>oPin<\/span>\s*<\/h1>/);
+  assert.ok(!/Insta Pinmap/.test(html), 'no old name on the page');
+  const manifest = JSON.parse(readFileSync(new URL('../web/manifest.webmanifest', import.meta.url), 'utf8'));
+  assert.equal(manifest.name, 'oPin');
+  assert.equal(manifest.short_name, 'oPin');
+  assert.match(readFileSync(new URL('../web/selftest.html', import.meta.url), 'utf8'), /<title>Self-test — oPin<\/title>/);
+  assert.match(html, /caches\.delete\('insta-pinmap-app'\)/, 'the cache keeps its name');
+});

@@ -727,7 +727,7 @@ export function pickedColor(box) {
 export function showUnsupported(link, what = '') {
   const site = siteOf(link);
   $('unsupported-text').textContent =
-    `${what || `${site} links`} don't work in this version of the app. If nobody has asked for it yet, open an issue on GitHub.`;
+    `${what || `${site} links`} don't work in this version of oPin. If nobody has asked for it yet, open an issue on GitHub.`;
   $('unsupported-issues').href = issuesSearchUrl(what || site);
   $('unsupported-list').replaceChildren(...SUPPORTED_SOURCES.map((group) => {
     const p = document.createElement('p');
@@ -959,7 +959,7 @@ function download(file) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-import { buildBackupHtml, backupAgeText } from './backup.js';
+import { buildBackupHtml, backupAgeText, backupFileName } from './backup.js';
 
 async function fetchText(path) {
   const r = await fetch(path);
@@ -981,8 +981,7 @@ export async function exportBackup() {
       fetchText('/vendor/leaflet/leaflet.css'),
     ]);
     const html = buildBackupHtml(store.db, { leafletJs, leafletCss, colorOf: (p) => store.pinColor(p) });
-    const date = new Date().toISOString().slice(0, 10);
-    file = new File([html], `insta-pinmap-${date}.html`, { type: 'text/html' });
+    file = new File([html], backupFileName(), { type: 'text/html' });
   } catch (e) {
     toast("Couldn't build the backup: " + e.message, 'error');
     return false;
@@ -993,7 +992,7 @@ export async function exportBackup() {
   if (canShare) {
     hideToast();
     try {
-      await navigator.share({ files: [file], title: 'Insta Pinmap backup' });
+      await navigator.share({ files: [file], title: 'oPin backup' });
       store.setSetting('lastBackupAt', new Date().toISOString());
       toast('Backup saved.', 'success', 6000);
       return true;

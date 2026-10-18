@@ -1,5 +1,5 @@
 /**
- * api.js — the calls that go to the Insta Pinmap Worker.
+ * api.js — the calls that go to the oPin Worker.
  * Each /api/ig call carries a work ticket (see ticket.js).
  */
 

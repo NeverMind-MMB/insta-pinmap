@@ -172,7 +172,7 @@ export const SUPPORTED_SOURCES = [
       'Google My Maps and Google Earth maps',
       "GPS files (GPX) from Komoot, Strava, Garmin and other outdoor apps (their waypoints and a route's start point)",
       'Other map files (GeoJSON)',
-      'Backups from this app',
+      'oPin backups',
     ],
   },
 ];

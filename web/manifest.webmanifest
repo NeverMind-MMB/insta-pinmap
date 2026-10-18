@@ -1,6 +1,6 @@
 {
-  "name": "Insta Pinmap",
-  "short_name": "Insta Pinmap",
+  "name": "oPin",
+  "short_name": "oPin",
   "description": "One map for your places from Apple Maps, Google Maps, Instagram, GPX, KML and more.",
   "id": "/",
   "start_url": "/",

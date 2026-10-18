@@ -23,6 +23,11 @@ export function jsonForScript(value) {
 /** Only plain hex colours get into markup. */
 const safeColor = (c) => (/^#[0-9a-f]{3,8}$/i.test(String(c)) ? String(c) : '#8a8f98');
 
+/** The backup file's name: opin-backup-<YYYY-MM-DD>.html (older insta-pinmap-… files load the same way). */
+export function backupFileName(now = new Date()) {
+  return `opin-backup-${now.toISOString().slice(0, 10)}.html`;
+}
+
 export function buildBackupHtml(db, { leafletJs, leafletCss, colorOf, now = new Date() }) {
   const pins = db.pins.map((p) => ({
     t: p.title, a: p.address, la: p.lat, lo: p.lon,
@@ -38,7 +43,7 @@ export function buildBackupHtml(db, { leafletJs, leafletCss, colorOf, now = new 
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Insta Pinmap backup ${date}</title>
+<title>oPin backup ${date}</title>
 <style>${css}
 html,body{margin:0;height:100%;font:16px/1.5 system-ui,sans-serif;background:#16181c;color:#e9e6e1}
 #k{position:absolute;inset:0}
@@ -49,7 +54,7 @@ html,body{margin:0;height:100%;font:16px/1.5 system-ui,sans-serif;background:#16
 .leaflet-popup-content .g{display:inline-block;font-size:11px;background:#eee;border-radius:99px;padding:1px 7px;margin:2px 3px 0 0}
 #i{position:absolute;z-index:600;left:54px;top:10px;right:10px;background:rgba(22,24,28,.9);padding:8px 12px;border-radius:10px;font-size:13px}
 </style></head><body>
-<div id="k"></div><div id="i">${pins.length} places · backup of ${date} · read-only. To restore: Insta Pinmap → Settings → Load backup.</div>
+<div id="k"></div><div id="i">${pins.length} places · backup of ${date} · read-only. To restore: oPin → Settings → Load backup.</div>
 <script type="application/json" id="${BACKUP_SCRIPT_ID}">${jsonForScript(db)}</script>
 <script>${leafletJs}<\/script>
 <script>

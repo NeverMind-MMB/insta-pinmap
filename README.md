@@ -1,7 +1,7 @@
-# Insta Pinmap
+# oPin
 
-One map for places from many sources: Apple Maps, Google Maps, map files and
-Instagram posts. Free, no account, and your pins stay on your phone.
+oPin is one map for places from many sources: Apple Maps, Google Maps, map files
+and Instagram posts. Free, no account, and your pins stay on your phone.
 
 ## What it does
 
@@ -80,9 +80,9 @@ place search and reading Instagram posts.
 
 ## Adding a place
 
-- **Android:** in Instagram tap Share → **Insta Pinmap**. If it isn't in the list,
+- **Android:** in Instagram tap Share → **oPin**. If it isn't in the list,
   use the iPhone way.
-- **iPhone:** in Instagram tap Share → **Copy link**, open Insta Pinmap, tap the
+- **iPhone:** in Instagram tap Share → **Copy link**, open oPin, tap the
   paste button next to the input field and confirm iPhone's "Paste" bubble.
 - You can also type a place name, or paste one Apple or Google Maps link (an
   Apple Guide link too).
@@ -142,7 +142,7 @@ Then share to it (Share → **Fetch Apple Guide**) from:
   guides take 10–30 seconds.
 - **Maps or Safari, a single place:** the Shortcut hands over the place link.
 
-In every case the result goes to the clipboard. Open Insta Pinmap, tap the paste
+In every case the result goes to the clipboard. Open oPin, tap the paste
 button next to the input field and confirm iPhone's "Paste" bubble (or, with the
 import dialog open, tap **Paste results**). A guide opens the import dialog with
 its places: tap **Import selected**. A single place opens **Confirm place**, as

@@ -70,3 +70,13 @@ test('Backup viewer popup shows the escaped "when" line', () => {
   assert.equal(popups.length, 1);
   assert.match(popups[0], /📅 &lt;b&gt;14–16 Sep&lt;\/b&gt; &amp; more/);
 });
+
+test('oPin backups: file name opin-backup-<date>.html, viewer title and restore hint say oPin', async () => {
+  const { backupFileName } = await import('../web/js/backup.js');
+  assert.equal(backupFileName(new Date('2026-10-18T12:00:00Z')), 'opin-backup-2026-10-18.html');
+  const h = html();
+  assert.match(h, /<title>oPin backup 2026-10-04<\/title>/);
+  assert.match(h, /To restore: oPin → Settings → Load backup\./);
+  assert.ok(!/Insta Pinmap/.test(h));
+  assert.match(h, /id="pinmap-backup"/, 'old and new backups keep the same script id');
+});
