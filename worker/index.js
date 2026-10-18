@@ -7,6 +7,8 @@
  *   /api/resolve  where a short map link points to
  *   /api/guide    the place links of an Apple guide link, read from the link
  *                 itself (for the iPhone Shortcut; Apple is never contacted)
+ *   /api/post     text and location tag of a YouTube video or Facebook post or
+ *                 page (needs a work ticket; see post.js)
  *
  * Apple Maps places of Apple Guides are not looked up here: maps.apple.com
  * refuses Cloudflare's servers (see web/js/appleplace.js).
@@ -17,6 +19,8 @@ import { verifyTicket } from './ticket.js';
 import { ticketMinute } from '../web/js/ticket.js';
 import versionInfo from '../web/version.json' with { type: 'json' };
 import { readAppleGuide, isAppleGuideLink, appleIdLink } from '../web/js/importers.js';
+import { readPost } from './post.js';
+import { postRequestKey } from '../web/js/postlinks.js';
 
 /** Short-link hosts the Worker follows. Any other host ends the walk. */
 const SHORT_LINK_HOSTS = [
@@ -28,6 +32,7 @@ const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 
 const MEMORY_LIMIT = 20; // per address and minute, used when the rate-limit binding is missing
 const memoryHits = new Map();
 const GUIDE_MEMORY_LIMIT = 30; // per address and minute for /api/guide without its binding
+const POST_MEMORY_LIMIT = 20; // per address and minute for /api/post without its binding
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -190,6 +195,33 @@ async function handleGuide(url, request, bindings) {
   return plainText(appleIds.map(appleIdLink).join('\n'));
 }
 
+/**
+ * A YouTube video or Facebook post, reel or page (post.js). The work ticket is
+ * computed over the link's post key (postlinks.js), as /api/ig's is over the
+ * shortcode. Links are never logged.
+ */
+async function handlePost(url, request, bindings, deps) {
+  const difficulty = Number(bindings.WORK_DIFFICULTY) || 18;
+  const difficultyHeader = { 'X-Work-Difficulty': String(difficulty) };
+  if (await overLimit(bindings.POST_LIMIT, `post:${clientAddress(request)}`, POST_MEMORY_LIMIT)) return tooMany(difficultyHeader);
+  const link = url.searchParams.get('url') || '';
+  const key = postRequestKey(link);
+  if (!key) {
+    return json({ ok: false, reason: 'bad-link', message: "That isn't a YouTube video or Facebook post link." }, 400, difficultyHeader);
+  }
+  const nowMinute = ticketMinute();
+  const valid = await verifyTicket({
+    code: key, minute: url.searchParams.get('m'), nonce: url.searchParams.get('n'), difficulty, nowMinute,
+  });
+  if (!valid) {
+    return json({ ok: false, reason: 'ticket', message: 'Work ticket missing or expired.' }, 403, {
+      ...difficultyHeader,
+      'X-Server-Minute': String(nowMinute),
+    });
+  }
+  return json(await readPost(link, deps.fetch), 200, difficultyHeader);
+}
+
 /** All routes. Tests replace `deps.fetch`; the default calls the global fetch. */
 export async function handleRequest(request, bindings, deps = { fetch: (...args) => fetch(...args) }) {
   const url = new URL(request.url);
@@ -199,6 +231,7 @@ export async function handleRequest(request, bindings, deps = { fetch: (...args)
   if (url.pathname === '/api/ig') return handleInstagram(url, request, bindings, deps);
   if (url.pathname === '/api/resolve') return handleResolve(url, request, bindings, deps);
   if (url.pathname === '/api/guide') return handleGuide(url, request, bindings);
+  if (url.pathname === '/api/post') return handlePost(url, request, bindings, deps);
   return json({ ok: false, message: 'Not found.' }, 404);
 }
 
