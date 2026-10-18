@@ -7,6 +7,8 @@
  * falls back to manual search.
  */
 
+import { readLocationTag } from './iglocation.js';
+
 export const SHORTCODE_RE = /^[A-Za-z0-9_-]{5,40}$/;
 
 export const CRAWLER_USER_AGENTS = [
@@ -117,11 +119,15 @@ export async function fetchPost(code, fetchFn = fetch) {
       continue;
     }
     if (res.status !== 200) { reason = `http-${res.status}`; continue; }
-    const page = parsePostPage(await res.text());
+    const html = await res.text();
+    const page = parsePostPage(html);
     if (page && (page.caption || page.imageUrl)) {
+      // The location tag sits far behind </head>, so it is read from the whole page.
+      const location = readLocationTag(html, code);
       return {
         ok: true, shortcode: code, caption: page.caption, username: page.username,
         postedAt: page.postedAt, imageUrl: page.imageUrl,
+        ...(location ? { location } : {}),
       };
     }
     reason = 'not-found';

@@ -143,8 +143,12 @@ async function addFromInstagram(link, env) {
 
   const caption = ig.ok ? ig.caption || '' : '';
   const postedAt = ig.ok ? ig.postedAt || '' : '';
+  // The post's location tag: with coordinates it is offered first as it is;
+  // a tag without usable ones still counts as the best name to search for.
+  const tagged = ig.ok ? taggedPlace(ig.location) : null;
   const { candidates, countries, hintedCountries } = placeCandidates(caption, {
-    username: ig.username, location: ig.location,
+    username: ig.username,
+    location: !tagged && typeof ig.location?.name === 'string' ? ig.location.name : undefined,
   });
 
   return openConfirm({
@@ -154,7 +158,8 @@ async function addFromInstagram(link, env) {
       caption, username: ig.username || '', thumb: ig.thumb || '', postedAt,
     },
     igError: ig.ok ? null : ig,
-    titleSuggestion: candidates[0]?.text || '',
+    taggedPlace: tagged,
+    titleSuggestion: tagged?.name || candidates[0]?.text || '',
     whenSuggestion: eventDate(caption, { postedAt })?.text || '',
     candidates,
     countries,
@@ -163,6 +168,24 @@ async function addFromInstagram(link, env) {
     tagSuggestions: tagSuggestions(caption, store.settings.customStopTags),
     env,
   });
+}
+
+const TAGGED_LABEL = 'Tagged location';
+const TAGGED_STATUS = "The place comes from the post's location tag. Please give it a quick check anyway.";
+
+/**
+ * The post's location tag as a place for Confirm place, or null unless it has a
+ * name and real coordinates (the Worker sends `{ name, lat, lon, address? }`).
+ */
+export function taggedPlace(location) {
+  if (!location || typeof location !== 'object' || typeof location.name !== 'string') return null;
+  const name = location.name.trim();
+  const { lat, lon } = location;
+  if (!name || typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (lat === 0 && lon === 0) return null;
+  const address = typeof location.address === 'string' ? location.address.trim() : '';
+  return { name, lat, lon, address, tagged: true };
 }
 
 /* ================================================================== *
@@ -502,6 +525,11 @@ export async function openConfirm(cfg) {
     choosePlace(cfg.readyPlace);
     $('confirm-candidates').innerHTML = '';
     $('confirm-status').textContent = 'The place came straight from the link. Please give it a quick check anyway.';
+  } else if (cfg.taggedPlace) {
+    // The post's location tag first and chosen; the caption's places are added below.
+    choosePlace(cfg.taggedPlace);
+    drawCandidates([cfg.taggedPlace]);
+    $('confirm-status').textContent = TAGGED_STATUS;
   } else {
     $('confirm-preview').hidden = true;
     $('confirm-save').disabled = true;
@@ -514,8 +542,8 @@ export async function openConfirm(cfg) {
 
   // --- Look up candidates ---
   if (!cfg.readyPlace && cfg.candidates?.length) {
-    await searchCandidates(cfg.candidates, cfg.countries || [], cfg.hintedCountries || []);
-  } else if (!cfg.readyPlace) {
+    await searchCandidates(cfg.candidates, cfg.countries || [], cfg.hintedCountries || [], cfg.taggedPlace);
+  } else if (!cfg.readyPlace && !cfg.taggedPlace) {
     // Don't leave the search field empty: the cleaned-up post text is
     // almost always a better starting point than nothing.
     $('confirm-search').value = cfg.searchPrefill || '';
@@ -527,15 +555,18 @@ export async function openConfirm(cfg) {
   }
 }
 
-/** Queries the best candidates one after another and merges the matches. */
-async function searchCandidates(candidates, countries, hintedCountries = []) {
+/**
+ * Queries the best candidates one after another and merges the matches.
+ * `tagged`: the post's location tag, which stays first and chosen; matches go below it.
+ */
+async function searchCandidates(candidates, countries, hintedCountries = [], tagged = null) {
   const list = $('confirm-candidates');
   const status = $('confirm-status');
   status.textContent = 'Searching for matching places …';
-  list.innerHTML = '';
+  if (!tagged) list.innerHTML = '';
 
   const all = [];
-  const seen = new Set();
+  const seen = new Set(tagged ? [`${tagged.lat.toFixed(4)},${tagged.lon.toFixed(4)}`] : []);
   let searchDown = false;
 
   // At most three candidates, so the place search is not overrun.
@@ -554,6 +585,18 @@ async function searchCandidates(candidates, countries, hintedCountries = []) {
 
   all.sort((a, b) => b.points - a.points);
   const top = all.slice(0, 6);
+
+  if (tagged) {
+    // The tagged place stays chosen; without matches it is simply the only one.
+    if (top.length) {
+      drawCandidates([tagged, ...top]);
+      choosePlace(tagged); // the list marks it again, so the preview shows it too
+      status.textContent = "The first place is the post's location tag, the others come from the post text. Which one is it?";
+    } else {
+      status.textContent = TAGGED_STATUS;
+    }
+    return;
+  }
 
   if (!top.length) {
     status.textContent = searchDown
@@ -590,7 +633,7 @@ function drawCandidates(matches) {
     btn.querySelector('.candidate__flag').textContent = flagEmoji(t.countryCode);
     btn.querySelector('.candidate__name').textContent = t.name || '(no name)';
     btn.querySelector('.candidate__address').textContent = t.address || '';
-    btn.querySelector('.candidate__kind').textContent = kindLabel(t);
+    btn.querySelector('.candidate__kind').textContent = t.tagged ? TAGGED_LABEL : kindLabel(t);
     btn.addEventListener('click', () => {
       for (const b of list.querySelectorAll('.candidate')) b.setAttribute('aria-pressed', 'false');
       btn.setAttribute('aria-pressed', 'true');
