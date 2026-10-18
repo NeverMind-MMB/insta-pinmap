@@ -102,6 +102,39 @@ test('resolve: addresses outside the short-link hosts are refused without any fe
   assert.equal(fetch.calls.length, 0);
 });
 
+/** `link` with a user name, password or port set (built here, so no such address sits in the code). */
+function withParts(link, parts) {
+  const u = new URL(link);
+  Object.assign(u, parts);
+  return u.href;
+}
+
+test('resolve: a short link with a user name, a password or a port is refused without any fetch', async () => {
+  const fetch = fakeFetch({});
+  const links = [
+    withParts('https://maps.app.goo.gl/abc123', { username: 'synth' }),
+    withParts('https://maps.app.goo.gl/abc123', { username: 'synth', password: 'x' }),
+    withParts('https://goo.gl/maps/x', { password: 'x' }),
+    'https://maps.app.goo.gl:8443/abc123', 'http://goo.gl:8080/maps/x', 'https://vm.tiktok.com:444/ZMsynth/',
+  ];
+  for (const link of links) {
+    const res = await handleRequest(apiRequest(resolvePath(link)), BINDINGS, { fetch });
+    const body = await res.json();
+    assert.equal(body.ok, false, link);
+    assert.equal(body.message, 'Invalid address.', link);
+  }
+  assert.equal(fetch.calls.length, 0);
+});
+
+test('resolve: a hop to a short-link host with a user name, a password or a port is not followed', async () => {
+  for (const next of [withParts('https://goo.gl/next', { username: 'synth', password: 'x' }), 'https://goo.gl:8443/next']) {
+    const fetch = fakeFetch({ 'https://maps.app.goo.gl/abc123': [302, next] });
+    const res = await handleRequest(apiRequest(resolvePath('https://maps.app.goo.gl/abc123')), BINDINGS, { fetch });
+    assert.deepEqual(await res.json(), { ok: false, message: "Couldn't resolve this short link." }, next);
+    assert.deepEqual(fetch.calls.map((c) => c.url), ['https://maps.app.goo.gl/abc123'], next);
+  }
+});
+
 test('resolve: Mapy short links (mapy.cz/s/… → mapy.com/s/… → the map) stop at the map address without fetching it', async () => {
   const final = 'https://mapy.com/en/turisticka?source=base&id=1234&x=11.2&y=47.1&z=17';
   const fetch = fakeFetch({ 'https://mapy.cz/s/abcdefgh': [301, 'https://mapy.com/s/abcdefgh'], 'https://mapy.com/s/abcdefgh': [301, final] });

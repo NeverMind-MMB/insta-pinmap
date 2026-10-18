@@ -74,6 +74,11 @@ function isShortLink(url) {
     SHORT_LINK_PATHS.some(([h, path]) => (host === h || host.endsWith('.' + h)) && url.pathname.startsWith(path));
 }
 
+/** An http(s) address without a user name, password or port: the only kind /api/resolve fetches. */
+function isPlainWebAddress(url) {
+  return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password && !url.port;
+}
+
 /** `limiter`: a rate-limit binding; without one, an in-memory count of `max` per minute. */
 async function overLimit(limiter, key, max = MEMORY_LIMIT) {
   if (limiter) {
@@ -139,7 +144,7 @@ async function handleResolve(url, request, bindings, deps) {
   } catch {
     return json({ ok: false, message: 'Invalid address.' });
   }
-  if (start.protocol !== 'https:' && start.protocol !== 'http:') return json({ ok: false, message: 'Invalid address.' });
+  if (!isPlainWebAddress(start)) return json({ ok: false, message: 'Invalid address.' });
   if (!isShortLink(start)) {
     return json({ ok: false, message: 'Only short map and TikTok links can be resolved.' });
   }
@@ -172,6 +177,7 @@ async function handleResolve(url, request, bindings, deps) {
     }
     if (next.protocol !== 'https:' && next.protocol !== 'http:') return failed();
     if (!isShortLink(next)) return json({ ok: true, url: next.href });
+    if (!isPlainWebAddress(next)) return failed();
     current = next;
   }
   return failed();
