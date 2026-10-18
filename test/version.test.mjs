@@ -108,10 +108,10 @@ test('index.html has the startup guard before the app module, and app.js reports
   const guard = html.indexOf('Reinstall app files');
   assert.ok(guard > 0);
   assert.ok(guard < html.indexOf('<script type="module"'));
-  assert.ok(html.includes("caches.delete('insta-pinmap-app')"));
+  assert.ok(html.includes("caches.delete('opin-app')"));
   assert.ok(!/indexedDB/i.test(html.slice(html.lastIndexOf('<script>', guard), html.indexOf('</script>', guard))), 'the guard must not touch pins');
   const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8');
-  assert.ok(app.includes('window.__instaPinmapStarted = true'));
+  assert.ok(app.includes('window.__opinStarted = true'));
 });
 
 /* ---------- 2.1.0 oPin ---------- */
@@ -136,7 +136,7 @@ test('index.html: the pinwheel as favicon, touch icon and top-bar logo, the sett
   assert.match(html, /id="btn-settings"[^>]*>\s*<img src="\/icons\/settings\.png" alt="" width="24" height="24">\s*<\/button>/);
 });
 
-test('the app is called oPin: page title, top bar, manifest, self-test (internal names stay)', () => {
+test('the app is called oPin: page title, top bar, manifest, self-test, and its cache', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   assert.match(html, /<title>oPin<\/title>/);
   assert.match(html, /<span>oPin<\/span>\s*<\/h1>/);
@@ -145,7 +145,10 @@ test('the app is called oPin: page title, top bar, manifest, self-test (internal
   assert.equal(manifest.name, 'oPin');
   assert.equal(manifest.short_name, 'oPin');
   assert.match(readFileSync(new URL('../web/selftest.html', import.meta.url), 'utf8'), /<title>Self-test — oPin<\/title>/);
-  assert.match(html, /caches\.delete\('insta-pinmap-app'\)/, 'the cache keeps its name');
+  assert.match(html, /caches\.delete\('opin-app'\)/, 'the cache is opin-app');
+  for (const f of ['../web/sw.js', '../web/js/update.js']) {
+    assert.match(readFileSync(new URL(f, import.meta.url), 'utf8'), /const CACHE = 'opin-app';/, f);
+  }
 });
 
 test('index.html has no status ("Want to go / Been there") any more', () => {
@@ -164,4 +167,26 @@ test('index.html: the pinwheel overlay over the map: five wheel pins plus the ac
   assert.equal((wheel.match(/<use /g) || []).length, 5, 'five pins in the wheel; the top-right one is the active pin');
   assert.match(overlay, /<g transform="rotate\(60 250 250\)">\s*<g class="pinwheel__pop">/);
   assert.match(overlay, /<image class="pinwheel__logo"/);
+});
+
+/* ---------- 1.0.0: a clean slate at the oPin address ---------- */
+
+test('no old name is left: no "insta-pinmap", "Insta Pinmap" or "pinmap" in the app, the Worker, the tests, tools or README', () => {
+  const walk = (dir) => readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })
+    .flatMap((d) => (d.isDirectory() ? (['vendor', 'fixtures'].includes(d.name) ? [] : walk(`${dir}${d.name}/`)) : [`${dir}${d.name}`]));
+  const files = [...walk('../web/'), ...walk('../worker/'), ...walk('../test/'), ...walk('../tools/'), '../README.md', '../wrangler.toml']
+    .filter((f) => /\.(js|mjs|html|css|json|webmanifest|md|toml|txt)$|_headers$/.test(f));
+  // Allowed: the README's one "formerly Insta Pinmap", the backup id older backups carry, and this test itself.
+  const allowed = {
+    '../README.md': /formerly Insta Pinmap/g,
+    '../web/js/backup.js': /'pinmap-backup'/g,
+    '../test/backup.test.mjs': /pinmap-backup|!\/Insta Pinmap\//g,
+    '../test/version.test.mjs': /[\s\S]*/g,
+  };
+  for (const f of files) {
+    let text = readFileSync(new URL(f, import.meta.url), 'utf8');
+    if (allowed[f]) text = text.replace(allowed[f], '');
+    assert.ok(!/pinmap/i.test(text), `${f}: ${(text.match(/.{0,40}pinmap.{0,40}/i) || [''])[0]}`);
+  }
+  assert.equal((readFileSync(new URL('../README.md', import.meta.url), 'utf8').match(/pinmap/gi) || []).length, 1, 'one "formerly Insta Pinmap"');
 });

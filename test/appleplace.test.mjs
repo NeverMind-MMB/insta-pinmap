@@ -158,7 +158,7 @@ test('pending guide: saved under its key, read back within 24 h, gone after that
   const s = memoryStorage();
   const now = Date.UTC(2026, 9, 10, 12, 0, 0);
   savePendingGuide(GUIDE, { storage: s, now });
-  assert.equal(PENDING_GUIDE_KEY, 'insta-pinmap.pending-guide');
+  assert.equal(PENDING_GUIDE_KEY, 'opin.pending-guide');
   const stored = JSON.parse(s.map.get(PENDING_GUIDE_KEY));
   assert.deepEqual(stored, { ...GUIDE, link: '', savedAt: now });
 

@@ -2,7 +2,7 @@
 
 oPin is one map for places from many sources: Apple Maps, Google Maps and other
 map apps, map files and spreadsheets, and posts from Instagram, TikTok, YouTube
-and Facebook. Free, no account, and your pins stay on your phone.
+and Facebook. Free, no account, and your pins stay on your phone. (It was formerly Insta Pinmap.)
 
 ## What it does
 
@@ -317,9 +317,7 @@ app. Change that once:
 
 1. In the Shortcuts app, tap **•••** on **Fetch Apple Guide** to edit it.
 2. Find the **URL** action with `/api/guide?link=` in it. As shared it points at the author's
-   copy, `https://opin.<subdomain>.workers.dev`, or still at the old
-   `https://insta-pinmap.<subdomain>.workers.dev` until the Shortcut is shared again; check it
-   either way.
+   copy, `https://opin.<subdomain>.workers.dev`.
 3. Replace the address in front of `/api/guide` with yours, so it starts with
    `https://<name>.<your-subdomain>.workers.dev/api/guide?link=`. Leave the rest
    of the action as it is.
@@ -429,8 +427,11 @@ Over the limit, the helper answers "Too many requests. Wait a minute and try aga
   lines. A guide link as the first line names the guide they belong to.
 - The app version is in `web/version.json` and `web/js/version.js` (a test checks
   they match); `version.json` also lists every file the app keeps offline.
-  `web/sw.js` must stay byte-for-byte the same between versions, so phones update
-  only through **Settings → App**.
+  `web/sw.js` last changed for 1.0.0 (its cache is `opin-app`); from that baseline on
+  it must stay byte-for-byte the same between versions, so phones update only
+  through **Settings → App**. Stored on the phone: IndexedDB `opin` (pins and
+  settings), localStorage `opin.pending-guide` (an Apple Guide waiting for the
+  Shortcut, for a day), the cache `opin-app`.
 - `tools/apple-guide.mjs` — Apple Guide → GeoJSON on a computer (see "Apple Guides").
 - `web/js/guidehelper.js` — the oPin guide helper, a bookmarklet for a guide page on
   maps.apple.com (the Shortcut's Safari script without its 4-second limit); the app

@@ -119,7 +119,7 @@ async function askIg(code, page, extra = {}) {
     return String(url).startsWith('https://www.instagram.com/p/') ? new Response(page, { status: 200 }) : new Response('', { status: 404 });
   };
   address++;
-  const req = new Request(`https://pinmap.example/api/ig?code=${code}${extra.noTicket ? '' : `&m=${minute}&n=${nonce}`}`, {
+  const req = new Request(`https://opin.example/api/ig?code=${code}${extra.noTicket ? '' : `&m=${minute}&n=${nonce}`}`, {
     headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': `10.1.0.${address}` },
   });
   const res = await handleRequest(req, { WORK_DIFFICULTY: '8', ASSETS: { fetch: async () => new Response('asset') } }, { fetch });

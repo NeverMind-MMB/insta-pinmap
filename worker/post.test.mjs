@@ -319,7 +319,7 @@ const BINDINGS = { WORK_DIFFICULTY: '8', ASSETS: { fetch: async () => new Respon
 let address = 0;
 function apiRequest(path, ip) {
   address++;
-  return new Request(`https://pinmap.example${path}`, {
+  return new Request(`https://opin.example${path}`, {
     headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': ip || `10.4.0.${address}` },
   });
 }

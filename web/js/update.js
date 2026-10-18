@@ -5,7 +5,7 @@
 
 import { APP_VERSION, compareVersions } from './version.js';
 
-const CACHE = 'insta-pinmap-app';
+const CACHE = 'opin-app';
 
 export async function checkForUpdate() {
   const res = await fetch('/version.json', { cache: 'no-store' });

@@ -21,7 +21,7 @@ function bindings(extra = {}) {
 function guideRequest(link, ip) {
   address++;
   const query = link === undefined ? '' : `?link=${encodeURIComponent(link)}`;
-  return new Request(`https://pinmap.example/api/guide${query}`, { headers: { 'CF-Connecting-IP': ip || `10.2.0.${address}` } });
+  return new Request(`https://opin.example/api/guide${query}`, { headers: { 'CF-Connecting-IP': ip || `10.2.0.${address}` } });
 }
 
 /** deps.fetch that fails the test if the Worker ever contacts anyone (Apple included). */
@@ -65,7 +65,7 @@ const PLUS_LINES = 'https://maps.apple.com/place?auid=1016\nhttps://maps.apple.c
 
 test('/api/guide: a guide link with %2B works URL-encoded, passed as-is, or decoded once ("+" turned into a space)', async () => {
   assert.ok(PLUS_GUIDE.includes('%2B'), 'the test link must contain %2B');
-  const asIs = (link) => new Request(`https://pinmap.example/api/guide?link=${link}`, { headers: { 'CF-Connecting-IP': `10.4.0.${++address}` } });
+  const asIs = (link) => new Request(`https://opin.example/api/guide?link=${link}`, { headers: { 'CF-Connecting-IP': `10.4.0.${++address}` } });
   for (const req of [
     guideRequest(PLUS_GUIDE),                                   // encoded once (what a URL Encode action gives)
     asIs(PLUS_GUIDE),                                           // the Shortcut glued the raw link in

@@ -12,7 +12,6 @@ import { sourceColor } from './sources.js';
 
 const DB_KEY = 'db';
 const SETTINGS_KEY = 'settings';
-const LEGACY_SETTINGS_KEY = 'insta-pinmap.settings';
 
 export const DEFAULT_SETTINGS = {
   radiusM: 150,
@@ -58,13 +57,13 @@ export const store = {
     this.lastError = null;
     this._loadFailed = false;
     try {
-      const settings = (await idbGet(SETTINGS_KEY)) ?? readLegacySettings();
+      const settings = await idbGet(SETTINGS_KEY);
       this.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
       this.db = normalizeDb((await idbGet(DB_KEY)) || {});
     } catch (e) {
       this.lastError = `Phone storage is not available: ${e.message}`;
       this._loadFailed = true;
-      this.settings = { ...DEFAULT_SETTINGS, ...(readLegacySettings() || {}) };
+      this.settings = { ...DEFAULT_SETTINGS };
       this.db = normalizeDb({});
     }
     // Asking can wait on a permission prompt (Firefox), so never block start-up on it.
@@ -362,15 +361,6 @@ function rememberTags(db, tags) {
       for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
       db.tags.push({ name, color: COLORS[h % COLORS.length] });
     }
-  }
-}
-
-function readLegacySettings() {
-  try {
-    const s = globalThis.localStorage?.getItem(LEGACY_SETTINGS_KEY);
-    return s ? JSON.parse(s) : null;
-  } catch {
-    return null;
   }
 }
 

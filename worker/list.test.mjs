@@ -63,7 +63,7 @@ function bindings(extra = {}) {
 function listRequest(link, ip) {
   address++;
   const query = link === undefined ? '' : `?link=${encodeURIComponent(link)}`;
-  return new Request(`https://pinmap.example/api/list${query}`, {
+  return new Request(`https://opin.example/api/list${query}`, {
     headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': ip || `10.7.${Math.floor(address / 250)}.${address % 250}` },
   });
 }
@@ -261,7 +261,7 @@ test('/api/list: without the binding, 20 per address and minute, counted apart f
   const noBinding = { ASSETS: bindings().ASSETS };
   const ip = '10.8.9.9';
   const resolveFetch = async () => new Response(null, { status: 302, headers: { Location: 'https://www.google.com/maps/@1,2,3z' } });
-  const resolveRequest = () => new Request(`https://pinmap.example/api/resolve?url=${encodeURIComponent('https://goo.gl/a')}`,
+  const resolveRequest = () => new Request(`https://opin.example/api/resolve?url=${encodeURIComponent('https://goo.gl/a')}`,
     { headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': ip } });
   for (let i = 0; i < 20; i++) await handleRequest(resolveRequest(), noBinding, { fetch: resolveFetch });
   const statuses = [];
@@ -271,7 +271,7 @@ test('/api/list: without the binding, 20 per address and minute, counted apart f
 
 test('/api/list: requests from other sites are refused before anything is fetched', async () => {
   const deps = googleFetch(TWO_PLACES);
-  const req = new Request(`https://pinmap.example/api/list?link=${encodeURIComponent(PLACELIST_LINK)}`, { headers: { 'Sec-Fetch-Site': 'cross-site' } });
+  const req = new Request(`https://opin.example/api/list?link=${encodeURIComponent(PLACELIST_LINK)}`, { headers: { 'Sec-Fetch-Site': 'cross-site' } });
   assert.equal((await handleRequest(req, bindings(), deps)).status, 403);
   assert.deepEqual(deps.calls, []);
 });

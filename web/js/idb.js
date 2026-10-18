@@ -1,13 +1,13 @@
 /**
  * idb.js — a tiny key-value wrapper around IndexedDB.
- * One database "insta-pinmap", one object store "kv".
+ * One database "opin", one object store "kv".
  *
  * The open connection is reused, but browsers can close it (iOS does after the
  * app was in the background). Then the next call opens a new one, so saving
  * keeps working without a reload.
  */
 
-const DB_NAME = 'insta-pinmap';
+const DB_NAME = 'opin';
 const STORE_NAME = 'kv';
 let opening = null;
 

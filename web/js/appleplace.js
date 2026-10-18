@@ -519,7 +519,7 @@ export function lookupButton({ notFound, needed }) {
  * is kept for 24 hours so the import can go on after a restart.
  * ================================================================== */
 
-export const PENDING_GUIDE_KEY = 'insta-pinmap.pending-guide';
+export const PENDING_GUIDE_KEY = 'opin.pending-guide';
 const PENDING_MAX_AGE_MS = 24 * 3600 * 1000;
 
 function browserStorage() {

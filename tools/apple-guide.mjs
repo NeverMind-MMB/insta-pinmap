@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * apple-guide.mjs — turns an Apple Guide link into a GeoJSON file for Insta Pinmap.
+ * apple-guide.mjs — turns an Apple Guide link into a GeoJSON file for oPin.
  *
  *   node tools/apple-guide.mjs "<guide link>" [out.geojson]
  *

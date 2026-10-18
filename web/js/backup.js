@@ -1,12 +1,14 @@
 /**
  * backup.js — one HTML file that is both a read-only map and a full backup.
  *
- * The complete collection sits in <script type="application/json" id="pinmap-backup">.
+ * The complete collection sits in <script type="application/json" id="opin-backup">.
  * Opening the file shows the map (Leaflet is embedded); loading it in the app
  * restores the pins.
  */
 
-export const BACKUP_SCRIPT_ID = 'pinmap-backup';
+export const BACKUP_SCRIPT_ID = 'opin-backup';
+/** The id in backups made before 1.0.0, which still load. */
+const OLDER_SCRIPT_ID = 'pinmap-backup';
 const NOT_A_BACKUP = "This file isn't a backup.";
 const DAY_MS = 86400000;
 
@@ -23,7 +25,7 @@ export function jsonForScript(value) {
 /** Only plain hex colours get into markup. */
 const safeColor = (c) => (/^#[0-9a-f]{3,8}$/i.test(String(c)) ? String(c) : '#8a8f98');
 
-/** The backup file's name: opin-backup-<YYYY-MM-DD>.html (older insta-pinmap-… files load the same way). */
+/** The backup file's name: opin-backup-<YYYY-MM-DD>.html. */
 export function backupFileName(now = new Date()) {
   return `opin-backup-${now.toISOString().slice(0, 10)}.html`;
 }
@@ -84,7 +86,7 @@ export function readBackupText(text) {
   let data;
   try {
     if (/^\s*</.test(s)) {
-      const m = s.match(new RegExp(`<script type="application/json" id="${BACKUP_SCRIPT_ID}">([\\s\\S]*?)</script>`));
+      const m = s.match(new RegExp(`<script type="application/json" id="(?:${BACKUP_SCRIPT_ID}|${OLDER_SCRIPT_ID})">([\\s\\S]*?)</script>`));
       if (!m) throw new Error(NOT_A_BACKUP);
       data = JSON.parse(m[1]);
     } else {

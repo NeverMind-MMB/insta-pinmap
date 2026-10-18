@@ -141,7 +141,7 @@ async function start() {
   });
 
   // Tells the startup guard in index.html that the app is running.
-  window.__instaPinmapStarted = true;
+  window.__opinStarted = true;
 }
 
 /* ================================================================== *
@@ -457,8 +457,8 @@ function wireShared() {
 start().catch((e) => {
   console.error(e);
   toast('Startup failed: ' + e.message, 'error', 0);
-  window.__instaPinmapStartFailed?.(); // the startup guard's "Reinstall app files" banner
+  window.__opinStartFailed?.(); // the startup guard's "Reinstall app files" banner
 });
 
 // For the self-test page and for experimenting in the console
-window.InstaPinmap = { store, get map() { return map; }, redraw, filter, DEFAULT_SETTINGS };
+window.oPin = { store, get map() { return map; }, redraw, filter, DEFAULT_SETTINGS };

@@ -78,7 +78,14 @@ test('oPin backups: file name opin-backup-<date>.html, viewer title and restore 
   assert.match(h, /<title>oPin backup 2026-10-04<\/title>/);
   assert.match(h, /To restore: oPin → Settings → Load backup\./);
   assert.ok(!/Insta Pinmap/.test(h));
-  assert.match(h, /id="pinmap-backup"/, 'old and new backups keep the same script id');
+  assert.match(h, /<script type="application\/json" id="opin-backup">/);
+});
+
+test('a backup made before 1.0.0 (script id pinmap-backup) still loads', async () => {
+  const { readBackupText } = await import('../web/js/backup.js');
+  const old = html().replace('id="opin-backup"', 'id="pinmap-backup"');
+  assert.notEqual(old, html());
+  assert.equal(readBackupText(old).pins.length, readBackupText(html()).pins.length);
 });
 
 test('the backup viewer shows no "want to go / been there" any more', () => {

@@ -356,7 +356,7 @@ function logicChecks() {
     ok(page.includes('Reinstall app files'), 'index.html has no startup guard');
     ok(page.indexOf('Reinstall app files') < page.indexOf('<script type="module"'), 'the guard must come before the app module');
     const app = await (await fetch('/js/app.js')).text();
-    ok(app.includes('window.__instaPinmapStarted = true'), 'app.js does not report a successful start');
+    ok(app.includes('window.__opinStarted = true'), 'app.js does not report a successful start');
     return 'index.html has the guard, app.js reports its start';
   });
 

@@ -7,7 +7,7 @@
  * Updates happen only through Settings → App → Install (js/update.js).
  */
 
-const CACHE = 'insta-pinmap-app';
+const CACHE = 'opin-app';
 
 /** A plain copy of a response: body read fully, never flagged as redirected. */
 async function rebuild(res) {

@@ -10,7 +10,7 @@ let address = 0;
 /** A request from the app itself, from its own address so rate limits never mix between tests. */
 function resolveRequest(link) {
   address++;
-  return new Request(`https://pinmap.example/api/resolve?url=${encodeURIComponent(link)}`, {
+  return new Request(`https://opin.example/api/resolve?url=${encodeURIComponent(link)}`, {
     headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': `10.1.0.${address}` },
   });
 }

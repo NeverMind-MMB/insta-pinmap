@@ -10,7 +10,7 @@ let address = 0;
 /** A request from the app itself, from its own address so rate limits never mix between tests. */
 function apiRequest(path, headers = {}) {
   address++;
-  return new Request(`https://pinmap.example${path}`, {
+  return new Request(`https://opin.example${path}`, {
     headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': `10.0.0.${address}`, ...headers },
   });
 }
@@ -211,7 +211,7 @@ test('every /api response carries X-Robots-Tag and X-App-Version', async () => {
     apiRequest(resolvePath('https://example.com/')),
     apiRequest('/api/nothing'),
     apiRequest('/api/ig', { 'Sec-Fetch-Site': 'cross-site' }),
-    new Request('https://pinmap.example/api/ig', { method: 'POST' }),
+    new Request('https://opin.example/api/ig', { method: 'POST' }),
   ];
   for (const req of requests) {
     const res = await handleRequest(req, BINDINGS, { fetch });
@@ -221,7 +221,7 @@ test('every /api response carries X-Robots-Tag and X-App-Version', async () => {
 });
 
 test('everything outside /api/ goes to the static files', async () => {
-  const res = await handleRequest(new Request('https://pinmap.example/index.html'), BINDINGS);
+  const res = await handleRequest(new Request('https://opin.example/index.html'), BINDINGS);
   assert.equal(await res.text(), 'asset');
 });
 

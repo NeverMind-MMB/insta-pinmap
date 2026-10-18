@@ -481,7 +481,7 @@
 (function () {
   var shown = false;
   function show() {
-    if (shown || window.__instaPinmapStarted) return;
+    if (shown || window.__opinStarted) return;
     shown = true;
     var bar = document.createElement('div');
     bar.className = 'reminder';
@@ -499,7 +499,7 @@
       if (!navigator.onLine) { offline(); return; }
       btn.disabled = true;
       Promise.resolve()
-        .then(function () { return window.caches ? caches.delete('insta-pinmap-app') : null; })
+        .then(function () { return window.caches ? caches.delete('opin-app') : null; })
         .then(function () {
           return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : [];
         })
@@ -515,10 +515,10 @@
     document.body.appendChild(bar);
     // A slow start that finishes after all: remove the banner again.
     var poll = setInterval(function () {
-      if (window.__instaPinmapStarted) { clearInterval(poll); bar.remove(); }
+      if (window.__opinStarted) { clearInterval(poll); bar.remove(); }
     }, 1000);
   }
-  window.__instaPinmapStartFailed = show;
+  window.__opinStartFailed = show;
   // A script or module that fails to load fires "error" on its element (no bubbling, so capture).
   window.addEventListener('error', function (e) {
     if (e.target && e.target.tagName === 'SCRIPT') show();
