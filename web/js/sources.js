@@ -66,6 +66,24 @@ export const SOURCE_GROUPS = [
     short: ['maps.app.goo.gl/', 'goo.gl/maps/'],
     lists: ['google.*/maps/placelists/'],
   },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    logo: '/icons/sources/youtube.png',
+    color: '#c0603f',
+    sources: ['youtube'],
+    // Any other youtube.com link is YouTube's too: the post reader (postlinks.js) tells a video from the rest.
+    prefixes: ['youtube.com/watch', 'youtube.com/shorts/', 'youtube.com/live/', 'youtube.com/embed/', 'youtube.com/', 'youtu.be/'],
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    logo: '/icons/sources/facebook.png',
+    color: '#2f7d7a',
+    sources: ['facebook'],
+    // Posts, reels, videos, share links and pages; the post reader (postlinks.js) tells them apart.
+    prefixes: ['facebook.com/', 'fb.watch/'],
+  },
   { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
   { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson'] },
   { id: 'search', name: 'Place search', color: '#b8543f', sources: ['manual'] },
@@ -177,6 +195,8 @@ export const SUPPORTED_SOURCES = [
     items: [
       'instagram.com/p/…', 'instagram.com/reel/…', 'maps.apple.com/… (places and guides)', 'guides.apple.com/…',
       'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…',
+      'youtube.com/watch?v=…', 'youtube.com/shorts/…', 'youtube.com/live/…', 'youtu.be/…',
+      'facebook.com/… (public posts, reels and pages)', 'fb.watch/…',
     ],
     note: 'or type a place name to search',
   },
