@@ -229,8 +229,8 @@ test('pinLook: Google Maps, Apple Maps and Instagram show their logo; other sour
   const { pinLook } = await import('../web/js/sources.js');
   assert.deepEqual(pinLook('google-csv'), { logo: '/icons/sources/google.png', caption: '' });
   assert.deepEqual(pinLook('google-link'), { logo: '/icons/sources/google.png', caption: '' });
-  assert.deepEqual(pinLook('apple-guide'), { logo: '/icons/sources/apple.svg', caption: '' });
-  assert.deepEqual(pinLook('apple-ort'), { logo: '/icons/sources/apple.svg', caption: '' });
+  assert.deepEqual(pinLook('apple-guide'), { logo: '/icons/sources/apple.png', caption: '' });
+  assert.deepEqual(pinLook('apple-ort'), { logo: '/icons/sources/apple.png', caption: '' });
   assert.deepEqual(pinLook('instagram'), { logo: '/icons/sources/instagram.png', caption: '' });
   assert.deepEqual(pinLook('gpx'), { logo: '', caption: 'GPS file' });
   assert.deepEqual(pinLook('kml'), { logo: '', caption: 'Map file' });

@@ -127,7 +127,10 @@ test('version.json lists every icon, the source logos and /favicon.ico', () => {
 test('index.html: the pinwheel as favicon, touch icon and top-bar logo, the settings drawing on its button', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="any">/);
-  assert.match(html, /<link rel="icon" href="\/icons\/icon\.svg" type="image\/svg\+xml">/);
+  // Owner: the 16 px favicon.ico plus the web-app icons are enough (no SVG or 32 px favicon).
+  assert.ok(!/rel="icon"[^>]*icon\.svg/.test(html), 'no SVG favicon');
+  const manifest = JSON.parse(readFileSync(new URL('../web/manifest.webmanifest', import.meta.url), 'utf8'));
+  assert.deepEqual(manifest.icons.map((i) => i.src), ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png']);
   assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
   assert.match(html, /class="topbar__title">\s*<img class="topbar__logo" src="\/icons\/icon\.svg" alt="">/);
   assert.match(html, /id="btn-settings"[^>]*>\s*<img src="\/icons\/settings\.png" alt="" width="24" height="24">\s*<\/button>/);

@@ -50,7 +50,7 @@ export const SOURCE_GROUPS = [
   {
     id: 'apple',
     name: 'Apple Maps',
-    logo: '/icons/sources/apple.svg',
+    logo: '/icons/sources/apple.png',
     color: '#3a6ea5',
     sources: ['apple-ort', 'apple-guide'],
     prefixes: ['maps.apple.com/guides', 'guides.apple.com/', 'maps.apple.com/'],

@@ -339,7 +339,7 @@ test('Enter in a dialog is held back in every input (text, colour swatches, chec
 test('importLook: the source\'s logo when all new pins share one with a logo, else the file or list name, "3 files", or a count', async () => {
   const { importLook } = await import('../web/js/ui.js');
   assert.deepEqual(importLook(['google-csv', 'google-csv'], 'Want to go.csv'), { logo: '/icons/sources/google.png', caption: '' });
-  assert.deepEqual(importLook(['apple-guide'], 'Synthetic Guide'), { logo: '/icons/sources/apple.svg', caption: '' });
+  assert.deepEqual(importLook(['apple-guide'], 'Synthetic Guide'), { logo: '/icons/sources/apple.png', caption: '' });
   assert.deepEqual(importLook(['gpx', 'gpx'], 'Tour.gpx'), { logo: '', caption: 'Tour.gpx' });
   assert.deepEqual(importLook(['gpx', 'kml', 'gpx'], 'a.gpx, b.kml, c.gpx'), { logo: '', caption: '3 files' });
   assert.deepEqual(importLook(['apple-ort', 'google-link'], ''), { logo: '', caption: '2 places' });
@@ -353,7 +353,7 @@ test('Import selected plays the add-pin animation once when it added pins, not w
   try {
     store.db = normalizeDb({});
     await applyImport([row('Lake', 47.1, 11.1), row('Hill', 47.2, 11.2)], 'Synthetic Guide', { redraw() {}, pinwheel: (l) => looks.push(l) }, '');
-    assert.deepEqual(looks, [{ logo: '/icons/sources/apple.svg', caption: '' }]);
+    assert.deepEqual(looks, [{ logo: '/icons/sources/apple.png', caption: '' }]);
     await applyImport([row('Lake again', 47.1, 11.1)], 'Synthetic Guide', { redraw() {}, pinwheel: (l) => looks.push(l) }, '');
     assert.equal(looks.length, 1, 'a duplicate only: no animation');
   } finally {

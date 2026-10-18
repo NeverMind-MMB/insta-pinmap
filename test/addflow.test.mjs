@@ -738,7 +738,7 @@ test('Drop pin plays the add-pin animation with the new pin\'s source (Apple Map
     await startAdd(LL_LINK, appEnv);
     assert.deepEqual(looks, [], 'not before the pin is saved');
     doc.getElementById('confirm-save').fire('click');
-    assert.deepEqual(looks, [{ logo: '/icons/sources/apple.svg', caption: '' }]);
+    assert.deepEqual(looks, [{ logo: '/icons/sources/apple.png', caption: '' }]);
   } finally {
     delete globalThis.document;
     clearTimeout(store._saveTimer);

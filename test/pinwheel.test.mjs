@@ -22,17 +22,17 @@ test('the pinwheel plays over the map view when that shows', (t) => {
   const { box, logo, document } = pinwheelDocument({ mapShown: true });
   globalThis.document = document;
   t.after(() => { delete globalThis.document; });
-  playPinwheel({ logo: '/icons/sources/apple.svg' });
+  playPinwheel({ logo: '/icons/sources/apple.png' });
   assert.equal(box.hidden, false);
   assert.equal(box.classList.contains('is-playing'), true);
-  assert.equal(logo.attrs.href, '/icons/sources/apple.svg');
+  assert.equal(logo.attrs.href, '/icons/sources/apple.png');
 });
 
 test('the pinwheel is skipped while the map view is hidden (List tab on a phone), not saved up for later', (t) => {
   const { box, document } = pinwheelDocument({ mapShown: false });
   globalThis.document = document;
   t.after(() => { delete globalThis.document; });
-  playPinwheel({ logo: '/icons/sources/apple.svg' });
+  playPinwheel({ logo: '/icons/sources/apple.png' });
   assert.equal(box.hidden, true);
   assert.equal(box.classList.contains('is-playing'), false);
 });
