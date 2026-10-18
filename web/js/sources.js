@@ -31,7 +31,7 @@ export function issuesSearchUrl(site) {
  *   color: the default colour of its pins (store.pinColor), from the palette in store.js;
  *   sources: the pin `source` values the readers write for it;
  *   guides: the prefixes of Apple guide links; short: those of short links the helper expands;
- *   lists: those of Google Maps lists (not read yet).
+ *   lists: those of Google Maps lists (read whole through the Worker, googlelist.js).
  */
 export const SOURCE_GROUPS = [
   {
@@ -61,7 +61,7 @@ export const SOURCE_GROUPS = [
     name: 'Google Maps',
     logo: '/icons/sources/google.png',
     color: '#2f7d5d',
-    sources: ['google-link', 'google-takeout', 'google-csv'],
+    sources: ['google-link', 'google-takeout', 'google-csv', 'google-list'],
     prefixes: ['google.*/maps', 'google.*/maps/placelists/', 'maps.google.*/', 'maps.app.goo.gl/', 'goo.gl/maps/'],
     short: ['maps.app.goo.gl/', 'goo.gl/maps/'],
     lists: ['google.*/maps/placelists/'],
@@ -177,6 +177,7 @@ export const SUPPORTED_SOURCES = [
     items: [
       'instagram.com/p/…', 'instagram.com/reel/…', 'maps.apple.com/… (places and guides)', 'guides.apple.com/…',
       'google.com/maps/…', 'maps.google.com/…', 'maps.app.goo.gl/…', 'goo.gl/maps/…',
+      'google.com/maps/placelists/… (shared lists)',
     ],
     note: 'or type a place name to search',
   },

@@ -16,8 +16,9 @@ import {
 } from './dedupe.js';
 import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, eventDate } from './extract.js';
 import {
-  readLink, appleIdEntries, isAppleGuideLink, isGoogleShortLink, isGoogleListLink, UNNAMED_GOOGLE_PLACE,
+  readLink, appleIdEntries, isAppleGuideLink, isGoogleShortLink, UNNAMED_GOOGLE_PLACE,
 } from './importers.js';
+import { isGoogleList, addFromGoogleList } from './googlelist.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
   loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
@@ -386,11 +387,8 @@ function addFromResultLines(text, env) {
 
 /** `resolved`: the link is already the answer of /api/resolve. */
 async function addFromMapLink(link, env, resolved = false) {
-  // Lists get their own way later; for now the dialog says so.
-  if (isGoogleListLink(link)) {
-    env.showUnsupported?.(link, 'Google Maps lists');
-    return;
-  }
+  // A Google Maps list (also what a list's short link resolves to): all its places in one import.
+  if (isGoogleList(link)) return addFromGoogleList(link, env);
   let parsed;
   try {
     parsed = readLink(link);
