@@ -195,6 +195,7 @@ export class PreviewMap {
     }
 
     setTimeout(() => {
+      if (!this.map) return; // the dialog closed (and destroyed the map) within these 60 ms
       this.map.invalidateSize();
       if (points.length === 1) {
         this.map.setView([points[0].lat, points[0].lon], zoom);
