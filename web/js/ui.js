@@ -6,7 +6,7 @@ import { store, normTag, PIN_COLORS, pinColorValue } from './store.js';
 import { embedLink, distanceM, distanceText, shortcode } from './dedupe.js';
 import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
-import { googleCoordinates, googlePlaceName, isAppleIdLink, isGoogleShortLink } from './importers.js';
+import { googleCoordinates, googlePlaceName, isAppleIdLink, isGoogleShortLink, skippedPlacesNotice } from './importers.js';
 import {
   SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
@@ -518,8 +518,9 @@ function cleanTag(text) {
  * @param {Array} entries  import rows; `checked: false` starts a row unchecked
  * @param {{title, link, entries, appleIds} | null} guide  an Apple Guide with Apple Maps
  *   places still to look up: shows the Shortcut notice and keeps the guide for 24 h
+ * @param {number} skipped  places the files named with neither coordinates nor a name (left out)
  */
-export function showImport(entries, sourceName, env, guide = null) {
+export function showImport(entries, sourceName, env, guide = null, skipped = 0) {
   const dlg = $('dlg-import');
   const list = $('import-list');
   $('dlg-import-title').textContent = sourceName ? `Import: ${sourceName}` : 'Places found';
@@ -542,7 +543,8 @@ export function showImport(entries, sourceName, env, guide = null) {
     if (open) notes.push(`${open} Apple Maps ${open === 1 ? 'place still needs a lookup and is' : 'places still need a lookup and are'} unchecked`);
     $('import-info').textContent =
       `${entries.length} ${entries.length === 1 ? 'place' : 'places'} found` +
-      (notes.length ? ` — ${notes.join('; ')}.` : '.');
+      (notes.length ? ` — ${notes.join('; ')}.` : '.') +
+      (skipped ? ` ${skippedPlacesNotice(skipped)}` : '');
   };
 
   const updateApply = () => {

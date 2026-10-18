@@ -67,7 +67,7 @@ export const SOURCE_GROUPS = [
     lists: ['google.*/maps/placelists/'],
   },
   { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
-  { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson'] },
+  { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson', 'csv'] },
   { id: 'search', name: 'Place search', color: '#b8543f', sources: ['manual'] },
 ];
 

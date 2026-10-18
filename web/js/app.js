@@ -10,7 +10,7 @@ import {
   drawTagBar, drawList, showDetail, showImport,
   exportBackup, showRestore, backupAgeLabel, linkShortcutInstall, showUnsupported, keepsEnter,
 } from './ui.js';
-import { readFile } from './importers.js';
+import { readFile, skippedPlacesNotice } from './importers.js';
 import { isInstagramLink, shortcode } from './dedupe.js';
 import { findLinks } from './sources.js';
 import { showsMoveBanner, newAddressUrl } from './address.js';
@@ -331,22 +331,24 @@ function wireSettings() {
 
     const all = [];
     const names = [];
+    let skipped = 0; // places with neither coordinates nor a name
     for (const f of files) {
       try {
-        const { entries, backup, name } = await readFile(f);
+        const { entries, backup, name, skipped: dropped = 0 } = await readFile(f);
         if (backup) { dlg.close(); showRestore(backup, env); return; }
         all.push(...entries);
         names.push(name);
+        skipped += dropped;
       } catch (err) {
         $('settings-import-status').textContent = `${f.name}: ${err.message}`;
       }
     }
     if (!all.length) {
-      $('settings-import-status').textContent = 'The files contained no places.';
+      $('settings-import-status').textContent = 'The files contained no places.' + (skipped ? ` ${skippedPlacesNotice(skipped)}` : '');
       return;
     }
     dlg.close();
-    showImport(all, names.join(', '), env);
+    showImport(all, names.join(', '), env, null, skipped);
   });
 
   // --- Import from pasted links or Shortcut results: the input bar's way ---
