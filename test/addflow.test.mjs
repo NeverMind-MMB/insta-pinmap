@@ -256,7 +256,7 @@ const PLACE_ID_LINK = 'https://maps.apple.com/place?address=Testweg%202&coordina
 const PLACE_ID_ONLY_LINK = 'https://maps.apple.com/place?place-id=I3ADE68B1&_provider=9902';
 
 const SEVERAL_LINKS_HINT = 'Several map links? Paste them in Settings → Import (one per line), or import a file there.';
-const INSTAGRAM_HINT = 'One Instagram post at a time: paste each link on its own.';
+const INSTAGRAM_HINT = 'One post or video at a time: paste each link on its own.';
 
 test('the input bar takes one link at a time: several place links bring a hint to Settings → Import, no dialog', async () => {
   for (const text of [[LL_LINK, ADDRESS_AUID_LINK, AUID_LINK].join('\n'), `${AUID_LINK}\n${PLACE_ID_LINK}`]) {
@@ -462,7 +462,7 @@ test('the input bar: any two links import nothing; with an Instagram post among 
 });
 
 const SKIPPED_WITH_INSTAGRAM = (n) => `Skipped ${n} ${n === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read. ` +
-  'Instagram posts go in the input bar, one at a time.';
+  'Posts and videos go in the input bar, one at a time.';
 
 test('Settings → Import: a list of place links says in one toast how many other links it left out', async () => {
   const text = [LL_LINK, AUID_LINK, 'https://maps.apple/p/AbCdEf1234', 'https://www.instagram.com/p/ABC123/', SYN_GUIDE, LL_LINK].join('\n');
@@ -894,4 +894,68 @@ test('Settings → Import: links from several map apps open one import dialog; O
   assert.match(e[3].warning, /resolved on import/);
   assert.deepEqual(calls, [], 'lookups happen on import');
   assert.deepEqual(toasts, []);
+});
+
+/* ---------- Posts and videos from every site count as one each; promo links don't count ---------- */
+
+const YT_A = 'https://www.youtube.com/watch?v=AbCdEfGhIj0';
+const YT_B = 'https://youtu.be/ZyXwVuTsRq9';
+const FB_POST = 'https://www.facebook.com/SyntheticCafe/posts/pfbid0SyntheticSyntheticSynthetic1';
+const TT_VIDEO = 'https://www.tiktok.com/@synthetic.user/video/7300000000000000001';
+const POST_HINT = 'One post or video at a time: paste each link on its own.';
+
+test('the input bar: two post or video links from any site (YouTube, Facebook, TikTok, Instagram, mixed) bring the one-post hint', async () => {
+  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  for (const text of [
+    `${YT_A}\n${YT_B}`, `${YT_A}\n${FB_POST}`, `${TT_VIDEO}\nhttps://www.instagram.com/p/AAA111/`, `Watch ${YT_A} then go to ${LL_LINK}`,
+  ]) {
+    globalThis.fetch = async () => assert.fail('nothing fetched');
+    const { imports, toasts, cleared } = await pasteIntoBar(text);
+    assert.deepEqual(imports, [], text);
+    assert.deepEqual(toasts, [[POST_HINT, 'info']], text);
+    assert.equal(cleared, 0, text);
+    assert.equal(isShortcutPaste(text), true, text);
+  }
+});
+
+test('Settings → Import: YouTube and Facebook links among several are counted as left out, never dropped silently', async () => {
+  const skipped = (n) => `Skipped ${n} ${n === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read. ` +
+    'Posts and videos go in the input bar, one at a time.';
+  globalThis.fetch = async () => assert.fail('nothing fetched');
+  const two = await readInSettings(`${YT_A}\n${FB_POST}`);
+  assert.deepEqual(two.imports, []);
+  assert.deepEqual(two.toasts, [[skipped(2), 'info']]);
+  assert.match(two.field.value, /youtube/, 'kept, to paste each one in the input bar');
+  const mixed = await readInSettings(`${LL_LINK}\n${YT_B}`);
+  assert.deepEqual(mixed.imports[0]?.e.map((r) => r.name), ['Synthetic Cafe']);
+  assert.deepEqual(mixed.toasts, [[skipped(1), 'info']]);
+});
+
+test('the input bar: a map app share text with a download link in it is one place link: Confirm place, no hint', async () => {
+  const { isShortcutPaste } = await import('../web/js/addflow.js');
+  const share = 'Synthetic Cafe\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe\nDownload here: https://omaps.app/get';
+  assert.equal(isShortcutPaste(share), false, 'goes into the field like any one link');
+  const r = await mapAppInBar(share);
+  assert.equal(r.open, true);
+  assert.equal(r.title, 'Synthetic Cafe');
+  assert.ok(!r.toasts.some(([t]) => /at a time|Several map links/.test(t)), JSON.stringify(r.toasts));
+});
+
+test('the input bar: a download link before the place link is passed over: the place link opens Confirm place', async () => {
+  for (const text of [
+    'Get Organic Maps: https://omaps.app/get\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe',
+    'https://pin.it/SynthAbc then https://omaps.app/o4B4pYZsRs/Synthetic_Cafe',
+  ]) {
+    const r = await mapAppInBar(text);
+    assert.equal(r.open, true, text);
+    assert.equal(r.coords, '47.38593, 8.57666', text);
+    assert.ok(!r.toasts.some(([, kind]) => kind === 'error'), JSON.stringify(r.toasts));
+  }
+});
+
+test('the input bar: two real place links still bring the hint, also with a download link among them', async () => {
+  const text = `${LL_LINK}\nhttps://omaps.app/o4B4pYZsRs/Synthetic_Cafe\nDownload here: https://omaps.app/get`;
+  const { imports, toasts } = await pasteIntoBar(text);
+  assert.deepEqual(imports, []);
+  assert.deepEqual(toasts, [[SEVERAL_LINKS_HINT, 'info']]);
 });

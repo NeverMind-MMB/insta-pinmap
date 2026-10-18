@@ -69,7 +69,10 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   // Fish the link out of shared text: Android often sends
   // "Check this out: https://... " instead of just the URL, and a link may
   // lack its scheme ("see instagram.com/p/…").
-  const linkInText = findLinks(text)[0] || '';
+  // The first link that gives a place or a post: a map app's download link in its share
+  // text, or a link to another site, comes after it (raw HTML keeps its first link).
+  const linksInText = findLinks(text);
+  const linkInText = (!/<html/i.test(text) && linksInText.find(givesPlaceOrPost)) || linksInText[0] || '';
   // The text itself counts as a link only with a scheme ("geo:…") or a "/": a site's
   // name alone ("tiktok.com") is free text, as in findLinks.
   const candidateLink = linkInText || (/^[a-z][a-z0-9+.-]*:|\//i.test(text) ? text : '');
@@ -461,7 +464,7 @@ function guideWithResults(text) {
 export function isShortcutPaste(text) {
   const s = String(text ?? '').trim();
   return looksLikeGuidePage(s) || /<html/i.test(s) || guideWithResults(s) !== null ||
-    (s.includes('@@') && parseShortcutResults(s).size > 0) || placeLinks(s).distinct >= 2;
+    (s.includes('@@') && parseShortcutResults(s).size > 0) || placeLinks(s).readable >= 2;
 }
 
 /**
@@ -488,10 +491,12 @@ function appleIdOnly(link) {
  * once: their places as import rows, and the Apple IDs of Apple links without
  * coordinates that name their place by ID (each ID once). Guide links stay out:
  * a guide goes its own way, with its title.
- * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number, instagram: number, tiktok: number}}
+ * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number,
+ *   readable: number, social: number, posts: number}}
  *   links: how many brought a place; skipped: how many other links (guides, links it can't read);
- *   distinct: how many different links the paste has; instagram: how many of them are Instagram posts;
- *   tiktok: how many are TikTok links
+ *   distinct: how many different links the paste has; readable: how many of them give a place, a
+ *   guide, a list or a post (not, say, a map app's download link); social: how many are Instagram,
+ *   TikTok, YouTube or Facebook links; posts: how many of those are posts or videos the app reads
  */
 function placeLinks(text) {
   const entries = [];
@@ -499,18 +504,21 @@ function placeLinks(text) {
   const seen = new Set();
   let links = 0;
   let skipped = 0;
-  let instagram = 0;
-  let tiktok = 0;
+  let readable = 0;
+  let social = 0;
+  let posts = 0;
   for (const link of findLinks(text)) {
     if (seen.has(link)) continue;
     seen.add(link);
-    if (isInstagramLink(link)) instagram++;
-    if (isTikTokLink(link)) tiktok++;
+    if (isSocialSource(link)) social++;
+    const post = isReadablePost(link);
+    if (post) posts++;
     let parsed = null;
     try {
       parsed = isAppleGuideLink(link) ? null : readLink(link);
     } catch { /* no link readLink knows; perhaps an Apple link with only an ID */ }
     const id = parsed?.entries.some((e) => Number.isFinite(e.lat)) ? '' : appleIdOnly(link);
+    if (givesPlaceOrPost(link)) readable++;
     if (id) {
       if (appleIds.includes(id)) continue;
       appleIds.push(id);
@@ -522,27 +530,51 @@ function placeLinks(text) {
     }
     links++;
   }
-  return { entries, appleIds, links, skipped, distinct: seen.size, instagram, tiktok };
+  return { entries, appleIds, links, skipped, distinct: seen.size, readable, social, posts };
 }
 
-/** The toast for the links a list of place links left out; Instagram posts and TikTok videos go in the input bar. */
-function skippedNotice(skipped, instagram, tiktok = 0) {
+/** A link that gives a place (also by Apple ID), a guide, a Google list or a post or video. */
+function givesPlaceOrPost(link) {
+  if (isReadablePost(link) || isAppleGuideLink(link) || isGoogleList(link) || appleIdOnly(link)) return true;
+  try {
+    return readLink(link).entries.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** A link from Instagram, TikTok, YouTube or Facebook (by its prefix), post or not. */
+function isSocialSource(link) {
+  return isInstagramLink(link) || isTikTokLink(link) || isSocialLink(link);
+}
+
+/** A post or video link the app reads: an Instagram post, a TikTok video, a YouTube video, a Facebook post or page. */
+function isReadablePost(link) {
+  if (isInstagramLink(link)) return Boolean(shortcode(link));
+  if (isTikTokLink(link)) return Boolean(tiktokVideo(link) || isTikTokShortLink(link));
+  return isSocialLink(link) && Boolean(postRequestKey(link));
+}
+
+/** The toast for the links a list of place links left out; posts and videos go in the input bar. */
+function skippedNotice(skipped, social) {
   const notice = `Skipped ${skipped} ${skipped === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read.`;
-  if (instagram) return `${notice} Instagram posts go in the input bar, one at a time.`;
-  return tiktok ? `${notice} TikTok videos go in the input bar, one at a time.` : notice;
+  return social ? `${notice} Posts and videos go in the input bar, one at a time.` : notice;
 }
 
 /**
  * Two or more map place links in one paste, from Settings → Import
  * (`severalLinks`): one import dialog, one row per place. Rows with coordinates
  * are checked; Apple places named only by ID get the dialog's Shortcut lookup,
- * as a guide's do. An Instagram post among several links never takes over: it
- * is counted as left out, even next to just one place link or none. The input
- * bar takes one link at a time: it imports nothing and says where to go instead.
+ * as a guide's do. A post or video (Instagram, TikTok, YouTube, Facebook) among
+ * several links never takes over: it is counted as left out, even next to just
+ * one place link or none. The input bar takes one link at a time: with two or
+ * more links that give a place or a post it imports nothing and says where to go
+ * instead (a link that gives neither, such as a map app's download link in its
+ * share text, doesn't count).
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
 function addFromPlaceLinks(text, env, severalLinks) {
-  const { entries, appleIds, links, skipped, distinct, instagram, tiktok } = placeLinks(text);
+  const { entries, appleIds, links, skipped, distinct, readable, social, posts } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
   const pending = appleIds.length && !entries.length && !skipped ? loadPendingGuide() : null;
@@ -553,21 +585,20 @@ function addFromPlaceLinks(text, env, severalLinks) {
     return true;
   }
   if (!severalLinks) {
-    // The input bar: any two different links, not just place links. A guide link on
+    // The input bar: any two different links that give a place or a post. A guide link on
     // the first line is the Shortcut's output (or what is left of it): the guide's way.
-    if (distinct < 2 || isAppleGuideLink(text.split(/\r?\n/, 1)[0].trim())) return false;
-    env.toast(instagram
-      ? 'One Instagram post at a time: paste each link on its own.'
-      : tiktok ? 'One TikTok video at a time: paste each link on its own.'
-        : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
+    if (readable < 2 || isAppleGuideLink(text.split(/\r?\n/, 1)[0].trim())) return false;
+    env.toast(posts
+      ? 'One post or video at a time: paste each link on its own.'
+      : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
     return true;
   }
-  if (links < 2 && !((instagram || tiktok) && distinct >= 2)) return false;
+  if (links < 2 && !(social && distinct >= 2)) return false;
   if (links) {
     const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
     env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
   }
-  if (skipped) env.toast(skippedNotice(skipped, instagram, tiktok), 'info', 6000);
+  if (skipped) env.toast(skippedNotice(skipped, social), 'info', 6000);
   if (links) env.inputDone?.();
   return true;
 }

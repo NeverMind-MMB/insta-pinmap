@@ -363,7 +363,7 @@ test('the input bar: a TikTok video already on a pin opens that pin, before and 
 
 test('the input bar takes one TikTok video at a time; Settings → Import leaves TikTok videos out of a list of place links', async () => {
   const LL_LINK = 'https://maps.apple.com/?ll=48.1371,11.5754&q=Synthetic%20Cafe';
-  const hint = 'One TikTok video at a time: paste each link on its own.';
+  const hint = 'One post or video at a time: paste each link on its own.';
   for (const text of [`${VIDEO}\nhttps://vm.tiktok.com/ZMsynth01/`, `${LL_LINK}\n${VIDEO}`]) {
     globalThis.fetch = stubFetch(() => assert.fail('nothing fetched'));
     const { toasts, ui } = fakeUi();
@@ -374,7 +374,7 @@ test('the input bar takes one TikTok video at a time; Settings → Import leaves
   const imports = [];
   await startAdd(`${LL_LINK}\n${VIDEO}`, { ...ui, showImport: (e) => imports.push(e) }, { severalLinks: true });
   assert.deepEqual(imports.map((e) => e.map((r) => r.name)), [['Synthetic Cafe']]);
-  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read. TikTok videos go in the input bar, one at a time.", 'info']]);
+  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read. Posts and videos go in the input bar, one at a time.", 'info']]);
 });
 
 /* ---------- The pin's posts ---------- */
