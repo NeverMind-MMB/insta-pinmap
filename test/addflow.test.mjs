@@ -723,3 +723,25 @@ test('Confirm place without any tag suggestion suggests want-to-go; with suggest
   assert.deepEqual(await suggested({}), ['#want-to-go']);
   assert.deepEqual(await suggested({ tagSuggestions: ['coffee', 'rome'] }), ['#coffee', '#rome']);
 });
+
+test('Drop pin plays the add-pin animation with the new pin\'s source (Apple Maps: its logo)', async () => {
+  const { wireConfirm } = await import('../web/js/addflow.js');
+  const { store, normalizeDb } = await import('../web/js/store.js');
+  const doc = confirmDocument();
+  globalThis.document = doc;
+  store.db = normalizeDb({});
+  try {
+    const looks = [];
+    const { ui } = fakeUi();
+    const appEnv = { ...ui, redraw() {}, inputDone() {}, pinwheel: (l) => looks.push(l) };
+    wireConfirm(appEnv);
+    await startAdd(LL_LINK, appEnv);
+    assert.deepEqual(looks, [], 'not before the pin is saved');
+    doc.getElementById('confirm-save').fire('click');
+    assert.deepEqual(looks, [{ logo: '/icons/sources/apple.svg', caption: '' }]);
+  } finally {
+    delete globalThis.document;
+    clearTimeout(store._saveTimer);
+    store._saveTimer = null;
+  }
+});

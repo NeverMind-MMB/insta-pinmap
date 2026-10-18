@@ -13,7 +13,7 @@ import {
   lookupState, lookupNotice, lookupButton, rememberRequested, copiedNotice,
 } from './appleplace.js';
 import { formatDay } from './extract.js';
-import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR } from './sources.js';
+import { SUPPORTED_SOURCES, issuesSearchUrl, siteOf, sourceColor, UNKNOWN_SOURCE_COLOR, pinLook } from './sources.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -817,6 +817,7 @@ function wireAppleLookup(guide, entries, onResults) {
  */
 export async function applyImport(entries, sourceName, env, tag = '', color = '') {
   let created = 0;
+  const createdSources = [];
   let skipped = 0;
   const failed = [];
   const radius = store.settings.radiusM;
@@ -883,6 +884,7 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
       color,
     });
     created++;
+    createdSources.push(e.source || 'import');
   }
 
   const saved = await store.save();
@@ -902,7 +904,22 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
     $('search').value = '';
     env.redraw?.();
     env.map?.fitTo(store.db.pins);
+    env.pinwheel?.(importLook(createdSources, sourceName));
   }
+}
+
+/**
+ * What the add-pin animation shows after an import: the source's logo when
+ * every new pin comes from one source with a logo, else the file or list name
+ * ("3 files" for several files) or how many places came in.
+ */
+export function importLook(pinSources, sourceName) {
+  const logos = new Set(pinSources.map((source) => pinLook(source).logo));
+  const [logo] = logos;
+  if (logos.size === 1 && logo) return { logo, caption: '' };
+  const files = (String(sourceName ?? '').match(IMPORT_FILE_EXTENSION) || []).length;
+  if (files > 1) return { logo: '', caption: `${files} files` };
+  return { logo: '', caption: sourceName || `${pinSources.length} places` };
 }
 
 /* ================================================================== *

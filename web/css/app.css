@@ -542,6 +542,58 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 .toast[data-kind="error"] { background: var(--danger); color: #fff; }
 
+/* ---------- Add-pin animation (the pinwheel, pinwheel.js) ---------- */
+
+.pinwheel {
+  --opin-pop: 1.15; /* how big the active pin pops (the owner's big-pin drawing) */
+  position: absolute; inset: 0; z-index: 900;
+  display: grid; place-content: center; justify-items: center;
+  pointer-events: none;
+}
+.pinwheel__svg { display: block; width: min(60vmin, 300px); height: min(60vmin, 300px); overflow: visible; }
+.pinwheel__spin { transform-origin: 250px 250px; }
+.pinwheel__pop { transform-origin: 250px 230px; }
+.pinwheel__upright { transform-origin: 250px 100px; transform: rotate(-60deg); }
+.pinwheel__caption {
+  margin: 4px 0 0; padding: 4px 12px; border-radius: 999px; max-width: min(60vmin, 300px);
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+  font-size: .875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pinwheel__caption:empty { display: none; }
+
+/* ms: 0 fade in · 150 turn −60° (active pin at the top) · 550 pop · 850 hold · 1450 back · 1750 turn on · 2150 fade out · 2350 */
+.pinwheel.is-playing { animation: pinwheel-fade 2350ms linear both; }
+.pinwheel.is-playing .pinwheel__spin { animation: pinwheel-spin 2350ms ease-in-out both; }
+.pinwheel.is-playing .pinwheel__pop { animation: pinwheel-pop 2350ms ease-in-out both; }
+.pinwheel.is-playing .pinwheel__upright { animation: pinwheel-upright 2350ms ease-in-out both; }
+
+@keyframes pinwheel-fade { 0% { opacity: 0; } 6.38%, 91.49% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pinwheel-spin {
+  0%, 6.38% { transform: rotate(0deg); }
+  23.4%, 74.47% { transform: rotate(-60deg); }
+  91.49%, 100% { transform: rotate(-120deg); }
+}
+@keyframes pinwheel-pop {
+  0%, 23.4% { transform: scale(1); }
+  36.17%, 61.7% { transform: scale(var(--opin-pop)); }
+  74.47%, 100% { transform: scale(1); }
+}
+/* The logo stays upright (other companies' logos are never rotated): it turns back what the pin turns. */
+@keyframes pinwheel-upright {
+  0%, 6.38% { transform: rotate(-60deg); }
+  23.4%, 74.47% { transform: rotate(0deg); }
+  91.49%, 100% { transform: rotate(60deg); }
+}
+@keyframes pinwheel-flash { 0% { opacity: 0; } 30%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Reduced motion: no turning or popping, a 600 ms fade of the still wheel (beats the global .01ms rule). */
+@media (prefers-reduced-motion: reduce) {
+  .pinwheel.is-playing { animation: pinwheel-flash 600ms linear both !important; }
+  .pinwheel.is-playing .pinwheel__spin,
+  .pinwheel.is-playing .pinwheel__pop,
+  .pinwheel.is-playing .pinwheel__upright { animation: none !important; }
+}
+
 /* ---------- Map pins ---------- */
 
 .pinmark {

@@ -149,3 +149,16 @@ test('index.html has no status ("Want to go / Been there") any more', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   assert.ok(!/Want to go|Been there|data-status=/i.test(html));
 });
+
+test('index.html: the pinwheel overlay over the map: five wheel pins plus the active one with the logo, hidden and aria-hidden', () => {
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  const map = html.slice(html.indexOf('id="view-map"'), html.indexOf('id="view-list"'));
+  const overlay = map.match(/<div class="pinwheel" id="pinwheel" aria-hidden="true" hidden>[\s\S]*?<\/svg>/)?.[0] || '';
+  assert.ok(overlay, 'the overlay sits in the map view');
+  assert.match(overlay, /d="M190\.52 138\.78A71 71 0 1 1 309\.48 138\.78L250 230ZM206 100a44 44 0 1 0 88 0a44 44 0 1 0 -88 0Z"/);
+  const wheel = overlay.match(/<g fill="#e22222">([\s\S]*?)<\/g>/)?.[1] || '';
+  assert.deepEqual([...wheel.matchAll(/rotate\((\d+) 250 250\)/g)].map((m) => m[1]), ['120', '180', '240', '300']);
+  assert.equal((wheel.match(/<use /g) || []).length, 5, 'five pins in the wheel; the top-right one is the active pin');
+  assert.match(overlay, /<g transform="rotate\(60 250 250\)">\s*<g class="pinwheel__pop">/);
+  assert.match(overlay, /<image class="pinwheel__logo"/);
+});

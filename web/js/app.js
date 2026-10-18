@@ -14,6 +14,7 @@ import { readFile } from './importers.js';
 import { isInstagramLink, shortcode } from './dedupe.js';
 import { findLinks } from './sources.js';
 import { isOldAddress, newAddressUrl } from './address.js';
+import { playPinwheel } from './pinwheel.js';
 import { readBackupText, needsBackupReminder } from './backup.js';
 import { APP_VERSION, compareVersions } from './version.js';
 import { checkForUpdate, installUpdate } from './update.js';
@@ -32,6 +33,7 @@ const env = {
   showDetail: (id) => showDetail(id, env),
   showImport: (e, n, guide) => showImport(e, n, env, guide),
   showUnsupported,
+  pinwheel: playPinwheel,
 };
 
 /* ================================================================== *

@@ -222,3 +222,18 @@ test('findLinks: every http(s) link, and words that start with a registered pref
     assert.deepEqual(findLinks(text), [], text);
   }
 });
+
+/* ---------- 2.1.0: the add-pin animation's logo or caption ---------- */
+
+test('pinLook: Google and Apple Maps show their logo; other sources their name as a caption', async () => {
+  const { pinLook } = await import('../web/js/sources.js');
+  assert.deepEqual(pinLook('google-csv'), { logo: '/icons/sources/google.png', caption: '' });
+  assert.deepEqual(pinLook('google-link'), { logo: '/icons/sources/google.png', caption: '' });
+  assert.deepEqual(pinLook('apple-guide'), { logo: '/icons/sources/apple.svg', caption: '' });
+  assert.deepEqual(pinLook('apple-ort'), { logo: '/icons/sources/apple.svg', caption: '' });
+  assert.deepEqual(pinLook('instagram'), { logo: '', caption: 'Instagram' });
+  assert.deepEqual(pinLook('gpx'), { logo: '', caption: 'GPS file' });
+  assert.deepEqual(pinLook('kml'), { logo: '', caption: 'Map file' });
+  assert.deepEqual(pinLook('manual'), { logo: '', caption: 'Place search' });
+  assert.deepEqual(pinLook('somewhere-else'), { logo: '', caption: '' });
+});

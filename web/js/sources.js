@@ -19,6 +19,8 @@ export function issuesSearchUrl(site) {
  * where "*" in the host stands for a domain ending ("com", "de", "co.uk").
  * Reading the link (post codes, coordinates, guides) comes after, in that
  * source's reader. A new source is one more entry.
+ *   name: what the add-pin animation says for it; logo: the image it shows instead (256 px box,
+ *   the mark inside the inscribed circle; other companies' logos are never rotated);
  *   color: the default colour of its pins (store.pinColor), from the palette in store.js;
  *   sources: the pin `source` values the readers write for it;
  *   guides: the prefixes of Apple guide links; short: those of short links the helper expands;
@@ -27,6 +29,7 @@ export function issuesSearchUrl(site) {
 export const SOURCE_GROUPS = [
   {
     id: 'instagram',
+    name: 'Instagram',
     color: '#8f4b6b',
     sources: ['instagram'],
     prefixes: [
@@ -38,6 +41,8 @@ export const SOURCE_GROUPS = [
   },
   {
     id: 'apple',
+    name: 'Apple Maps',
+    logo: '/icons/sources/apple.svg',
     color: '#3a6ea5',
     sources: ['apple-ort', 'apple-guide'],
     prefixes: ['maps.apple.com/guides', 'guides.apple.com/', 'maps.apple.com/'],
@@ -45,19 +50,27 @@ export const SOURCE_GROUPS = [
   },
   {
     id: 'google',
+    name: 'Google Maps',
+    logo: '/icons/sources/google.png',
     color: '#2f7d5d',
     sources: ['google-link', 'google-takeout', 'google-csv'],
     prefixes: ['google.*/maps', 'google.*/maps/placelists/', 'maps.google.*/', 'maps.app.goo.gl/', 'goo.gl/maps/'],
     short: ['maps.app.goo.gl/', 'goo.gl/maps/'],
     lists: ['google.*/maps/placelists/'],
   },
-  { id: 'gps', color: '#a3762b', sources: ['gpx'] },
-  { id: 'files', color: '#7a4b8f', sources: ['kml', 'geojson'] },
-  { id: 'search', color: '#b8543f', sources: ['manual'] },
+  { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
+  { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson'] },
+  { id: 'search', name: 'Place search', color: '#b8543f', sources: ['manual'] },
 ];
 
 /** The colour of pins from a source the table doesn't know. */
 export const UNKNOWN_SOURCE_COLOR = '#8a8f98';
+
+/** What the add-pin animation shows for a pin's `source`: its group's logo, or else its name as a caption. */
+export function pinLook(pinSource) {
+  const group = SOURCE_GROUPS.find((g) => g.sources.includes(pinSource));
+  return group?.logo ? { logo: group.logo, caption: '' } : { logo: '', caption: group?.name || '' };
+}
 
 /** A pin's default colour: that of the group its `source` value belongs to. */
 export function sourceColor(pinSource) {

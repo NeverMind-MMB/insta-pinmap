@@ -24,7 +24,7 @@ import {
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
-import { siteOf, sourceOf, sourceColor, findLinks } from './sources.js';
+import { siteOf, sourceOf, sourceColor, findLinks, pinLook } from './sources.js';
 import { colorPicker, pickedColor } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -760,6 +760,7 @@ async function save(env) {
   env.redraw();
   env.map?.goToPin(pin.id);
   env.toast(`"${pin.title}" saved.`, 'success');
+  env.pinwheel?.(pinLook(state.source));
 }
 
 /** Lets the user attach to one of the nearby pins, make a new pin, or cancel. */
