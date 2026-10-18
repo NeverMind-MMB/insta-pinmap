@@ -99,6 +99,26 @@ test('facebookTarget: other Facebook links, lookalikes and other sites are nothi
   }
 });
 
+test('web.facebook.com and mbasic.facebook.com links are Facebook\'s too: same key, read at www.facebook.com', async () => {
+  const { sourceOf } = await import('../web/js/sources.js');
+  const PFBID = 'pfbid0SyntheticSyntheticSynthetic1';
+  for (const host of ['web.facebook.com', 'mbasic.facebook.com']) {
+    const post = `https://${host}/SyntheticCafe/posts/${PFBID}`;
+    assert.equal(sourceOf(post), 'facebook', post);
+    assert.equal(isSocialLink(post), true, post);
+    assert.equal(postRequestKey(post), `fb:${PFBID}`, post);
+    assert.equal(canonicalPostLink(post), `https://www.facebook.com/SyntheticCafe/posts/${PFBID}`, post);
+    assert.equal(postRequestKey(`https://${host}/reel/1234567890123`), 'fb:1234567890123');
+    assert.deepEqual(facebookTarget(`https://${host}/SyntheticCafe`),
+      { kind: 'page', key: 'fb:page:syntheticcafe', aboutUrl: 'https://www.facebook.com/SyntheticCafe/about/' });
+    assert.equal(facebookTarget(`https://${host}/share/p/SynthShare1/`).url, 'https://www.facebook.com/share/p/SynthShare1/');
+    assert.equal(sourceOf(`https://${host}.evil.example/SyntheticCafe`), null, 'lookalike');
+    assert.equal(facebookTarget(`https://${host}.evil.example/SyntheticCafe`), null, 'lookalike');
+  }
+  assert.equal(sourceOf('https://evilweb.facebook.com.example/x'), null);
+  assert.equal(facebookTarget('https://touch.facebook.com.evil.example/SyntheticCafe'), null);
+});
+
 test('postRequestKey and socialPostKey: YouTube is yt:<id>; other links have none', () => {
   assert.equal(postRequestKey(`https://youtu.be/${YT}`), `yt:${YT}`);
   assert.equal(socialPostKey(`https://www.youtube.com/shorts/${YT}`), `yt:${YT}`);

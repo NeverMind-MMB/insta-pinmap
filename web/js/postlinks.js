@@ -59,6 +59,9 @@ export function youtubeId(link) {
   return YOUTUBE_ID.test(id) ? id : '';
 }
 
+/** Facebook's hosts as links name them (hostOf drops "www." and "m."); every one is read at www.facebook.com. */
+const FACEBOOK_LINK_HOSTS = new Set(['facebook.com', 'web.facebook.com', 'mbasic.facebook.com']);
+
 /** https://www.facebook.com/<path> with only the query parameters that name the post. */
 function facebookUrl(u, keep = []) {
   const q = new URLSearchParams();
@@ -82,7 +85,7 @@ export function facebookTarget(link) {
   if (host === 'fb.watch') {
     return SHARE_CODE.test(parts[0] || '') ? { kind: 'share', key: `fb:w:${parts[0]}`, url: `https://fb.watch/${parts[0]}/` } : null;
   }
-  if (host !== 'facebook.com') return null;
+  if (!FACEBOOK_LINK_HOSTS.has(host)) return null;
   const first = (parts[0] || '').toLowerCase();
   const param = (k) => u.searchParams.get(k) || '';
   const post = (id, keep = []) => (FACEBOOK_ID.test(id || '') ? { kind: 'post', key: `fb:${id}`, url: facebookUrl(u, keep) } : null);

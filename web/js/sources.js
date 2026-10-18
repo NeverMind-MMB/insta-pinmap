@@ -97,7 +97,7 @@ export const SOURCE_GROUPS = [
     color: '#2f7d7a',
     sources: ['facebook'],
     // Posts, reels, videos, share links and pages; the post reader (postlinks.js) tells them apart.
-    prefixes: ['facebook.com/', 'fb.watch/'],
+    prefixes: ['facebook.com/', 'web.facebook.com/', 'mbasic.facebook.com/', 'fb.watch/'],
   },
   { id: 'gps', name: 'GPS file', color: '#a3762b', sources: ['gpx'] },
   { id: 'files', name: 'Map file', color: '#7a4b8f', sources: ['kml', 'geojson', 'csv'] },
