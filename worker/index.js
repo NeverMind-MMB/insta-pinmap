@@ -99,6 +99,7 @@ async function handleInstagram(url, request, bindings, deps) {
   return json({
     ok: true, shortcode: post.shortcode, caption: post.caption, username: post.username,
     postedAt: post.postedAt || '', thumb,
+    ...(post.location ? { location: post.location } : {}),
   }, 200, difficultyHeader);
 }
 
