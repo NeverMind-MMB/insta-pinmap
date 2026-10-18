@@ -153,6 +153,24 @@ test('/api/list: a list Google doesn\'t show (private, deleted, made up) is 404 
   assert.match(body.message, /Anyone with the link/);
 });
 
+test('/api/list: Google\'s answer is parsed once, also when it holds no list (CPU near the 1.5 MB cap)', async () => {
+  const parse = JSON.parse;
+  for (const [answer, status] of [[`)]}'\n[null,null,[4,"${LIST_ID}"]]`, 404], [`)]}'\n[{"no":"list"}]`, 502], [TWO_PLACES, 200]]) {
+    let parsed = 0;
+    JSON.parse = (text, ...rest) => {
+      if (typeof text === 'string' && text.startsWith('[')) parsed++;
+      return parse(text, ...rest);
+    };
+    try {
+      const res = await handleRequest(listRequest(PLACELIST_LINK), bindings(), googleFetch(answer));
+      assert.equal(res.status, status, answer.slice(0, 30));
+    } finally {
+      JSON.parse = parse;
+    }
+    assert.equal(parsed, 1, answer.slice(0, 30));
+  }
+});
+
 test('/api/list: Google failing (error status, a redirect, junk, no network) is 502 with a fixed message', async () => {
   const cases = [
     googleFetch('server error', 500),

@@ -59,8 +59,8 @@ export async function readCapped(res, max = MAX_ANSWER_BYTES) {
   return new TextDecoder().decode(all);
 }
 
-/** getlist's JSON, or undefined when the text is none. */
-function readAnswer(text) {
+/** getlist's JSON, or undefined when the text is none. Parse it once, then ask listOfAnswer and isMissingAnswer. */
+export function readListAnswer(text) {
   try {
     return JSON.parse(String(text ?? '').replace(/^\)\]\}'\s*/, ''));
   } catch {
@@ -97,7 +97,11 @@ function placeUrl(featureId, lat, lon) {
  * one without name, address and coordinates is left out.
  */
 export function parseGoogleList(text) {
-  const data = readAnswer(text);
+  return listOfAnswer(readListAnswer(text));
+}
+
+/** parseGoogleList for an answer already parsed (readListAnswer). */
+export function listOfAnswer(data) {
   const L = Array.isArray(data) ? data[0] : null;
   if (!Array.isArray(L)) return null;
   const places = [];
@@ -114,8 +118,7 @@ export function parseGoogleList(text) {
   return { title: plainText(L[4], MAX_LENGTH.title, true), total, places };
 }
 
-/** True for getlist's answer about a list it doesn't show (private, deleted, made up): [null, null, [4, "<id>"]]. */
-export function isMissingList(text) {
-  const data = readAnswer(text);
+/** True for getlist's answer (parsed, readListAnswer) about a list it doesn't show (private, deleted, made up): [null, null, [4, "<id>"]]. */
+export function isMissingAnswer(data) {
   return Array.isArray(data) && data[0] === null;
 }

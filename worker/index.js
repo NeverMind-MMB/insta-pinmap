@@ -21,7 +21,7 @@ import { ticketMinute } from '../web/js/ticket.js';
 import versionInfo from '../web/version.json' with { type: 'json' };
 import { readAppleGuide, isAppleGuideLink, appleIdLink } from '../web/js/importers.js';
 import { googleListId } from '../web/js/googlelist.js';
-import { getlistUrl, parseGoogleList, isMissingList, readCapped } from './googlelist.js';
+import { getlistUrl, readListAnswer, listOfAnswer, isMissingAnswer, readCapped } from './googlelist.js';
 import { readPost } from './post.js';
 import { postRequestKey } from '../web/js/postlinks.js';
 import { tiktokPostKey } from '../web/js/tiktok.js';
@@ -255,9 +255,11 @@ async function handleList(url, request, bindings, deps) {
       message: "This Google Maps list is too big to read here. Import the list's file from Google Takeout in Settings → Import.",
     }, 502);
   }
-  const list = parseGoogleList(answer);
+  // Parsed once: up to 1.5 MB of JSON is most of the request's CPU time.
+  const data = readListAnswer(answer);
+  const list = listOfAnswer(data);
   if (list) return json({ ok: true, ...list });
-  if (isMissingList(answer)) {
+  if (isMissingAnswer(data)) {
     return json({
       ok: false, reason: 'not-found',
       message: `This Google Maps list can't be read. Only lists shared with "Anyone with the link" can be imported.`,
