@@ -71,6 +71,11 @@
 </main>
 
 <!-- Input bar: always reachable, this is the main way into the app -->
+<div class="reminder" id="move-reminder" role="status" hidden>
+  <span>oPin has moved to a new address. Your pins are stored at this address only: 1. Save a backup here. 2. Open the new address and add it to your Home Screen. 3. There: Settings → Import → choose the backup.</span>
+  <button type="button" class="btn btn--small" id="move-save">Save backup</button>
+  <a class="btn btn--small btn--primary" id="move-open" target="_blank" rel="noopener">Open the new address</a>
+</div>
 <div class="reminder" id="backup-reminder" role="status" hidden>
   <span id="backup-reminder-text"></span>
   <button type="button" class="btn btn--small btn--primary" id="backup-reminder-save">Save backup</button>

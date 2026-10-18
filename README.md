@@ -103,6 +103,13 @@ Your pins are stored in the app on your phone. Nothing is uploaded.
 - If your last backup is older than 30 days, the app reminds you.
 - Removing the app from the home screen deletes its pins. Save a backup first.
 
+### Moving from the old address
+
+oPin used to be Insta Pinmap at `insta-pinmap.<subdomain>.workers.dev`; it now lives at
+`opin.<subdomain>.workers.dev`. Pins are stored per address, so the old address keeps working
+and shows a banner: **Save backup** there, open the new address (**Open the new address**) and
+add it to your Home Screen, then there **Settings → Import → choose the backup**.
+
 ## Apple Guides
 
 An Apple Guide link carries the name and coordinates of places you added as an
@@ -238,7 +245,7 @@ Cloudflare account: your Worker, your limits. It takes about 15 minutes.
    and provide it as the environment variables `CLOUDFLARE_API_TOKEN` and
    `CLOUDFLARE_ACCOUNT_ID`. Keep the token private and never put it in a file
    that goes into git.
-5. Optional: change `name = "insta-pinmap"` in `wrangler.toml` — the name is part
+5. Optional: change `name = "opin"` in `wrangler.toml` — the name is part
    of your address. If another Worker on your account already uses rate-limit
    namespace `1001` or `1002`, change those numbers too (see "Rate limits").
 6. Deploy: `npx --yes wrangler@4 deploy`. At the end it prints your address,
@@ -253,7 +260,8 @@ author's copy for a guide's place links when you share a guide from the Maps
 app. Change that once:
 
 1. In the Shortcuts app, tap **•••** on **Fetch Apple Guide** to edit it.
-2. Find the **URL** action with `workers.dev/api/guide?link=` in it.
+2. Find the **URL** action with `/api/guide?link=` in it; as shared it points at the author's copy,
+   `https://opin.<subdomain>.workers.dev`.
 3. Replace the address in front of `/api/guide` with yours, so it starts with
    `https://<name>.<your-subdomain>.workers.dev/api/guide?link=`. Leave the rest
    of the action as it is.
