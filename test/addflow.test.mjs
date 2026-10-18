@@ -745,3 +745,10 @@ test('Drop pin plays the add-pin animation with the new pin\'s source (Apple Map
     store._saveTimer = null;
   }
 });
+
+test('waiting for the helper shows the pinwheel turning in a "busy" toast (here: resolving a short link)', async () => {
+  stubResolve(() => ({ ok: false, message: "This short link doesn't lead anywhere." }));
+  const { toasts, ui } = fakeUi();
+  await startAdd('https://maps.app.goo.gl/deadLink123', ui);
+  assert.deepEqual(toasts[0], ['Resolving the short link …', 'busy']);
+});

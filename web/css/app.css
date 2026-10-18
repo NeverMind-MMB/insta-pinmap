@@ -541,6 +541,16 @@ input[type="file"] { border: 1px dashed var(--border); padding: 12px; background
 }
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 .toast[data-kind="error"] { background: var(--danger); color: #fff; }
+/* Waiting for the helper: the pinwheel turns in 60° steps in front of the text. */
+.toast[data-kind="busy"]::before {
+  content: ''; display: inline-block; width: 1.25em; height: 1.25em; margin: -.25em .5em -.25em 0;
+  vertical-align: middle; background: url(/icons/icon.svg) center / contain no-repeat;
+  animation: pinwheel-steps 1.2s steps(6) infinite;
+}
+@keyframes pinwheel-steps { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .toast[data-kind="busy"]::before { animation: none !important; }
+}
 
 /* ---------- Add-pin animation (the pinwheel, pinwheel.js) ---------- */
 

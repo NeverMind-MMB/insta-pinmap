@@ -132,7 +132,7 @@ async function addFromInstagram(link, env) {
   }
 
   // 2) Fetch the caption
-  env.toast('Reading the post …', 'info', 15000);
+  env.toast('Reading the post …', 'busy', 15000);
   let ig;
   try {
     ig = await fetchPost(code);
@@ -417,7 +417,7 @@ async function addFromMapLink(link, env, resolved = false) {
   // Resolved at most once: an answer that is again a short link is not sent back.
   if (!resolved && !Number.isFinite(e0.lat) && isGoogleShortLink(e0.url || link)) {
     const sent = e0.url || link;
-    env.toast('Resolving the short link …', 'info', 8000);
+    env.toast('Resolving the short link …', 'busy', 8000);
     const j = await resolveShortLink(sent);
     env.hideToast?.();
     if (j.ok && j.url && j.url !== sent) return addFromMapLink(j.url, env, true);
