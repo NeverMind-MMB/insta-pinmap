@@ -270,6 +270,7 @@ export const SUPPORTED_SOURCES = [
       'Google Maps saved places and lists (files from the Google Takeout zip)',
       'Google My Maps and Google Earth maps',
       "GPS files (GPX) from Komoot, Strava, Garmin and other outdoor apps (their waypoints and a route's start point)",
+      'Spreadsheets (CSV, TSV) with coordinate or address columns',
       'Other map files (GeoJSON)',
       'oPin backups',
     ],

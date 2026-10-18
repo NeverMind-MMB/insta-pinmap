@@ -110,6 +110,11 @@ const FILE_SAMPLES = {
     file('Want to go.csv',
       'Title,Note,URL\nSynthetic Bar,,https://www.google.com/maps/place/Synthetic+Bar/@45.4,9.2,17z/data=!3d45.4719!4d9.1721\n'),
   ],
+  'Spreadsheets (CSV, TSV) with coordinate or address columns': [
+    file('places.csv', 'Name,Latitude,Longitude\nSynthetic Cafe,48.1371,11.5754\n'),
+    file('places.tsv', 'Name\tAddress\nSynthetic Museum\tTeststrasse 1, 80331 Testtown\n'),
+    file('orte.csv', 'Name;Breite;Länge\nSynthetic Lake;47,5;11,1\n'),
+  ],
   'Other map files (GeoJSON)': [file('places.geojson', geojson({ type: 'Point', coordinates: [11.5, 48.1] }))],
   'oPin backups': [file('backup.json', JSON.stringify({ version: 1, pins: [], tags: [], deleted: [] }))],
 };
@@ -371,4 +376,12 @@ test('every source logo is a file in web/', async () => {
   const logos = SOURCE_GROUPS.filter((group) => group.logo).map((group) => group.logo);
   assert.ok(logos.length >= 3);
   for (const logo of logos) assert.ok(existsSync(new URL(`../web${logo}`, import.meta.url)), logo);
+});
+
+test('Supported links and files and the Settings import help name CSV/TSV spreadsheets', async () => {
+  assert.ok(group('files').items.includes('Spreadsheets (CSV, TSV) with coordinate or address columns'));
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  const help = html.match(/<legend>Import<\/legend>\s*<p class="field__help">([\s\S]*?)<\/p>/)[1].replace(/\s+/g, ' ');
+  assert.match(help, /spreadsheets \(CSV\/TSV\)/);
 });
