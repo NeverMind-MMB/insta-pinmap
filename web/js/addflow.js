@@ -24,7 +24,8 @@ import {
 } from './appleplace.js';
 import { searchPlaces } from './geocode.js';
 import { fetchPost, resolveShortLink } from './api.js';
-import { siteOf, sourceOf, sourceColor, findLinks, pinLook } from './sources.js';
+import { siteOf, sourceOf, sourceColor, findLinks, pinLook, linkSourceName } from './sources.js';
+import { isTikTokLink, isTikTokShortLink, tiktokVideo, readTikTok, findTikTokPost, tiktokEmbed } from './tiktok.js';
 import { colorPicker, pickedColor } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -67,6 +68,10 @@ export async function startAdd(input, env, { severalLinks = false } = {}) {
   // The link's source, by its prefix (sources.js), picks the reader.
   if (isInstagramLink(candidateLink)) {
     return addFromInstagram(candidateLink, env);
+  }
+
+  if (isTikTokLink(candidateLink)) {
+    return addFromTikTok(candidateLink, env);
   }
 
   if (isMapLink(candidateLink)) {
@@ -155,6 +160,64 @@ async function addFromInstagram(link, env) {
     igError: ig.ok ? null : ig,
     titleSuggestion: candidates[0]?.text || '',
     whenSuggestion: eventDate(caption, { postedAt })?.text || '',
+    candidates,
+    countries,
+    hintedCountries,
+    searchPrefill: cleanedText(caption),
+    tagSuggestions: tagSuggestions(caption, store.settings.customStopTags),
+    env,
+  });
+}
+
+/* ================================================================== *
+ * TikTok
+ * ================================================================== */
+
+/** "You already saved this post": opens the pin that has it. @returns {boolean} true when it is saved */
+function tellSaved(existing, env) {
+  if (!existing) return false;
+  env.toast(`You already saved this post: "${existing.pin.title}"`, 'info');
+  env.inputDone?.();
+  env.map?.goToPin(existing.pin.id);
+  env.showDetail?.(existing.pin.id);
+  return true;
+}
+
+/**
+ * A TikTok video or photo post: its caption (oEmbed, straight from the phone; a short
+ * link oEmbed refuses goes through the Worker first) → place candidates → Confirm place.
+ * The video's link goes on the pin as a post, like an Instagram post.
+ */
+async function addFromTikTok(link, env) {
+  const video = tiktokVideo(link);
+  if (!video && !isTikTokShortLink(link)) {
+    env.toast("This TikTok link isn't a video.", 'error');
+    return;
+  }
+  if (video && tellSaved(findTikTokPost(store.db, video.id), env)) return;
+
+  env.toast('Reading the video …', 'busy', 15000);
+  let tt;
+  try {
+    tt = await readTikTok(link, { resolve: resolveShortLink });
+  } finally {
+    env.hideToast?.();
+  }
+  // No video behind the link (a dead short link, no network while expanding it): nothing to pin.
+  if (!tt.id) {
+    env.toast(tt.message, 'error', 6000);
+    return;
+  }
+  if (!video && tellSaved(findTikTokPost(store.db, tt.id), env)) return;
+
+  const caption = tt.ok ? tt.caption : '';
+  const { candidates, countries, hintedCountries } = placeCandidates(caption, { username: tt.username });
+  return openConfirm({
+    source: 'tiktok',
+    post: { url: tt.url, caption, username: tt.username, thumb: '', postedAt: tt.postedAt },
+    igError: tt.ok ? null : tt,
+    titleSuggestion: candidates[0]?.text || '',
+    whenSuggestion: eventDate(caption, { postedAt: tt.postedAt })?.text || '',
     candidates,
     countries,
     hintedCountries,
@@ -272,9 +335,10 @@ function appleIdOnly(link) {
  * once: their places as import rows, and the Apple IDs of Apple links without
  * coordinates that name their place by ID (each ID once). Guide links stay out:
  * a guide goes its own way, with its title.
- * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number, instagram: number}}
+ * @returns {{entries: Array, appleIds: string[], links: number, skipped: number, distinct: number, instagram: number, tiktok: number}}
  *   links: how many brought a place; skipped: how many other links (guides, links it can't read);
- *   distinct: how many different links the paste has; instagram: how many of them are Instagram posts
+ *   distinct: how many different links the paste has; instagram: how many of them are Instagram posts;
+ *   tiktok: how many are TikTok links
  */
 function placeLinks(text) {
   const entries = [];
@@ -283,10 +347,12 @@ function placeLinks(text) {
   let links = 0;
   let skipped = 0;
   let instagram = 0;
+  let tiktok = 0;
   for (const link of findLinks(text)) {
     if (seen.has(link)) continue;
     seen.add(link);
     if (isInstagramLink(link)) instagram++;
+    if (isTikTokLink(link)) tiktok++;
     let parsed = null;
     try {
       parsed = isAppleGuideLink(link) ? null : readLink(link);
@@ -303,13 +369,14 @@ function placeLinks(text) {
     }
     links++;
   }
-  return { entries, appleIds, links, skipped, distinct: seen.size, instagram };
+  return { entries, appleIds, links, skipped, distinct: seen.size, instagram, tiktok };
 }
 
-/** The toast for the links a list of place links left out; Instagram posts go in the input bar. */
-function skippedNotice(skipped, instagram) {
+/** The toast for the links a list of place links left out; Instagram posts and TikTok videos go in the input bar. */
+function skippedNotice(skipped, instagram, tiktok = 0) {
   const notice = `Skipped ${skipped} ${skipped === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read.`;
-  return instagram ? `${notice} Instagram posts go in the input bar, one at a time.` : notice;
+  if (instagram) return `${notice} Instagram posts go in the input bar, one at a time.`;
+  return tiktok ? `${notice} TikTok videos go in the input bar, one at a time.` : notice;
 }
 
 /**
@@ -322,7 +389,7 @@ function skippedNotice(skipped, instagram) {
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
 function addFromPlaceLinks(text, env, severalLinks) {
-  const { entries, appleIds, links, skipped, distinct, instagram } = placeLinks(text);
+  const { entries, appleIds, links, skipped, distinct, instagram, tiktok } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
   const pending = appleIds.length && !entries.length && !skipped ? loadPendingGuide() : null;
@@ -338,15 +405,16 @@ function addFromPlaceLinks(text, env, severalLinks) {
     if (distinct < 2 || isAppleGuideLink(text.split(/\r?\n/, 1)[0].trim())) return false;
     env.toast(instagram
       ? 'One Instagram post at a time: paste each link on its own.'
-      : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
+      : tiktok ? 'One TikTok video at a time: paste each link on its own.'
+        : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
     return true;
   }
-  if (links < 2 && !(instagram && distinct >= 2)) return false;
+  if (links < 2 && !((instagram || tiktok) && distinct >= 2)) return false;
   if (links) {
     const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
     env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
   }
-  if (skipped) env.toast(skippedNotice(skipped, instagram), 'info', 6000);
+  if (skipped) env.toast(skippedNotice(skipped, instagram, tiktok), 'info', 6000);
   if (links) env.inputDone?.();
   return true;
 }
@@ -476,9 +544,11 @@ export async function openConfirm(cfg) {
     errorBox.open = true;
     $('confirm-error-text').textContent =
       cfg.igError.message || 'Unknown reason.';
-    const embed = embedLink(cfg.post?.url);
+    const site = linkSourceName(cfg.post?.url) || 'Instagram';
+    $('confirm-error-title').textContent = `Could not read the ${site} text`;
+    const embed = embedLink(cfg.post?.url) || tiktokEmbed(cfg.post?.url);
     $('confirm-embed').innerHTML = embed
-      ? `<iframe src="${embed}" loading="lazy" title="Instagram post"
+      ? `<iframe src="${embed}" loading="lazy" title="${site} post"
            referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>`
       : '';
   } else {

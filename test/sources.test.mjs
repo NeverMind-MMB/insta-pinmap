@@ -1,9 +1,10 @@
 // test/sources.test.mjs — the "Supported links and files" list (web/js/sources.js), checked against the code that reads them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUPPORTED_SOURCES, ISSUES_URL, issuesSearchUrl, siteOf } from '../web/js/sources.js';
+import { SUPPORTED_SOURCES, ISSUES_URL, issuesSearchUrl, siteOf, linkIs } from '../web/js/sources.js';
 import { isMapLink } from '../web/js/addflow.js';
 import { isInstagramLink } from '../web/js/dedupe.js';
+import { isTikTokLink, tiktokVideo } from '../web/js/tiktok.js';
 import { readLink, readFile } from '../web/js/importers.js';
 import { ugLink, pbText, pbIdRef, pbPin } from './ug.mjs';
 
@@ -22,6 +23,10 @@ const LINK_SAMPLES = {
   'maps.google.com/…': ['https://maps.google.com/?q=45.4719,9.1721'],
   'maps.app.goo.gl/…': ['https://maps.app.goo.gl/synthetic1'],
   'goo.gl/maps/…': ['https://goo.gl/maps/synthetic2'],
+  'tiktok.com/@…/video/…': ['https://www.tiktok.com/@synthetic.user/video/7560000000000004242'],
+  'vm.tiktok.com/…': ['https://vm.tiktok.com/ZMsynth01/'],
+  'vt.tiktok.com/…': ['https://vt.tiktok.com/ZSsynth02/'],
+  'tiktok.com/t/…': ['https://www.tiktok.com/t/ZTsynth03/'],
 };
 
 const group = (id) => SUPPORTED_SOURCES.find((g) => g.id === id);
@@ -37,6 +42,10 @@ test('every link form listed for the input bar is one the input bar reads', () =
     assert.ok(samples, `${item}: add a sample link to this test`);
     for (const link of samples) {
       if (isInstagramLink(link)) continue;
+      if (isTikTokLink(link)) {
+        assert.ok(tiktokVideo(link) || linkIs(link, 'short'), `${item}: ${link} is a TikTok video or short link`);
+        continue;
+      }
       assert.ok(isMapLink(link), `${item}: ${link} goes the map-link way`);
       assert.doesNotThrow(() => readLink(link), `${item}: ${link}`);
     }
@@ -116,7 +125,7 @@ const { isAppleGuideLink, isGoogleShortLink } = await import('../web/js/importer
 
 test('sourceOf: every prefix in the table maps to its group', () => {
   const linked = SOURCE_GROUPS.filter((g) => g.prefixes?.length);
-  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google']);
+  assert.deepEqual(linked.map((g) => g.id), ['instagram', 'apple', 'google', 'tiktok']);
   for (const g of linked) {
     for (const prefix of g.prefixes) assert.equal(sourceOf(`https://${prefix.replace('*', 'com')}x`), g.id, prefix);
   }
@@ -181,7 +190,7 @@ test('source colours: each source value the app writes gets its group\'s colour;
   const want = {
     instagram: '#8f4b6b', 'apple-ort': '#3a6ea5', 'apple-guide': '#3a6ea5',
     'google-link': '#2f7d5d', 'google-takeout': '#2f7d5d', 'google-csv': '#2f7d5d',
-    gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f',
+    gpx: '#a3762b', kml: '#7a4b8f', geojson: '#7a4b8f', manual: '#b8543f', tiktok: '#5a5f8f',
   };
   for (const [source, color] of Object.entries(want)) assert.equal(sourceColor(source), color, source);
   for (const source of ['import', 'somewhere-else', '', undefined]) assert.equal(sourceColor(source), '#8a8f98', String(source));
@@ -189,7 +198,7 @@ test('source colours: each source value the app writes gets its group\'s colour;
 
 test('source colours: one per group, all different, all from the pin colour palette', () => {
   const colors = SOURCE_GROUPS.map((g) => g.color);
-  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id), ['instagram', 'apple', 'google', 'gps', 'files', 'search']);
+  assert.deepEqual(SOURCE_GROUPS.map((g) => g.id), ['instagram', 'apple', 'google', 'tiktok', 'gps', 'files', 'search']);
   assert.equal(new Set(colors).size, colors.length);
   for (const c of colors) assert.ok(PIN_COLORS.some((p) => p.color === c), c);
 });

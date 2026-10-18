@@ -28,10 +28,11 @@ const COLORS = [
   '#c0603f', '#2f7d7a', '#8f4b6b', '#4f7a2b', '#5a5f8f',
 ];
 
-/** The pin colours to choose from (pin colour picker): eight of the colours above, with names. */
+/** The pin colours to choose from (pin colour picker): colours from the list above, with names. */
 export const PIN_COLORS = [
   { name: 'Rust', color: '#b8543f' }, { name: 'Amber', color: '#a3762b' }, { name: 'Olive', color: '#4f7a2b' },
   { name: 'Green', color: '#2f7d5d' }, { name: 'Teal', color: '#2f7d7a' }, { name: 'Blue', color: '#3a6ea5' },
+  { name: 'Slate', color: '#5a5f8f' },
   { name: 'Purple', color: '#7a4b8f' }, { name: 'Plum', color: '#8f4b6b' },
 ];
 
@@ -185,7 +186,8 @@ export const store = {
     this.change((db) => {
       const pin = db.pins.find((p) => p.id === pinId);
       if (!pin) return;
-      pin.posts = (pin.posts || []).filter((x) => shortcode(x.url) !== code);
+      // A post without an Instagram shortcode (TikTok) goes by its link.
+      pin.posts = (pin.posts || []).filter((x) => (code ? shortcode(x.url) !== code : x.url !== url));
       pin.updatedAt = new Date().toISOString();
     });
   },
