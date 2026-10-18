@@ -27,6 +27,9 @@ export function isGoogleList(link) {
   return linkIs(link, 'lists') || googleListId(link) !== '';
 }
 
+/** Says a Google Maps list goes in on its own (the batch toast in addflow.js, the import's summary in ui.js). */
+export const LISTS_ALONE = 'Google Maps lists go in on their own: paste one list link at a time.';
+
 /**
  * Import rows for the places /api/list sent: all checked, source "google-list".
  * A place without a name takes the first part of its address; one without

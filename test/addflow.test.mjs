@@ -685,10 +685,28 @@ test('the input bar: a Google link with search text searches for that text; with
   }
 });
 
-test('Settings → Import: a Google Maps list link is left out of a list of place links', async () => {
+const LIST_ALONE = 'Google Maps lists go in on their own: paste one list link at a time.';
+const SYNTHETIC_LIST_ID = 'AbCdEf1234567890xyz';
+
+test('Settings → Import: a Google Maps list link is left out of a list of place links, and the toast names it', async () => {
   const { imports, toasts } = await readInSettings([LL_LINK, PLACE_ID_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n'));
   assert.equal(imports[0].e.length, 2);
-  assert.deepEqual(toasts, [["Skipped 1 link that isn't a place link this app can read.", 'info']]);
+  assert.deepEqual(toasts, [[`Skipped 1 Google Maps list. ${LIST_ALONE}`, 'info']]);
+});
+
+test('Settings → Import: a list\'s resolved address never becomes a "Google place" row; lists and other links are named apart', async () => {
+  const resolvedList = `https://www.google.com/maps/@/data=!3m1!4b1!4m3!11m2!2s${SYNTHETIC_LIST_ID}!3e3`;
+  let { imports, toasts } = await readInSettings([LL_LINK, PLACE_ID_LINK, resolvedList, 'https://example.com/x'].join('\n'));
+  assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe', 'Synthetic Lake']);
+  assert.deepEqual(toasts, [[`Skipped 1 link that isn't a place link this app can read and 1 Google Maps list. ${LIST_ALONE}`, 'info']]);
+  // One place link and one list: the list isn't dropped without a word.
+  ({ imports, toasts } = await readInSettings([LL_LINK, 'https://www.google.com/maps/placelists/list/AbCdEf123'].join('\n')));
+  assert.deepEqual(imports[0].e.map((r) => r.name), ['Synthetic Cafe']);
+  assert.deepEqual(toasts, [[`Skipped 1 Google Maps list. ${LIST_ALONE}`, 'info']]);
+  // Two lists: no dialog, the toast says how.
+  ({ imports, toasts } = await readInSettings(['https://www.google.com/maps/placelists/list/AbCdEf123', resolvedList].join('\n')));
+  assert.deepEqual(imports, []);
+  assert.deepEqual(toasts, [[`Skipped 2 Google Maps lists. ${LIST_ALONE}`, 'info']]);
 });
 
 test('the input bar: a link without its scheme inside text is still found (instagram.com/p/…, maps.app.goo.gl/…)', async () => {

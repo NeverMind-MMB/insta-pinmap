@@ -18,7 +18,7 @@ import { placeCandidates, scoreMatches, tagSuggestions, cleanedText, flagEmoji, 
 import {
   readLink, appleIdEntries, isAppleGuideLink, isGoogleShortLink, UNNAMED_GOOGLE_PLACE,
 } from './importers.js';
-import { isGoogleList, addFromGoogleList } from './googlelist.js';
+import { isGoogleList, addFromGoogleList, LISTS_ALONE } from './googlelist.js';
 import {
   looksLikeGuidePage, parseGuidePage, guidePageTitle, guidePlaceRow, applyPasteToGuide,
   loadPendingGuide, parseShortcutPages, missingAppleIds, parseShortcutResults,
@@ -507,12 +507,21 @@ function placeLinks(text) {
   let readable = 0;
   let social = 0;
   let posts = 0;
+  let lists = 0;
   for (const link of findLinks(text)) {
     if (seen.has(link)) continue;
     seen.add(link);
     if (isSocialSource(link)) social++;
     const post = isReadablePost(link);
     if (post) posts++;
+    // A Google Maps list (also its resolved address, which readLink would take for a
+    // place without coordinates) goes in on its own, never as a row of a batch.
+    if (isGoogleList(link)) {
+      readable++;
+      skipped++;
+      lists++;
+      continue;
+    }
     let parsed = null;
     try {
       parsed = isAppleGuideLink(link) ? null : readLink(link);
@@ -530,7 +539,7 @@ function placeLinks(text) {
     }
     links++;
   }
-  return { entries, appleIds, links, skipped, distinct: seen.size, readable, social, posts };
+  return { entries, appleIds, links, skipped, distinct: seen.size, readable, social, posts, lists };
 }
 
 /** A link that gives a place (also by Apple ID), a guide, a Google list or a post or video. */
@@ -555,9 +564,17 @@ function isReadablePost(link) {
   return isSocialLink(link) && Boolean(postRequestKey(link));
 }
 
-/** The toast for the links a list of place links left out; posts and videos go in the input bar. */
-function skippedNotice(skipped, social) {
-  const notice = `Skipped ${skipped} ${skipped === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read.`;
+/**
+ * The toast for the links a list of place links left out (`lists` of them Google Maps
+ * lists, named apart); posts and videos go in the input bar.
+ */
+function skippedNotice(skipped, social, lists = 0) {
+  const other = skipped - lists;
+  const parts = [];
+  if (other) parts.push(`${other} ${other === 1 ? "link that isn't a place link" : "links that aren't place links"} this app can read`);
+  if (lists) parts.push(`${lists} Google Maps ${lists === 1 ? 'list' : 'lists'}`);
+  let notice = `Skipped ${parts.join(' and ')}.`;
+  if (lists) notice += ` ${LISTS_ALONE}`;
   return social ? `${notice} Posts and videos go in the input bar, one at a time.` : notice;
 }
 
@@ -574,7 +591,7 @@ function skippedNotice(skipped, social) {
  * @returns {boolean} false for fewer than two (one link goes on as before)
  */
 function addFromPlaceLinks(text, env, severalLinks) {
-  const { entries, appleIds, links, skipped, distinct, readable, social, posts } = placeLinks(text);
+  const { entries, appleIds, links, skipped, distinct, readable, social, posts, lists } = placeLinks(text);
   // The place links "Look up with iPhone Shortcut" copied, pasted before the
   // Shortcut is done (iOS may have reloaded the app): back to the waiting guide.
   const pending = appleIds.length && !entries.length && !skipped ? loadPendingGuide() : null;
@@ -593,12 +610,12 @@ function addFromPlaceLinks(text, env, severalLinks) {
       : 'Several map links? Paste them in Settings → Import (one per line), or import a file there.', 'info', 8000);
     return true;
   }
-  if (links < 2 && !(social && distinct >= 2)) return false;
+  if (links < 2 && !((social || lists) && distinct >= 2)) return false;
   if (links) {
     const guide = appleIds.length ? { title: '', link: '', entries, appleIds } : null;
     env.showImport?.(guide ? guideImportEntries(guide) : entries, '', guide);
   }
-  if (skipped) env.toast(skippedNotice(skipped, social), 'info', 6000);
+  if (skipped) env.toast(skippedNotice(skipped, social, lists), 'info', 6000);
   if (links) env.inputDone?.();
   return true;
 }

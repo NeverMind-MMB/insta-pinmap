@@ -8,6 +8,7 @@ import { searchPlaces } from './geocode.js';
 import { resolveShortLink } from './api.js';
 import { googleCoordinates, googlePlaceName, isAppleIdLink, isGoogleShortLink, skippedPlacesNotice } from './importers.js';
 import { needsMapAppLookup, lookUpMapAppEntry } from './maplinks.js';
+import { isGoogleList, LISTS_ALONE } from './googlelist.js';
 import {
   SHORTCUT_RUN_URL, SHORTCUT_INSTALL_URL, applyPasteToGuide, appleIdOf,
   savePendingGuide, clearPendingGuide, shortcutInput, foundAppleIds, missingAppleIds,
@@ -826,6 +827,7 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
   let created = 0;
   const createdSources = [];
   let skipped = 0;
+  let lists = 0;
   const failed = [];
   const radius = store.settings.radiusM;
   const fieldTag = cleanTag(tag);
@@ -855,6 +857,11 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
     // Resolve short link
     if (!Number.isFinite(lat) && e.url && isGoogleShortLink(e.url)) {
       const j = await resolveShortLink(e.url);
+      // A list's short link looks like a place's until it is resolved: no row of its own.
+      if (j.ok && j.url && isGoogleList(j.url)) {
+        lists++;
+        continue;
+      }
       if (j.ok && j.url) {
         const k = googleCoordinates(j.url);
         if (k) { lat = k.lat; lon = k.lon; }
@@ -914,7 +921,8 @@ export async function applyImport(entries, sourceName, env, tag = '', color = ''
   const parts = [`${created} ${created === 1 ? 'place' : 'places'} imported`];
   if (skipped) parts.push(`${skipped} skipped as duplicates`);
   if (failed.length) parts.push(`${failed.length} left without coordinates`);
-  toast(parts.join(', ') + '.', failed.length ? 'error' : 'success', 6000);
+  if (lists) parts.push(`${lists} Google Maps ${lists === 1 ? 'list' : 'lists'} left out`);
+  toast(parts.join(', ') + '.' + (lists ? ` ${LISTS_ALONE}` : ''), failed.length ? 'error' : lists ? 'info' : 'success', 6000);
 
   if (created) {
     // Show the new pins: a search text or tag chip left over would hide them.

@@ -156,6 +156,26 @@ test('a Google short link resolving to neither name nor spot: no place search fo
   assert.deepEqual(calls.filter((u) => !u.startsWith('/api/resolve')), [], 'nothing searched');
 });
 
+test('a Google short link that turns out to be a list: no pin, no place search, and the toast says lists go in on their own', async () => {
+  const calls = stubNetwork({ resolved: 'https://www.google.com/maps/@/data=!3m1!4b1!4m3!11m2!2sAbCdEf1234567890xyz!3e3' });
+  const realSave = store.save;
+  store.save = async () => ({ ok: true });
+  globalThis.document = fakeDocument();
+  store.db = normalizeDb({ pins: [] });
+  try {
+    await applyImport([shortLinkRow('https://maps.app.goo.gl/synthetic5'), row('Lake', 47.1, 11.1)], '', { redraw() {} }, '', '');
+    assert.deepEqual(store.db.pins.map((p) => p.title), ['Lake']);
+    assert.deepEqual(calls.filter((u) => !u.startsWith('/api/resolve')), [], 'nothing searched');
+    const shown = globalThis.document.getElementById('toast');
+    assert.equal(shown.textContent,
+      '1 place imported, 1 Google Maps list left out. Google Maps lists go in on their own: paste one list link at a time.');
+    assert.equal(shown.dataset.kind, 'info');
+  } finally {
+    store.save = realSave;
+    delete globalThis.document;
+  }
+});
+
 test('import from several files: the tag field starts empty and each list keeps its own tag, as in 2.0.9', async () => {
   for (const names of ['Want to go.csv, Favorite places.csv', 'Rome, Italy.csv, Paris.csv', 'Trip.kml, Mailand.csv']) {
     assert.equal(importTag(names), '', names);
